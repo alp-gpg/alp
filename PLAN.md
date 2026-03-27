@@ -1,8 +1,16 @@
-# Alp — Apple Mail Extension for GPGTools
+# Alp — Apple Mail Extension for GnuPG
 
 ## Context
 
-Build a modern macOS **26** Mail extension (MailKit framework) that integrates with an existing GPGTools installation to provide GPG encrypt, decrypt, sign, and verify capabilities inside Apple Mail. Legacy Mail plugins were removed in macOS Sonoma; MailKit is the only supported approach. Because the extension sandbox prevents calling external binaries directly, we bridge to the existing `gpg` binary and `gpg-agent` via an embedded XPC helper — using the user's existing keyring, gpg-agent, and pinentry-mac rather than an independent key store. Uses all latest macOS 26 / Xcode 26 / Swift 6.3 platform features.
+Build a modern macOS **26** Mail extension (MailKit framework) that adds GPG encrypt, decrypt, sign, and verify capabilities to Apple Mail. Primary target is a standard `brew install gnupg` installation; GPGTools (`/usr/local/MacGPG2/bin/gpg`) is detected as a fallback. Legacy Mail plugins were removed in macOS Sonoma; MailKit is the only supported approach. Because the extension sandbox prevents calling external binaries directly, we bridge to the `gpg` binary and `gpg-agent` via an embedded XPC helper — using the user's existing keyring, gpg-agent, and pinentry-mac. Uses all latest macOS 26 / Xcode 26 / Swift 6.3 platform features. Project is defined via **Tuist** (Swift manifest) so the `.xcodeproj` is never committed.
+
+## Prerequisites
+
+```bash
+brew install gnupg          # primary gpg target
+brew install tuist          # project generation
+brew install swiftlint swiftformat   # code quality
+```
 
 ## Architecture
 
@@ -32,44 +40,138 @@ Three Xcode targets, one app bundle:
 
 ## Project Structure
 
+`.xcodeproj` is **not committed** — generated on demand via `tuist generate`.
+
 ```
-/Users/rha/git/alp/
+/Users/rha/git/remora/          # repo root (folder named remora, project named Alp)
 ├── .git/
-├── .gitignore
-├── PLAN.md                        ← this file
-├── Alp.xcodeproj/
+├── .gitignore                  # includes Alp.xcodeproj/, .build/, .tuist-build/
+├── PLAN.md
+├── Tuist/
+│   ├── Package.swift           # external SPM dependencies (none initially)
+│   └── Config.swift            # tuist config: compatibleXcodeVersions, etc.
+├── Project.swift               # Tuist manifest — defines all 3 targets, settings, entitlements
 ├── Alp/                        # Target: main app
-│   ├── AlpApp.swift            # @main SwiftUI App
-│   ├── ContentView.swift          # NavigationSplitView settings root
-│   ├── SettingsViewModel.swift    # @Observable view model
-│   ├── HelperInstaller.swift      # SMAppService.daemon registration
-│   ├── Info.plist
-│   └── Alp.entitlements
+│   ├── Sources/
+│   │   ├── AlpApp.swift            # @main SwiftUI App
+│   │   ├── ContentView.swift       # NavigationSplitView settings root
+│   │   ├── SettingsViewModel.swift # @Observable view model
+│   │   └── HelperInstaller.swift   # SMAppService.daemon registration
+│   ├── Resources/
+│   │   └── Assets.xcassets
+│   └── SupportingFiles/
+│       ├── Info.plist
+│       └── Alp.entitlements
 ├── AlpExtension/               # Target: Mail extension
-│   ├── AlpExtensionPrincipal.swift   # NSObject, MEExtension
-│   ├── SecurityHandler.swift            # MEMessageSecurityHandler
-│   ├── ComposeHandler.swift             # MEComposeSessionHandler
-│   ├── ComposeViewController.swift      # MEExtensionViewController + NSHostingController
-│   ├── ComposeView.swift                # SwiftUI Liquid Glass toolbar panel
-│   ├── ComposeViewModel.swift           # @Observable + @MainActor
-│   ├── GPGXPCClient.swift               # NSXPCConnection + async wrappers
-│   ├── PGPMessageParser.swift           # PGP/MIME & inline PGP detection
-│   ├── Info.plist
-│   └── AlpExtension.entitlements
+│   ├── Sources/
+│   │   ├── AlpExtensionPrincipal.swift
+│   │   ├── SecurityHandler.swift
+│   │   ├── ComposeHandler.swift
+│   │   ├── ComposeViewController.swift
+│   │   ├── ComposeView.swift
+│   │   ├── ComposeViewModel.swift
+│   │   ├── GPGXPCClient.swift
+│   │   └── PGPMessageParser.swift
+│   └── SupportingFiles/
+│       ├── Info.plist
+│       └── AlpExtension.entitlements
 ├── AlpHelper/                  # Target: unsandboxed XPC daemon
-│   ├── main.swift                 # NSXPCListener setup
-│   ├── GPGHelper.swift            # actor implementing GPGHelperProtocol
-│   ├── com.TEAMID.alp.helper.plist   # launchd plist
-│   └── Info.plist
-├── Shared/                        # Source files added to multiple targets
-│   ├── GPGHelperProtocol.swift    # @objc XPC protocol
-│   ├── GPGKeyInfo.swift           # Codable model
-│   └── GPGError.swift             # Sendable Error enum
+│   ├── Sources/
+│   │   ├── main.swift
+│   │   └── GPGHelper.swift
+│   └── SupportingFiles/
+│       ├── Info.plist
+│       └── com.TEAMID.alp.helper.plist   # embedded launchd plist
+├── Shared/                     # Added to both AlpExtension + AlpHelper targets in Project.swift
+│   ├── GPGHelperProtocol.swift
+│   ├── GPGKeyInfo.swift
+│   └── GPGError.swift
 └── Tests/
-    ├── GPGHelperTests.swift       # Swift Testing @Suite
+    ├── GPGHelperTests.swift        # @Suite (Swift Testing)
     ├── PGPMessageParserTests.swift
     └── XPCRoundtripTests.swift
 ```
+
+---
+
+## Tuist Manifest — `Project.swift`
+
+Key structure (abbreviated):
+
+```swift
+import ProjectDescription
+
+let project = Project(
+    name: "Alp",
+    options: .options(
+        defaultKnownRegions: ["en"],
+        developmentRegion: "en"
+    ),
+    settings: .settings(
+        base: [
+            "SWIFT_VERSION": "6.3",
+            "SWIFT_STRICT_CONCURRENCY": "complete",
+            "MACOSX_DEPLOYMENT_TARGET": "26.0",
+        ]
+    ),
+    targets: [
+        // ── Main App ──────────────────────────────────────────────
+        .target(
+            name: "Alp",
+            destinations: .macOS,
+            product: .app,
+            bundleId: "com.TEAMID.alp",
+            deploymentTargets: .macOS("26.0"),
+            sources: ["Alp/Sources/**"],
+            resources: ["Alp/Resources/**"],
+            entitlements: .file(path: "Alp/SupportingFiles/Alp.entitlements"),
+            dependencies: [.target(name: "AlpExtension"), .target(name: "AlpHelper")]
+        ),
+        // ── Mail Extension ────────────────────────────────────────
+        .target(
+            name: "AlpExtension",
+            destinations: .macOS,
+            product: .appExtension,
+            bundleId: "com.TEAMID.alp.extension",
+            deploymentTargets: .macOS("26.0"),
+            sources: ["AlpExtension/Sources/**", "Shared/**"],
+            entitlements: .file(path: "AlpExtension/SupportingFiles/AlpExtension.entitlements"),
+            settings: .settings(base: ["NSExtension": .dictionary([
+                "NSExtensionPointIdentifier": "com.apple.mail-client"
+            ])])
+        ),
+        // ── XPC Helper Daemon ─────────────────────────────────────
+        .target(
+            name: "AlpHelper",
+            destinations: .macOS,
+            product: .commandLineTool,     // unsandboxed daemon
+            bundleId: "com.TEAMID.alp.helper",
+            deploymentTargets: .macOS("26.0"),
+            sources: ["AlpHelper/Sources/**", "Shared/**"],
+            resources: ["AlpHelper/SupportingFiles/com.TEAMID.alp.helper.plist"]
+            // no entitlements file = no sandbox
+        ),
+        // ── Tests ─────────────────────────────────────────────────
+        .target(
+            name: "AlpTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.TEAMID.alp.tests",
+            sources: ["Tests/**"],
+            dependencies: [.target(name: "AlpHelper")]
+        ),
+    ]
+)
+```
+
+**Workflow:**
+```bash
+tuist install      # resolve dependencies (none initially, future SPM deps)
+tuist generate     # writes Alp.xcodeproj — open in Xcode 26
+tuist build        # CI / command-line build
+```
+
+`Alp.xcodeproj` is in `.gitignore`. Everyone regenerates locally.
 
 ---
 
@@ -129,11 +231,26 @@ import Foundation
 
 ## AlpHelper — `GPGHelper.swift`
 
-Unsandboxed `actor` that drives the gpg binary. Auto-detects gpg path
-(`/opt/homebrew/bin/gpg` → `/usr/local/bin/gpg` → PATH). All `Process`
-launches inherit the user's environment so gpg-agent socket and GNUPGHOME
-are resolved correctly. Passphrase prompts are handled transparently by the
-existing pinentry-mac.
+Unsandboxed `actor` that drives the gpg binary. Auto-detects gpg at startup
+in priority order — Homebrew is primary, GPGTools is fallback:
+
+```swift
+private static func detectGPGPath() -> String {
+    let candidates = [
+        "/opt/homebrew/bin/gpg",          // brew install gnupg (primary)
+        "/usr/local/bin/gpg",             // Homebrew on Intel
+        "/usr/local/MacGPG2/bin/gpg",     // GPGTools
+        "/usr/bin/gpg",                   // system fallback
+    ]
+    return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+        ?? "gpg"  // last resort: rely on PATH
+}
+```
+
+All `Process` launches inherit the user's environment so gpg-agent socket
+and GNUPGHOME are resolved correctly. Passphrase prompts are handled
+transparently by the existing gpg-agent + pinentry-mac (or pinentry-curses
+on headless systems).
 
 ```
 encrypt:  gpg --batch --yes --armor --trust-model always
@@ -414,17 +531,20 @@ struct GPGHelperTests {
 ## Implementation Order
 
 1. `git init` + `.gitignore` + `PLAN.md` ← **done**
-2. Create `Alp.xcodeproj` with 3 targets + app group capability
-3. `Shared/`: `GPGHelperProtocol.swift`, `GPGKeyInfo.swift`, `GPGError.swift`
-4. `AlpHelper/`: `GPGHelper.swift` (gpg Process calls) + `main.swift` (XPC listener)
-5. `AlpExtension/`: `GPGXPCClient.swift` + `PGPMessageParser.swift`
-6. `AlpExtension/`: `SecurityHandler.swift` (encode / decode / status)
-7. `AlpExtension/`: `ComposeViewModel.swift` + `ComposeView.swift` + `ComposeViewController.swift`
-8. `AlpExtension/`: `AlpExtensionPrincipal.swift`
-9. `Alp/`: settings UI + `HelperInstaller.swift`
-10. Launchd plist + all entitlements + Info.plists
-11. `Tests/` with Swift Testing suite
-12. `README.md` — build instructions, enabling the extension in Mail
+2. `brew install tuist swiftlint swiftformat` (once, on dev machine)
+3. `Tuist/Config.swift` + `Project.swift` Tuist manifest
+4. `Shared/`: `GPGHelperProtocol.swift`, `GPGKeyInfo.swift`, `GPGError.swift`
+5. `AlpHelper/Sources/`: `GPGHelper.swift` (gpg detection + Process calls) + `main.swift`
+6. `AlpHelper/SupportingFiles/`: `Info.plist` + launchd plist
+7. `AlpExtension/Sources/`: `GPGXPCClient.swift` + `PGPMessageParser.swift`
+8. `AlpExtension/Sources/`: `SecurityHandler.swift`
+9. `AlpExtension/Sources/`: `ComposeViewModel.swift` + `ComposeView.swift` + `ComposeViewController.swift`
+10. `AlpExtension/Sources/`: `AlpExtensionPrincipal.swift` + entitlements + Info.plist
+11. `Alp/Sources/`: settings UI + `HelperInstaller.swift` + entitlements + Info.plist
+12. `Tests/`: Swift Testing suite
+13. `tuist generate` → verify Xcode project opens cleanly in Xcode 26
+14. `.swiftlint.yml` + `.swiftformat` config files
+15. `README.md` — prerequisites, `tuist generate`, enabling extension in Mail
 
 ---
 

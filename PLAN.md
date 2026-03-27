@@ -1,4 +1,4 @@
-# Remora — Apple Mail Extension for GPGTools
+# Alp — Apple Mail Extension for GPGTools
 
 ## Context
 
@@ -7,9 +7,9 @@ Build a modern macOS **26** Mail extension (MailKit framework) that integrates w
 ## Architecture
 
 ```
-Mail.app → [MailKit XPC] → RemoraExtension (sandboxed)
+Mail.app → [MailKit XPC] → AlpExtension (sandboxed)
                                   ↓ NSXPCConnection (Mach service, XPCPeerRequirement)
-                           RemoraHelper (unsandboxed, SMAppService daemon)
+                           AlpHelper (unsandboxed, SMAppService daemon)
                                   ↓ async Process
                            gpg binary ↔ gpg-agent ↔ pinentry-mac
 ```
@@ -18,12 +18,12 @@ Three Xcode targets, one app bundle:
 
 | Target | Type | Sandbox | Purpose |
 |--------|------|---------|---------|
-| `Remora` | macOS App | Yes | Wrapper app + settings UI (Liquid Glass) + helper installer |
-| `RemoraExtension` | Mail Extension | Yes | MailKit protocols, compose toolbar UI |
-| `RemoraHelper` | Launchd Daemon | **No** | Calls gpg binary; async/await XPC service |
+| `Alp` | macOS App | Yes | Wrapper app + settings UI (Liquid Glass) + helper installer |
+| `AlpExtension` | Mail Extension | Yes | MailKit protocols, compose toolbar UI |
+| `AlpHelper` | Launchd Daemon | **No** | Calls gpg binary; async/await XPC service |
 
-- **App Group:** `group.com.TEAMID.remora` (shared UserDefaults + containers)
-- **Bundle IDs:** `com.TEAMID.remora`, `com.TEAMID.remora.extension`, `com.TEAMID.remora.helper`
+- **App Group:** `group.com.TEAMID.alp` (shared UserDefaults + containers)
+- **Bundle IDs:** `com.TEAMID.alp`, `com.TEAMID.alp.extension`, `com.TEAMID.alp.helper`
 - **Deployment target:** macOS 26.0
 - **Swift:** 6.3, strict concurrency (`-strict-concurrency=complete`)
 - **Xcode:** 26
@@ -33,20 +33,20 @@ Three Xcode targets, one app bundle:
 ## Project Structure
 
 ```
-/Users/rha/git/remora/
+/Users/rha/git/alp/
 ├── .git/
 ├── .gitignore
 ├── PLAN.md                        ← this file
-├── Remora.xcodeproj/
-├── Remora/                        # Target: main app
-│   ├── RemoraApp.swift            # @main SwiftUI App
+├── Alp.xcodeproj/
+├── Alp/                        # Target: main app
+│   ├── AlpApp.swift            # @main SwiftUI App
 │   ├── ContentView.swift          # NavigationSplitView settings root
 │   ├── SettingsViewModel.swift    # @Observable view model
 │   ├── HelperInstaller.swift      # SMAppService.daemon registration
 │   ├── Info.plist
-│   └── Remora.entitlements
-├── RemoraExtension/               # Target: Mail extension
-│   ├── RemoraExtensionPrincipal.swift   # NSObject, MEExtension
+│   └── Alp.entitlements
+├── AlpExtension/               # Target: Mail extension
+│   ├── AlpExtensionPrincipal.swift   # NSObject, MEExtension
 │   ├── SecurityHandler.swift            # MEMessageSecurityHandler
 │   ├── ComposeHandler.swift             # MEComposeSessionHandler
 │   ├── ComposeViewController.swift      # MEExtensionViewController + NSHostingController
@@ -55,11 +55,11 @@ Three Xcode targets, one app bundle:
 │   ├── GPGXPCClient.swift               # NSXPCConnection + async wrappers
 │   ├── PGPMessageParser.swift           # PGP/MIME & inline PGP detection
 │   ├── Info.plist
-│   └── RemoraExtension.entitlements
-├── RemoraHelper/                  # Target: unsandboxed XPC daemon
+│   └── AlpExtension.entitlements
+├── AlpHelper/                  # Target: unsandboxed XPC daemon
 │   ├── main.swift                 # NSXPCListener setup
 │   ├── GPGHelper.swift            # actor implementing GPGHelperProtocol
-│   ├── com.TEAMID.remora.helper.plist   # launchd plist
+│   ├── com.TEAMID.alp.helper.plist   # launchd plist
 │   └── Info.plist
 ├── Shared/                        # Source files added to multiple targets
 │   ├── GPGHelperProtocol.swift    # @objc XPC protocol
@@ -92,7 +92,7 @@ Three Xcode targets, one app bundle:
 
 ## Shared Protocol — `GPGHelperProtocol.swift`
 
-Added to both `RemoraExtension` and `RemoraHelper` targets.
+Added to both `AlpExtension` and `AlpHelper` targets.
 
 ```swift
 import Foundation
@@ -127,7 +127,7 @@ import Foundation
 
 ---
 
-## RemoraHelper — `GPGHelper.swift`
+## AlpHelper — `GPGHelper.swift`
 
 Unsandboxed `actor` that drives the gpg binary. Auto-detects gpg path
 (`/opt/homebrew/bin/gpg` → `/usr/local/bin/gpg` → PATH). All `Process`
@@ -167,7 +167,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
 ---
 
-## RemoraHelper — `main.swift`
+## AlpHelper — `main.swift`
 
 ```swift
 import Foundation
@@ -184,7 +184,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate {
     }
 }
 
-let listener = NSXPCListener(machServiceName: "com.TEAMID.remora.helper")
+let listener = NSXPCListener(machServiceName: "com.TEAMID.alp.helper")
 listener.delegate = HelperDelegate()
 listener.resume()
 dispatchMain()
@@ -192,7 +192,7 @@ dispatchMain()
 
 ---
 
-## RemoraExtension — `GPGXPCClient.swift`
+## AlpExtension — `GPGXPCClient.swift`
 
 All protocol methods exposed as `async throws` via `CheckedContinuation`.
 
@@ -203,7 +203,7 @@ final class GPGXPCClient: @unchecked Sendable {
     private let connection: NSXPCConnection
 
     init() {
-        connection = NSXPCConnection(machServiceName: "com.TEAMID.remora.helper")
+        connection = NSXPCConnection(machServiceName: "com.TEAMID.alp.helper")
         connection.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
         // TODO: set XPCPeerRequirement for team ID validation
         connection.resume()
@@ -224,7 +224,7 @@ final class GPGXPCClient: @unchecked Sendable {
 
 ---
 
-## RemoraExtension — `SecurityHandler.swift`
+## AlpExtension — `SecurityHandler.swift`
 
 `MEMessageSecurityHandler` — bridges MailKit's completion-handler API to async/await.
 
@@ -277,7 +277,7 @@ before handing off to the XPC client.
 
 ---
 
-## RemoraExtension — `ComposeView.swift`
+## AlpExtension — `ComposeView.swift`
 
 Liquid Glass toolbar panel shown in Mail's compose window.
 
@@ -317,18 +317,18 @@ struct ComposeView: View {
 
 ## Entitlements
 
-**`RemoraExtension.entitlements`**
+**`AlpExtension.entitlements`**
 ```xml
 <key>com.apple.security.app-sandbox</key><true/>
 <key>com.apple.security.application-groups</key>
-<array><string>group.com.TEAMID.remora</string></array>
+<array><string>group.com.TEAMID.alp</string></array>
 <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
-<array><string>com.TEAMID.remora.helper</string></array>
+<array><string>com.TEAMID.alp.helper</string></array>
 ```
 
-**`Remora.entitlements`** — same sandbox + app-groups + `com.apple.smJobBless` true
+**`Alp.entitlements`** — same sandbox + app-groups + `com.apple.smJobBless` true
 
-**`RemoraHelper`** — no sandbox entitlement (needs filesystem + exec access for gpg)
+**`AlpHelper`** — no sandbox entitlement (needs filesystem + exec access for gpg)
 
 ---
 
@@ -338,29 +338,29 @@ struct ComposeView: View {
 import ServiceManagement
 
 func installHelper() throws {
-    let service = SMAppService.daemon(plistName: "com.TEAMID.remora.helper.plist")
+    let service = SMAppService.daemon(plistName: "com.TEAMID.alp.helper.plist")
     try service.register()
 }
 
 func uninstallHelper() throws {
-    let service = SMAppService.daemon(plistName: "com.TEAMID.remora.helper.plist")
+    let service = SMAppService.daemon(plistName: "com.TEAMID.alp.helper.plist")
     try service.unregister()
 }
 ```
 
-launchd plist embedded at `Contents/Library/LaunchDaemons/com.TEAMID.remora.helper.plist`:
+launchd plist embedded at `Contents/Library/LaunchDaemons/com.TEAMID.alp.helper.plist`:
 ```xml
-<key>Label</key><string>com.TEAMID.remora.helper</string>
+<key>Label</key><string>com.TEAMID.alp.helper</string>
 <key>MachServices</key><dict>
-    <key>com.TEAMID.remora.helper</key><true/>
+    <key>com.TEAMID.alp.helper</key><true/>
 </dict>
 <key>BundleProgram</key>
-<string>Contents/Library/LoginItems/RemoraHelper.app/Contents/MacOS/RemoraHelper</string>
+<string>Contents/Library/LoginItems/AlpHelper.app/Contents/MacOS/AlpHelper</string>
 ```
 
 ---
 
-## Main App Settings (Remora)
+## Main App Settings (Alp)
 
 ```swift
 NavigationSplitView {
@@ -385,7 +385,7 @@ NavigationSplitView {
 
 ```swift
 import Testing
-@testable import RemoraHelper
+@testable import AlpHelper
 
 @Suite("GPG Helper")
 struct GPGHelperTests {
@@ -394,7 +394,7 @@ struct GPGHelperTests {
     @Test("Round-trip encrypt/decrypt")
     func encryptDecrypt() async throws {
         let helper = await GPGHelper()
-        let plaintext = Data("Hello, Remora!".utf8)
+        let plaintext = Data("Hello, Alp!".utf8)
         let cipher = try await helper._encrypt(plaintext, [fingerprint], fingerprint)
         let (decrypted, signer) = try await helper._decrypt(cipher)
         #expect(decrypted == plaintext)
@@ -414,14 +414,14 @@ struct GPGHelperTests {
 ## Implementation Order
 
 1. `git init` + `.gitignore` + `PLAN.md` ← **done**
-2. Create `Remora.xcodeproj` with 3 targets + app group capability
+2. Create `Alp.xcodeproj` with 3 targets + app group capability
 3. `Shared/`: `GPGHelperProtocol.swift`, `GPGKeyInfo.swift`, `GPGError.swift`
-4. `RemoraHelper/`: `GPGHelper.swift` (gpg Process calls) + `main.swift` (XPC listener)
-5. `RemoraExtension/`: `GPGXPCClient.swift` + `PGPMessageParser.swift`
-6. `RemoraExtension/`: `SecurityHandler.swift` (encode / decode / status)
-7. `RemoraExtension/`: `ComposeViewModel.swift` + `ComposeView.swift` + `ComposeViewController.swift`
-8. `RemoraExtension/`: `RemoraExtensionPrincipal.swift`
-9. `Remora/`: settings UI + `HelperInstaller.swift`
+4. `AlpHelper/`: `GPGHelper.swift` (gpg Process calls) + `main.swift` (XPC listener)
+5. `AlpExtension/`: `GPGXPCClient.swift` + `PGPMessageParser.swift`
+6. `AlpExtension/`: `SecurityHandler.swift` (encode / decode / status)
+7. `AlpExtension/`: `ComposeViewModel.swift` + `ComposeView.swift` + `ComposeViewController.swift`
+8. `AlpExtension/`: `AlpExtensionPrincipal.swift`
+9. `Alp/`: settings UI + `HelperInstaller.swift`
 10. Launchd plist + all entitlements + Info.plists
 11. `Tests/` with Swift Testing suite
 12. `README.md` — build instructions, enabling the extension in Mail
@@ -431,13 +431,13 @@ struct GPGHelperTests {
 ## Verification
 
 1. **Unit tests:** `Cmd+U` in Xcode — encrypt/decrypt/sign/verify against the real key `2BC83F55A4007468864C680E1B7CC8D4D4E914AA`
-2. **Helper smoke test:** run `RemoraHelper` directly in a terminal, connect manually via `NSXPCConnection`
+2. **Helper smoke test:** run `AlpHelper` directly in a terminal, connect manually via `NSXPCConnection`
 3. **End-to-end in Mail:**
-   - Build & run Remora → click "Install Helper" → grant permission
-   - Mail → Settings → Extensions → enable Remora
+   - Build & run Alp → click "Install Helper" → grant permission
+   - Mail → Settings → Extensions → enable Alp
    - New compose window → Liquid Glass toolbar with lock + sign icons appears
    - Add yourself as recipient → lock icon enables
    - Send → verify `Content-Type: multipart/encrypted` in Sent
    - Open received message → decrypted body + signature badge shown
 4. **Edge cases:** missing recipient key (lock disabled + orange warning), gpg not installed (error in HelperStatusView), revoked/expired keys
-5. **Console.app** → filter `com.TEAMID.remora.helper` for XPC and gpg diagnostics
+5. **Console.app** → filter `com.TEAMID.alp.helper` for XPC and gpg diagnostics

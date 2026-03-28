@@ -24,3 +24,9 @@ __MACOSX/
 # Credentials / local config
 *.entitlements.local
 secrets.xcconfig
+
+# Claude Code
+.claude/
+
+# Test artifacts
+test_mailkit

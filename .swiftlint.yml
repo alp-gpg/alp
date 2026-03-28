@@ -1,0 +1,46 @@
+excluded:
+  - Derived
+  - .build
+  - Alp.xcworkspace
+  - Alp.xcodeproj
+
+disabled_rules:
+  - todo              # TODOs are tracked in issues, not flagged as linter errors
+  - line_length       # enforced by swiftformat
+
+opt_in_rules:
+  - array_init
+  - closure_spacing
+  - contains_over_filter_count
+  - discouraged_optional_boolean
+  - empty_collection_literal
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - force_try
+  - identical_operands
+  - implicit_return
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - literal_expression_end_indentation
+  - multiline_arguments
+  - multiline_function_chains
+  - operator_usage_whitespace
+  - prefer_self_type_over_type_of_self
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - vertical_parameter_alignment_on_call
+  - yoda_condition
+
+force_cast: warning
+force_unwrapping: warning
+
+identifier_name:
+  min_length: 2
+  excluded:
+    - id
+    - fp
+    - vm
+    - ok

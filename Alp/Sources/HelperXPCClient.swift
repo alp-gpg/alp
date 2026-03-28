@@ -1,0 +1,37 @@
+import Foundation
+
+/// Lightweight XPC client for the main Alp app (settings UI key listing).
+/// @unchecked Sendable: NSXPCConnection proxy calls are thread-safe; no actor isolation
+/// so CheckedContinuation is not bound to any actor and cont.resume() can be called
+/// from NSXPCConnection's private serial queue without a dispatch_assert_queue crash.
+final class HelperXPCClient: @unchecked Sendable {
+    static let shared = HelperXPCClient()
+
+    private let connection: NSXPCConnection
+
+    private init() {
+        connection = NSXPCConnection(machServiceName: "com.CXM87Z432P.alp.helper")
+        connection.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
+        connection.setCodeSigningRequirement(
+            "anchor apple generic and certificate leaf[subject.OU] = \"3G6WR6H4M5\""
+        )
+        connection.resume()
+    }
+
+    func listSecretKeys() async throws -> [GPGKeyInfo] {
+        try await withCheckedThrowingContinuation { cont in
+            // swiftlint:disable:next force_cast
+            let proxy = connection.remoteObjectProxyWithErrorHandler { error in
+                cont.resume(throwing: error)
+            } as! any GPGHelperProtocol
+            proxy.listSecretKeys { dataList, error in
+                if let error {
+                    cont.resume(throwing: error)
+                } else {
+                    let keys = (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
+                    cont.resume(returning: keys)
+                }
+            }
+        }
+    }
+}

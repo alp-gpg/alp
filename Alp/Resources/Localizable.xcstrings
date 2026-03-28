@@ -1,0 +1,87 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "About" : {
+      "comment" : "Section header in Helper settings"
+    },
+    "Alp" : {
+      "comment" : "App/sidebar navigation title"
+    },
+    "Capabilities" : {
+      "comment" : "Table column header in Keys settings"
+    },
+    "Compose Defaults" : {
+      "comment" : "Section header in General settings"
+    },
+    "Default Signing Key" : {
+      "comment" : "Section header in General settings"
+    },
+    "Encrypt messages by default" : {
+      "comment" : "Toggle label in General settings"
+    },
+    "Fingerprint" : {
+      "comment" : "Table column header in Keys settings"
+    },
+    "General" : {
+      "comment" : "Sidebar item and navigation title for General settings"
+    },
+    "Helper" : {
+      "comment" : "Sidebar item and navigation title for Helper settings"
+    },
+    "Helper Daemon" : {
+      "comment" : "Section header in Helper settings"
+    },
+    "Install Helper" : {
+      "comment" : "Button in Helper settings"
+    },
+    "Key" : {
+      "comment" : "Picker label for default signing key in General settings"
+    },
+    "Keys" : {
+      "comment" : "Sidebar item and navigation title for Keys settings"
+    },
+    "Loading keys…" : {
+      "comment" : "Progress view label in Keys settings"
+    },
+    "No GPG secret keys were found. Install gnupg and import or generate a key." : {
+      "comment" : "Empty state description in Keys settings"
+    },
+    "No Secret Keys" : {
+      "comment" : "Empty state title in Keys settings"
+    },
+    "None" : {
+      "comment" : "Default option in signing key picker, meaning no key selected"
+    },
+    "Not Installed" : {
+      "comment" : "Helper daemon status badge"
+    },
+    "Refresh" : {
+      "comment" : "Toolbar button in Keys settings to reload GPG keys"
+    },
+    "Requires Approval" : {
+      "comment" : "Helper daemon status badge shown when user must approve in System Settings"
+    },
+    "Running" : {
+      "comment" : "Helper daemon status badge"
+    },
+    "Sign messages by default" : {
+      "comment" : "Toggle label in General settings"
+    },
+    "Status" : {
+      "comment" : "Labeled content label in Helper settings"
+    },
+    "The Alp helper runs as a background daemon outside the sandbox so it can invoke the gpg binary. It only accepts connections from the Alp extension (same Team ID)." : {
+      "comment" : "Explanatory text in Helper settings About section"
+    },
+    "Uninstall Helper" : {
+      "comment" : "Button in Helper settings"
+    },
+    "Unknown" : {
+      "comment" : "Helper daemon status badge for unrecognised SMAppService status"
+    },
+    "User ID" : {
+      "comment" : "Table column header in Keys settings"
+    }
+  },
+  "version" : "1.0"
+}

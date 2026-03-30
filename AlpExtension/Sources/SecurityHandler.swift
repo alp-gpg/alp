@@ -7,12 +7,10 @@ private let log = Logger(subsystem: "com.CXM87Z432P.alp.extension", category: "S
 /// Handles GPG encrypt/sign/decrypt/verify for Apple Mail.
 ///
 /// MailKit delivers all calls via XPC on its own private queue, not the main
-/// thread. MEMessageSecurityHandler is annotated @MainActor in the SDK headers,
-/// but this is incorrect for the runtime delivery path. Every protocol method
-/// must be explicitly `nonisolated` to prevent dispatch_assert_queue crashes
-/// under Swift 6's strict concurrency.
-final class SecurityHandler: NSObject, @preconcurrency MEMessageSecurityHandler {
-    private nonisolated(unsafe) let parser = PGPMessageParser()
+/// thread. Every protocol method is explicitly `nonisolated` to prevent
+/// dispatch_assert_queue crashes under Swift 6 strict concurrency.
+final class SecurityHandler: NSObject, MEMessageSecurityHandler {
+    private nonisolated let parser = PGPMessageParser()
 
     nonisolated override init() {
         super.init()
@@ -130,23 +128,23 @@ final class SecurityHandler: NSObject, @preconcurrency MEMessageSecurityHandler 
         do {
             switch pgp {
             case .mime(let cipher), .inline(let cipher):
-                let (plain, signer) = try await GPGXPCClient.shared.decrypt(cipher)
+                let (plain, signer, signerName) = try await GPGXPCClient.shared.decrypt(cipher)
                 log.info("Decrypted successfully")
                 return MEDecodedMessage(
                     data: plain,
                     securityInformation: MEMessageSecurityInformation(
-                        signers: makeSigner(signer), isEncrypted: true,
+                        signers: makeSigner(signer, displayName: signerName), isEncrypted: true,
                         signingError: nil, encryptionError: nil
                     ),
                     context: nil
                 )
 
             case .inlineSigned(let body):
-                let (valid, signer) = try await GPGXPCClient.shared.verify(body)
+                let (valid, signer, signerName) = try await GPGXPCClient.shared.verify(body)
                 return MEDecodedMessage(
                     data: data,
                     securityInformation: MEMessageSecurityInformation(
-                        signers: makeSigner(signer), isEncrypted: false,
+                        signers: makeSigner(signer, displayName: signerName), isEncrypted: false,
                         signingError: valid ? nil : mailKitError(code: 1, description: "Invalid signature"),
                         encryptionError: nil
                     ),
@@ -154,11 +152,11 @@ final class SecurityHandler: NSObject, @preconcurrency MEMessageSecurityHandler 
                 )
 
             case .mimeSignature(let body, let sig):
-                let (valid, signer) = try await GPGXPCClient.shared.verify(body, signature: sig)
+                let (valid, signer, signerName) = try await GPGXPCClient.shared.verify(body, signature: sig)
                 return MEDecodedMessage(
                     data: data,
                     securityInformation: MEMessageSecurityInformation(
-                        signers: makeSigner(signer), isEncrypted: false,
+                        signers: makeSigner(signer, displayName: signerName), isEncrypted: false,
                         signingError: valid ? nil : mailKitError(code: 1, description: "Invalid signature"),
                         encryptionError: nil
                     ),
@@ -209,7 +207,8 @@ final class SecurityHandler: NSObject, @preconcurrency MEMessageSecurityHandler 
             )
         }
 
-        if shouldSign, let fp = signerFingerprint {
+        if shouldSign {
+            guard let fp = signerFingerprint else { throw GPGError.noSigningKey }
             let signature = try await GPGXPCClient.shared.sign(rawData, signer: fp)
             return MEEncodedOutgoingMessage(
                 rawData: pgpMIMESigned(rawData, signature: signature), isSigned: true, isEncrypted: false
@@ -266,11 +265,12 @@ final class SecurityHandler: NSObject, @preconcurrency MEMessageSecurityHandler 
 
     // MARK: – Helpers
 
-    private nonisolated static func makeSigner(_ fingerprint: String?) -> [MEMessageSigner] {
+    private nonisolated static func makeSigner(_ fingerprint: String?, displayName: String?) -> [MEMessageSigner] {
         guard let fingerprint else { return [] }
+        let label = displayName ?? String(fingerprint.prefix(16))
         return [MEMessageSigner(
             emailAddresses: [],
-            signatureLabel: String(fingerprint.prefix(16)),
+            signatureLabel: label,
             context: fingerprint.data(using: .utf8)
         )]
     }

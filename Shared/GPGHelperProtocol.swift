@@ -10,10 +10,10 @@ import Foundation
         reply: @escaping @Sendable (Data?, NSError?) -> Void
     )
 
-    /// reply: (plaintext, signerFingerprint?, error?)
+    /// reply: (plaintext, signerFingerprint?, signerDisplayName?, error?)
     func decrypt(
         data: Data,
-        reply: @escaping @Sendable (Data?, String?, NSError?) -> Void
+        reply: @escaping @Sendable (Data?, String?, String?, NSError?) -> Void
     )
 
     func sign(
@@ -22,15 +22,25 @@ import Foundation
         reply: @escaping @Sendable (Data?, NSError?) -> Void
     )
 
-    /// reply: (valid, signerFingerprint?, error?)
+    /// reply: (valid, signerFingerprint?, signerDisplayName?, error?)
     func verify(
         data: Data,
         signatureData: Data?,
-        reply: @escaping @Sendable (Bool, String?, NSError?) -> Void
+        reply: @escaping @Sendable (Bool, String?, String?, NSError?) -> Void
     )
 
     /// reply: JSON-encoded [GPGKeyInfo] or error
     func listSecretKeys(reply: @escaping @Sendable ([Data]?, NSError?) -> Void)
+
+    /// All public keys with hasSecretKey flag set when a matching secret key exists.
+    /// reply: JSON-encoded [GPGKeyInfo] or error
+    func listAllKeys(reply: @escaping @Sendable ([Data]?, NSError?) -> Void)
+
+    /// Parse armored key data without importing. reply: JSON-encoded [GPGKeyInfo] or error
+    func previewKey(armoredKey: Data, reply: @escaping @Sendable ([Data]?, NSError?) -> Void)
+
+    /// Import armored key data into the local keyring. reply: error? (nil = success)
+    func importKey(armoredKey: Data, reply: @escaping @Sendable (NSError?) -> Void)
 
     /// reply: (found, fingerprint?, error?)
     func publicKeyExists(

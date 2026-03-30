@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background (optional - remove for transparent) -->
+
+  <!-- Monster Body -->
+  <ellipse fill="#7C3AED" cx="256" cy="235" rx="140" ry="150" />
+
+  <!-- Belly -->
+  <ellipse fill="#A78BFA" cx="256" cy="265" rx="85" ry="90" />
+
+  <!-- Left Horn -->
+  <polygon fill="#F59E0B" points="152,110 178,35 198,120" />
+  <!-- Right Horn -->
+  <polygon fill="#F59E0B" points="360,110 334,35 314,120" />
+
+  <!-- Left Ear -->
+  <polygon fill="#6D28D9" points="120,165 100,100 155,150" />
+  <!-- Right Ear -->
+  <polygon fill="#6D28D9" points="392,165 412,100 357,150" />
+
+  <!-- Left Eye -->
+  <ellipse fill="#FFFFFF" cx="210" cy="195" rx="36" ry="40" />
+  <ellipse fill="#1E1B4B" cx="218" cy="200" rx="16" ry="20" />
+  <circle fill="#FFFFFF" cx="225" cy="191" r="6" />
+
+  <!-- Right Eye -->
+  <ellipse fill="#FFFFFF" cx="302" cy="195" rx="36" ry="40" />
+  <ellipse fill="#1E1B4B" cx="310" cy="200" rx="16" ry="20" />
+  <circle fill="#FFFFFF" cx="317" cy="191" r="6" />
+
+  <!-- Nose dots -->
+  <circle fill="#5B21B6" cx="248" cy="248" r="5" />
+  <circle fill="#5B21B6" cx="264" cy="248" r="5" />
+
+  <!-- Mouth - mischievous grin -->
+  <path fill="#4C1D95" d="M208,270 Q232,300 256,300 Q280,300 304,270 Q280,285 256,285 Q232,285 208,270 Z" />
+  <!-- Teeth -->
+  <polygon fill="#FFFFFF" points="222,270 230,283 238,270" />
+  <polygon fill="#FFFFFF" points="274,270 282,283 290,270" />
+
+  <!-- Left Arm reaching down to envelope -->
+  <path fill="#7C3AED" d="M118,260 Q85,310 95,370 L130,380 Q110,330 140,290 Z" />
+  <!-- Left claw fingers gripping envelope -->
+  <path fill="#6D28D9" d="M92,365 L78,388 L98,378 Z" />
+  <path fill="#6D28D9" d="M105,372 L95,396 L118,384 Z" />
+  <path fill="#6D28D9" d="M120,377 L115,402 L135,388 Z" />
+
+  <!-- Right Arm reaching down to envelope -->
+  <path fill="#7C3AED" d="M394,260 Q427,310 417,370 L382,380 Q402,330 372,290 Z" />
+  <!-- Right claw fingers gripping envelope -->
+  <path fill="#6D28D9" d="M420,365 L434,388 L414,378 Z" />
+  <path fill="#6D28D9" d="M407,372 L417,396 L394,384 Z" />
+  <path fill="#6D28D9" d="M392,377 L397,402 L377,388 Z" />
+
+  <!-- Feet -->
+  <ellipse fill="#6D28D9" cx="205" cy="385" rx="32" ry="14" />
+  <ellipse fill="#6D28D9" cx="307" cy="385" rx="32" ry="14" />
+  <!-- Toe claws -->
+  <circle fill="#4C1D95" cx="182" cy="388" r="5" />
+  <circle fill="#4C1D95" cx="198" cy="392" r="5" />
+  <circle fill="#4C1D95" cx="214" cy="392" r="5" />
+  <circle fill="#4C1D95" cx="298" cy="392" r="5" />
+  <circle fill="#4C1D95" cx="314" cy="392" r="5" />
+  <circle fill="#4C1D95" cx="330" cy="388" r="5" />
+
+  <!-- Envelope - held below the body -->
+  <g transform="translate(0, 10)">
+    <rect fill="#F8FAFC" x="120" y="400" width="272" height="85" rx="6" stroke="#CBD5E1" stroke-width="1.5" />
+    <!-- Envelope flap -->
+    <polygon fill="#E2E8F0" points="120,400 256,455 392,400" stroke="#CBD5E1" stroke-width="1.5" />
+    <!-- Envelope fold lines -->
+    <line x1="120" y1="485" x2="215" y2="430" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="392" y1="485" x2="297" y2="430" stroke="#CBD5E1" stroke-width="1" />
+  </g>
+
+  <!-- Tail - curling from behind -->
+  <path fill="none" stroke="#7C3AED" stroke-width="18" stroke-linecap="round" d="M385,320 Q430,350 420,290 Q415,255 440,240" />
+  <!-- Tail tip -->
+  <polygon fill="#F59E0B" points="435,225 450,245 425,248" />
+</svg>

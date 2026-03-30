@@ -36,12 +36,12 @@ final class GPGXPCClient: @unchecked Sendable {
         }
     }
 
-    func decrypt(_ data: Data) async throws -> (plaintext: Data, signer: String?) {
+    func decrypt(_ data: Data) async throws -> (plaintext: Data, signer: String?, signerName: String?) {
         try await withCheckedThrowingContinuation { cont in
             proxy(cont) { proxy in
-                proxy.decrypt(data: data) { plain, signer, error in
+                proxy.decrypt(data: data) { plain, signer, signerName, error in
                     if let error { cont.resume(throwing: error) }
-                    else if let plain { cont.resume(returning: (plain, signer)) }
+                    else if let plain { cont.resume(returning: (plain, signer, signerName)) }
                     else { cont.resume(throwing: GPGError.decryptionFailed("nil result")) }
                 }
             }
@@ -60,12 +60,12 @@ final class GPGXPCClient: @unchecked Sendable {
         }
     }
 
-    func verify(_ data: Data, signature: Data? = nil) async throws -> (valid: Bool, signer: String?) {
+    func verify(_ data: Data, signature: Data? = nil) async throws -> (valid: Bool, signer: String?, signerName: String?) {
         try await withCheckedThrowingContinuation { cont in
             proxy(cont) { proxy in
-                proxy.verify(data: data, signatureData: signature) { valid, signer, error in
+                proxy.verify(data: data, signatureData: signature) { valid, signer, signerName, error in
                     if let error { cont.resume(throwing: error) }
-                    else { cont.resume(returning: (valid, signer)) }
+                    else { cont.resume(returning: (valid, signer, signerName)) }
                 }
             }
         }
@@ -81,6 +81,31 @@ final class GPGXPCClient: @unchecked Sendable {
                         let keys = (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
                         cont.resume(returning: keys)
                     }
+                }
+            }
+        }
+    }
+
+    func previewKey(_ armoredKey: Data) async throws -> [GPGKeyInfo] {
+        try await withCheckedThrowingContinuation { cont in
+            proxy(cont) { proxy in
+                proxy.previewKey(armoredKey: armoredKey) { dataList, error in
+                    if let error { cont.resume(throwing: error) }
+                    else {
+                        let keys = (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
+                        cont.resume(returning: keys)
+                    }
+                }
+            }
+        }
+    }
+
+    func importKey(_ armoredKey: Data) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            proxy(cont) { proxy in
+                proxy.importKey(armoredKey: armoredKey) { error in
+                    if let error { cont.resume(throwing: error) }
+                    else { cont.resume() }
                 }
             }
         }

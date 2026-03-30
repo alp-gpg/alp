@@ -1,6 +1,14 @@
-# Alp
+<p align="center">
+  <img src="Alp/Resources/Logo/alp-logo.svg" alt="Alp" width="200" />
+</p>
 
-A macOS 26 Mail extension that adds GPG sign, encrypt, decrypt, and verify to Apple Mail — using your existing `brew install gnupg` keychain.
+<h1 align="center">Alp</h1>
+
+<p align="center">
+  A macOS 26 Mail extension that adds GPG sign, encrypt, decrypt, and verify to Apple Mail — using your existing <code>brew install gnupg</code> keychain.
+</p>
+
+---
 
 ## Prerequisites
 
@@ -98,7 +106,7 @@ Mail.app → [MailKit XPC] → AlpExtension (sandboxed)
 - Trust model is `tofu+pgp` (Trust-On-First-Use) — warns on key changes rather than blindly trusting all keys.
 - All log output uses os_log default privacy (redacted in production). No plaintext, fingerprints, or email addresses are logged.
 
-## Development workflow
+## Development
 
 ```bash
 tuist generate          # regenerate Xcode project after Project.swift changes
@@ -127,3 +135,7 @@ These are hard-won lessons from debugging. Do not regress:
 - **gpg `--batch` and decrypt**: The `--batch` flag prevents pinentry passphrase prompts. Never use it for decrypt.
 - **Pipe deadlock**: stdout and stderr from gpg must be read concurrently. Sequential reads deadlock when either pipe's 64 KB OS buffer fills.
 - **gpg `--verify` exit code**: Non-zero exit is valid (bad/untrusted signature). Use the raw runner and parse status output regardless of exit code.
+
+## License
+
+MIT

@@ -3,17 +3,28 @@ import MailKit
 
 @Observable @MainActor
 final class ComposeViewModel {
-    var shouldSign: Bool = true
-    var shouldEncrypt: Bool = false
+    var shouldSign: Bool
+    var shouldEncrypt: Bool
     var canEncrypt: Bool = false
     var missingKeyEmails: [String] = []
     var availableSecretKeys: [GPGKeyInfo] = []
     var selectedSignerFingerprint: String?
 
+    var canSign: Bool { !availableSecretKeys.isEmpty }
+
+    var selectedKey: GPGKeyInfo? {
+        availableSecretKeys.first { $0.fingerprint == selectedSignerFingerprint }
+    }
+
     private let session: MEComposeSession
+    private static let sharedDefaults = UserDefaults(suiteName: "group.com.CXM87Z432P.alp")
 
     init(session: MEComposeSession) {
         self.session = session
+        let defaults = Self.sharedDefaults
+        // Respect stored compose defaults; fall back to sign=true, encrypt=false.
+        self.shouldSign = defaults?.object(forKey: "signByDefault") as? Bool ?? true
+        self.shouldEncrypt = defaults?.bool(forKey: "encryptByDefault") ?? false
     }
 
     func refresh() async {
@@ -21,7 +32,8 @@ final class ComposeViewModel {
         if let keys = try? await GPGXPCClient.shared.listSecretKeys() {
             availableSecretKeys = keys
             if selectedSignerFingerprint == nil {
-                selectedSignerFingerprint = keys.first?.fingerprint
+                let savedFP = Self.sharedDefaults?.string(forKey: "defaultSignerFingerprint")
+                selectedSignerFingerprint = savedFP ?? keys.first?.fingerprint
             }
         }
 

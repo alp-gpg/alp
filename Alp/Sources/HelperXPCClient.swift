@@ -20,18 +20,48 @@ final class HelperXPCClient: @unchecked Sendable {
 
     func listSecretKeys() async throws -> [GPGKeyInfo] {
         try await withCheckedThrowingContinuation { cont in
-            // swiftlint:disable:next force_cast
-            let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-                cont.resume(throwing: error)
-            } as! any GPGHelperProtocol
-            proxy.listSecretKeys { dataList, error in
-                if let error {
-                    cont.resume(throwing: error)
-                } else {
-                    let keys = (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
-                    cont.resume(returning: keys)
+            proxy(cont) { proxy in
+                proxy.listSecretKeys { dataList, error in
+                    if let error { cont.resume(throwing: error) }
+                    else { cont.resume(returning: Self.decodeKeys(dataList)) }
                 }
             }
         }
+    }
+
+    func listAllKeys() async throws -> [GPGKeyInfo] {
+        try await withCheckedThrowingContinuation { cont in
+            proxy(cont) { proxy in
+                proxy.listAllKeys { dataList, error in
+                    if let error { cont.resume(throwing: error) }
+                    else { cont.resume(returning: Self.decodeKeys(dataList)) }
+                }
+            }
+        }
+    }
+
+    func importKey(_ armoredKey: Data) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
+            proxy(cont) { proxy in
+                proxy.importKey(armoredKey: armoredKey) { error in
+                    if let error { cont.resume(throwing: error) }
+                    else { cont.resume() }
+                }
+            }
+        }
+    }
+
+    // MARK: – Private
+
+    private func proxy<T>(_ cont: CheckedContinuation<T, any Error>, body: (any GPGHelperProtocol) -> Void) {
+        // swiftlint:disable:next force_cast
+        let proxy = connection.remoteObjectProxyWithErrorHandler { error in
+            cont.resume(throwing: error)
+        } as! any GPGHelperProtocol
+        body(proxy)
+    }
+
+    private static func decodeKeys(_ dataList: [Data]?) -> [GPGKeyInfo] {
+        (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
     }
 }

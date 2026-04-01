@@ -13,21 +13,19 @@ concurrency:
 jobs:
   build-and-test:
     name: Build & Test
-    # Xcode 26 requires macOS 26 runners. Update runner label when available.
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # full history for CURRENT_PROJECT_VERSION git count
 
       - name: Select Xcode
         run: |
-          # Pick the latest available Xcode. Update to 26.x when runners ship it.
-          XCODE_PATH=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
-          echo "Using: $XCODE_PATH"
-          sudo xcode-select -s "$XCODE_PATH"
+          sudo xcode-select -s /Applications/Xcode_26.4.app || \
+            sudo xcode-select -s /Applications/Xcode_26.3.app || \
+            sudo xcode-select -s /Applications/Xcode_26.2.app
           xcodebuild -version
 
       - name: Install Tuist
@@ -71,14 +69,14 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Install linters
-        run: brew install swiftlint swiftformat
+      - name: Install SwiftLint
+        run: brew install swiftlint
 
       - name: SwiftLint
         run: swiftlint lint --strict --reporter github-actions

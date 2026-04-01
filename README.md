@@ -123,7 +123,7 @@ Run the `AlpTests` scheme in Xcode (`⌘U`). Tests require:
 - `gpg` installed and reachable
 - At least one secret key in your keyring
 
-The fingerprint `2BC83F55A4007468864C680E1B7CC8D4D4E914AA` is used as the default test key — change it in `Tests/GPGHelperTests.swift` if needed.
+Tests dynamically discover the first secret key in your keyring — no hardcoded fingerprint needed.
 
 ## Known Pitfalls
 

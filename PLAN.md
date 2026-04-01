@@ -506,7 +506,7 @@ import Testing
 
 @Suite("GPG Helper")
 struct GPGHelperTests {
-    let fingerprint = "2BC83F55A4007468864C680E1B7CC8D4D4E914AA"
+    // Dynamically discovers the first secret key in the keyring
 
     @Test("Round-trip encrypt/decrypt")
     func encryptDecrypt() async throws {
@@ -550,7 +550,7 @@ struct GPGHelperTests {
 
 ## Verification
 
-1. **Unit tests:** `Cmd+U` in Xcode — encrypt/decrypt/sign/verify against the real key `2BC83F55A4007468864C680E1B7CC8D4D4E914AA`
+1. **Unit tests:** `Cmd+U` in Xcode — encrypt/decrypt/sign/verify against the first secret key in your keyring
 2. **Helper smoke test:** run `AlpHelper` directly in a terminal, connect manually via `NSXPCConnection`
 3. **End-to-end in Mail:**
    - Build & run Alp → click "Install Helper" → grant permission

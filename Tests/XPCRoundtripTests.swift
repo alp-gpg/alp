@@ -1,5 +1,5 @@
+import Foundation
 import Testing
-@testable import AlpHelper
 
 /// Verifies that the GPGHelper correctly bridges between async and XPC reply-block patterns.
 /// These tests call the actor directly (no actual XPC transport) to validate bridging logic.

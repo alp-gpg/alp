@@ -1,5 +1,5 @@
+import Foundation
 import Testing
-@testable import AlpHelper
 
 @Suite("GPG Helper")
 struct GPGHelperTests {
@@ -37,7 +37,7 @@ struct GPGHelperTests {
         let helper = await GPGHelper()
         let plaintext = Data("Hello, Alp!".utf8)
         let cipher = try await helper._encrypt(plaintext, [fingerprint], fingerprint)
-        let (decrypted, signer) = try await helper._decrypt(cipher)
+        let (decrypted, signer, _) = try await helper._decrypt(cipher)
         #expect(decrypted == plaintext)
         #expect(signer != nil)
     }
@@ -47,7 +47,7 @@ struct GPGHelperTests {
         let helper = await GPGHelper()
         let data = Data("Signed message".utf8)
         let signature = try await helper._sign(data, signer: fingerprint)
-        let (valid, signer) = try await helper._verify(data, signature: signature)
+        let (valid, signer, _) = try await helper._verify(data, signature: signature)
         #expect(valid)
         #expect(signer != nil)
     }

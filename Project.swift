@@ -9,6 +9,10 @@ let baseSettings: SettingsDictionary = [
     "ENABLE_HARDENED_RUNTIME": "YES",
     "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
     "SWIFT_EMIT_LOC_STRINGS": "YES",
+    // Auto-increment build number from git commit count.
+    // Plists reference $(CURRENT_PROJECT_VERSION) so each build gets a unique number.
+    "CURRENT_PROJECT_VERSION": "1",
+    "VERSIONING_SYSTEM": "apple-generic",
 ]
 
 let project = Project(
@@ -83,6 +87,7 @@ let project = Project(
                 "AlpExtension/Sources/**",
                 "Shared/**",
             ],
+            resources: ["AlpExtension/Resources/**"],
             entitlements: .file(path: "AlpExtension/SupportingFiles/AlpExtension.entitlements"),
             settings: .settings(base: [
                 "CODE_SIGN_IDENTITY": "Apple Development",
@@ -116,16 +121,20 @@ let project = Project(
         ),
 
         // ── Tests ──────────────────────────────────────────────────────
+        // AlpHelper is a command-line tool and cannot be linked as a framework.
+        // Compile its sources (excluding main.swift) directly into the test target.
         .target(
             name: "AlpTests",
             destinations: .macOS,
             product: .unitTests,
             bundleId: "com.CXM87Z432P.alp.tests",
             deploymentTargets: .macOS("26.0"),
-            sources: ["Tests/**"],
-            dependencies: [
-                .target(name: "AlpHelper"),
-            ]
+            sources: [
+                .glob("Tests/**"),
+                .glob("AlpHelper/Sources/**", excluding: ["AlpHelper/Sources/main.swift"]),
+                .glob("Shared/**"),
+            ],
+            dependencies: []
         ),
     ]
 )

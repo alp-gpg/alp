@@ -7,13 +7,15 @@
     <key>CFBundleName</key>
     <string>Alp</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2025. All rights reserved.</string>
+    <string>Copyright © 2025-2026. All rights reserved.</string>
+    <key>NSExtensionUsageDescription</key>
+    <string>Alp uses a Mail extension to sign, encrypt, decrypt, and verify email messages with GPG.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>

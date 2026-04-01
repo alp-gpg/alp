@@ -1,5 +1,5 @@
+import Foundation
 import Testing
-@testable import AlpHelper
 
 @Suite("PGP Message Parser")
 struct PGPMessageParserTests {

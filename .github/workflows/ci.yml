@@ -32,7 +32,7 @@ jobs:
 
       - name: Install Tuist
         run: |
-          brew install --formula tuist
+          curl -Ls https://install.tuist.io | bash
           tuist version
 
       - name: Install GnuPG

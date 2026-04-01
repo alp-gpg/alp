@@ -5,18 +5,32 @@ import Testing
 /// These tests call the actor directly (no actual XPC transport) to validate bridging logic.
 @Suite("XPC Bridge Roundtrip")
 struct XPCRoundtripTests {
-    let fingerprint = "2BC83F55A4007468864C680E1B7CC8D4D4E914AA"
+    let helper: GPGHelper
+
+    init() async {
+        helper = await GPGHelper()
+    }
+
+    /// Returns the fingerprint of the first secret key, or skips the test.
+    private func firstSecretKeyFingerprint() async throws -> String {
+        let keys = try await helper._listSecretKeys()
+        guard let key = keys.first else {
+            Issue.record("No secret keys in keyring — skipping")
+            throw GPGError.noSigningKey
+        }
+        return key.fingerprint
+    }
 
     @Test("nonisolated encrypt bridge calls reply with data")
     func encryptBridgeCallsReply() async throws {
-        let helper = await GPGHelper()
+        let fp = try await firstSecretKeyFingerprint()
         let plaintext = Data("bridge test".utf8)
 
         let result: Data = try await withCheckedThrowingContinuation { cont in
             helper.encrypt(
                 data: plaintext,
-                recipientFingerprints: [fingerprint],
-                signingFingerprint: fingerprint
+                recipientFingerprints: [fp],
+                signingFingerprint: fp
             ) { data, error in
                 if let error { cont.resume(throwing: error) }
                 else if let data { cont.resume(returning: data) }
@@ -28,8 +42,6 @@ struct XPCRoundtripTests {
 
     @Test("nonisolated listSecretKeys bridge returns JSON-encoded array")
     func listSecretKeysBridgeReturnsJSON() async throws {
-        let helper = await GPGHelper()
-
         let dataList: [Data] = try await withCheckedThrowingContinuation { cont in
             helper.listSecretKeys { dataList, error in
                 if let error { cont.resume(throwing: error) }
@@ -37,7 +49,6 @@ struct XPCRoundtripTests {
             }
         }
         #expect(!dataList.isEmpty)
-        // Verify each element decodes to a GPGKeyInfo
         for data in dataList {
             let key = try JSONDecoder().decode(GPGKeyInfo.self, from: data)
             #expect(!key.fingerprint.isEmpty)

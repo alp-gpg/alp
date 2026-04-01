@@ -52,12 +52,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Generate CI GPG key
+        run: |
+          # Create a passphrase-less key in the default keyring for tests
+          gpg --batch --passphrase '' --quick-gen-key "CI Bot <ci@alp.test>" default default never
+          gpg --list-secret-keys --keyid-format long
+
       - name: Test
         run: |
-          # Generate a throwaway GPG key so helper tests can run
-          export GNUPGHOME="$(mktemp -d)"
-          gpg --batch --passphrase '' --quick-gen-key "CI Bot <ci@alp.test>" default default never
-
           xcodebuild test \
             -workspace Alp.xcworkspace \
             -scheme Alp \

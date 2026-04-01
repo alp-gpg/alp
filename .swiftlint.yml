@@ -32,6 +32,7 @@ opt_in_rules:
   - sorted_first_last
   - toggle_bool
   - vertical_parameter_alignment_on_call
+  - force_unwrapping
   - yoda_condition
 
 force_cast: warning

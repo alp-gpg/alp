@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    # Xcode 26 requires macOS 26 runners. Update runner label when available.
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for CURRENT_PROJECT_VERSION git count
+
+      - name: Select Xcode
+        run: |
+          # Pick the latest available Xcode. Update to 26.x when runners ship it.
+          XCODE_PATH=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          echo "Using: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH"
+          xcodebuild -version
+
+      - name: Install Tuist
+        run: |
+          brew install --formula tuist
+          tuist version
+
+      - name: Install GnuPG
+        run: |
+          brew install gnupg
+          gpg --version | head -1
+
+      - name: Generate Xcode project
+        run: tuist generate --no-open
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -workspace Alp.xcworkspace \
+            -scheme Alp \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Test
+        run: |
+          # Generate a throwaway GPG key so helper tests can run
+          export GNUPGHOME="$(mktemp -d)"
+          gpg --batch --passphrase '' --quick-gen-key "CI Bot <ci@alp.test>" default default never
+
+          xcodebuild test \
+            -workspace Alp.xcworkspace \
+            -scheme Alp \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+  lint:
+    name: Lint
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install linters
+        run: brew install swiftlint swiftformat
+
+      - name: SwiftLint
+        run: swiftlint lint --strict --reporter github-actions
+
+      - name: SwiftFormat (check only)
+        run: swiftformat --lint .

@@ -201,6 +201,108 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         }
     }
 
+    // MARK: – Health check
+
+    func _checkHealth() async -> GPGHealthStatus {
+        var status = GPGHealthStatus()
+
+        // 1. GPG binary
+        let path = gpgPath
+        let found = path != "gpg" && FileManager.default.isExecutableFile(atPath: path)
+        status.gpgPath = found ? path : nil
+
+        // 2. Version
+        if found, let versionData = try? await runGPGRaw(["--version"]).stdout,
+           let versionText = String(data: versionData, encoding: .utf8) {
+            // First line: "gpg (GnuPG) 2.4.7"
+            if let firstLine = versionText.components(separatedBy: "\n").first,
+               let match = firstLine.range(of: #"\d+\.\d+(\.\d+)?"#, options: .regularExpression) {
+                let ver = String(firstLine[match])
+                status.gpgVersion = ver
+                status.versionSufficient = compareVersion(ver, isAtLeast: "2.2.14")
+            }
+        }
+
+        // 3. gpg-agent
+        if found {
+            let agentResult = try? await runGPGRaw(["--batch", "--status-fd", "1", "--sign", "--local-user", "DOESNOTEXIST", "--output", "/dev/null"])
+            // We don't care about the result — if gpg can talk to the agent, it's running.
+            // A more reliable check: gpg-connect-agent
+            let agentCheck = try? await runProcess("/usr/bin/env", args: ["gpgconf", "--check-programs"])
+            if let data = agentCheck, let text = String(data: data, encoding: .utf8) {
+                status.agentRunning = text.contains("gpg-agent") && !text.contains(":0:")
+            }
+            // Fallback: just check the socket exists
+            if !status.agentRunning {
+                let gnupgHome = ProcessInfo.processInfo.environment["GNUPGHOME"]
+                    ?? (NSHomeDirectory() + "/.gnupg")
+                let socketPath = gnupgHome + "/S.gpg-agent"
+                status.agentRunning = FileManager.default.fileExists(atPath: socketPath)
+            }
+        }
+
+        // 4. pinentry-mac
+        let gnupgHome = ProcessInfo.processInfo.environment["GNUPGHOME"]
+            ?? (NSHomeDirectory() + "/.gnupg")
+        let agentConf = gnupgHome + "/gpg-agent.conf"
+        if let confText = try? String(contentsOfFile: agentConf, encoding: .utf8) {
+            for line in confText.components(separatedBy: "\n") {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("pinentry-program") {
+                    let parts = trimmed.components(separatedBy: .whitespaces)
+                    if parts.count >= 2 {
+                        status.pinentryPath = parts[1]
+                        // Accept any GUI pinentry (pinentry-mac, pinentry-gnome3, pinentry-qt, etc.)
+                        status.pinentryConfigured = FileManager.default.isExecutableFile(atPath: parts[1])
+                    }
+                }
+            }
+        }
+
+        // 5. Secret keys
+        if found, let keys = try? await _listSecretKeys() {
+            status.hasSecretKeys = !keys.isEmpty
+            status.secretKeyCount = keys.count
+        }
+
+        // 6. TOFU trust model support
+        if found {
+            // gpg --with-colons --trust-model tofu+pgp --list-keys returns 0 if supported
+            let tofuResult = try? await runGPGRaw(["--batch", "--trust-model", "tofu+pgp", "--list-keys", "--with-colons"])
+            status.tofuSupported = tofuResult?.exitCode == 0
+        }
+
+        return status
+    }
+
+    /// Simple semver comparison: "2.4.7" isAtLeast "2.2.14" → true
+    private func compareVersion(_ version: String, isAtLeast minimum: String) -> Bool {
+        let v = version.split(separator: ".").compactMap { Int($0) }
+        let m = minimum.split(separator: ".").compactMap { Int($0) }
+        for i in 0 ..< max(v.count, m.count) {
+            let a = i < v.count ? v[i] : 0
+            let b = i < m.count ? m[i] : 0
+            if a > b { return true }
+            if a < b { return false }
+        }
+        return true // equal
+    }
+
+    /// Run an arbitrary process and return stdout.
+    private func runProcess(_ path: String, args: [String]) async throws -> Data {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = args
+        process.environment = Self.sanitizedEnvironment()
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        try process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return data
+    }
+
     // MARK: – Helpers
 
     /// Run gpg and capture stdout (plaintext) while parsing status-fd on stderr (signer info).
@@ -463,6 +565,18 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(false, nil, e.asNSError)
             } catch {
                 reply(false, nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func checkHealth(reply: @escaping @Sendable (Data?, NSError?) -> Void) {
+        Task {
+            let status = await self._checkHealth()
+            do {
+                let data = try JSONEncoder().encode(status)
+                reply(data, nil)
+            } catch {
+                reply(nil, (error as NSError))
             }
         }
     }

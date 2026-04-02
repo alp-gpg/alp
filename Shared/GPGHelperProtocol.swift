@@ -47,4 +47,7 @@ import Foundation
         email: String,
         reply: @escaping @Sendable (Bool, String?, NSError?) -> Void
     )
+
+    /// Check GPG environment health. reply: JSON-encoded GPGHealthStatus or error
+    func checkHealth(reply: @escaping @Sendable (Data?, NSError?) -> Void)
 }

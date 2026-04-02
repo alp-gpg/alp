@@ -40,6 +40,26 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    func checkHealth() async throws -> GPGHealthStatus {
+        try await withCheckedThrowingContinuation { cont in
+            proxy(cont) { proxy in
+                proxy.checkHealth { data, error in
+                    if let error { cont.resume(throwing: error) }
+                    else if let data {
+                        do {
+                            let status = try JSONDecoder().decode(GPGHealthStatus.self, from: data)
+                            cont.resume(returning: status)
+                        } catch {
+                            cont.resume(throwing: error)
+                        }
+                    } else {
+                        cont.resume(throwing: GPGError.xpcUnavailable)
+                    }
+                }
+            }
+        }
+    }
+
     func importKey(_ armoredKey: Data) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
             proxy(cont) { proxy in

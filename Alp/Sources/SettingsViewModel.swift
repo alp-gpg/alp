@@ -41,6 +41,21 @@ final class SettingsViewModel {
         }
     }
 
+    // MARK: – Health
+
+    var healthStatus: GPGHealthStatus?
+    var isCheckingHealth = false
+
+    func refreshHealth() async {
+        isCheckingHealth = true
+        defer { isCheckingHealth = false }
+        do {
+            healthStatus = try await HelperXPCClient.shared.checkHealth()
+        } catch {
+            healthStatus = nil
+        }
+    }
+
     // MARK: – Helper
 
     var helperStatus: SMAppService.Status = .notRegistered
@@ -49,6 +64,7 @@ final class SettingsViewModel {
     func load() async {
         helperStatus = helperService.status
         await refreshKeys()
+        await refreshHealth()
     }
 
     func refreshKeys() async {

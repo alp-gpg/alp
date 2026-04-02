@@ -225,9 +225,6 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
         // 3. gpg-agent
         if found {
-            let agentResult = try? await runGPGRaw(["--batch", "--status-fd", "1", "--sign", "--local-user", "DOESNOTEXIST", "--output", "/dev/null"])
-            // We don't care about the result — if gpg can talk to the agent, it's running.
-            // A more reliable check: gpg-connect-agent
             let agentCheck = try? await runProcess("/usr/bin/env", args: ["gpgconf", "--check-programs"])
             if let data = agentCheck, let text = String(data: data, encoding: .utf8) {
                 status.agentRunning = text.contains("gpg-agent") && !text.contains(":0:")

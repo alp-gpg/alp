@@ -28,7 +28,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             if let val = inherited[key] { env[key] = val }
         }
         env["HOME"] = env["HOME"] ?? NSHomeDirectory()
-        env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+        env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin:/nix/var/nix/profiles/default/bin:/usr/local/MacGPG2/bin:/usr/bin:/bin"
         return env
     }
 
@@ -36,10 +36,11 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     private static func detectGPGPath() -> String {
         let candidates = [
-            "/opt/homebrew/bin/gpg",     // brew install gnupg (Apple Silicon)
-            "/usr/local/bin/gpg",        // brew install gnupg (Intel)
-            "/usr/local/MacGPG2/bin/gpg", // GPGTools fallback
-            "/usr/bin/gpg",              // system fallback
+            "/opt/homebrew/bin/gpg",              // Homebrew (Apple Silicon)
+            "/usr/local/bin/gpg",                 // Homebrew (Intel) / manual install
+            "/opt/local/bin/gpg",                 // MacPorts
+            "/nix/var/nix/profiles/default/bin/gpg", // Nix
+            "/usr/local/MacGPG2/bin/gpg",         // GPG Suite (GPGTools)
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
             ?? "gpg"  // last resort: rely on PATH

@@ -20,10 +20,10 @@ can pass Mac App Store review.
   replace with a Swift-native OpenPGP library (e.g. OpenPGP.swift, PGPy FFI, or a
   libgpgme xcframework). This is the largest architectural change required.
 
-### 3. Bundle ID Prefix
-- Bundle IDs default to `com.REPLACE_ME.alp` — set a proper reverse-domain prefix
-  in `Project.swift` before release (e.g. `com.yourcompany`).
-- All references are derived from the two variables at the top of `Project.swift`.
+### 3. Bundle ID Registration
+- Register `app.alp.Alp`, `app.alp.Alp.extension`, and `app.alp.Alp.helper` in
+  the Apple Developer portal before submitting to the App Store.
+- Enable App Groups capability (`group.app.alp.Alp`) on the app and extension.
 
 ## Should Fix
 

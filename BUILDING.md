@@ -12,14 +12,9 @@ You need **Xcode 26** or later and an Apple Developer account (free or paid).
 
 ## Configure Signing
 
-Before building, set your Apple Developer Team ID and bundle ID prefix at the top of `Project.swift`:
+The project uses `CODE_SIGN_STYLE = Automatic`. When you open the workspace in Xcode, select your own Apple Developer team — Xcode will handle provisioning profiles automatically.
 
-```swift
-let teamID = "YOUR_TEAM_ID"        // e.g. "ABCDE12345"
-let bundlePrefix = "com.yourcompany" // e.g. "com.example"
-```
-
-All bundle IDs, entitlements, Mach service names, XPC code signing requirements, and the LaunchAgent plist are derived from these two variables automatically. No other files need editing.
+If you're building a fork for distribution, update `DEVELOPMENT_TEAM` in `Project.swift` and the `teamID` in `Shared/BuildConfig.swift` to match your Team ID.
 
 ## Generate & Build
 

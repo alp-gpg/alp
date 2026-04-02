@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>__ALP_BUNDLE_PREFIX__.alp.helper</string>
+    <string>app.alp.Alp.helper</string>
     <key>MachServices</key>
     <dict>
-        <key>__ALP_BUNDLE_PREFIX__.alp.helper</key>
+        <key>app.alp.Alp.helper</key>
         <true/>
     </dict>
     <key>BundleProgram</key>

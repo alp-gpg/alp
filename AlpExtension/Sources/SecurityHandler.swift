@@ -2,7 +2,7 @@ import Foundation
 import MailKit
 import os.log
 
-private let log = Logger(subsystem: "\(BuildConfig.bundlePrefix).alp.extension", category: "SecurityHandler")
+private let log = Logger(subsystem: "app.alp.Alp.extension", category: "SecurityHandler")
 
 /// Handles GPG encrypt/sign/decrypt/verify for Apple Mail.
 ///

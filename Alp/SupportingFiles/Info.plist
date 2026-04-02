@@ -21,9 +21,5 @@
         <key>NSAllowsArbitraryLoads</key>
         <false/>
     </dict>
-    <key>ALPTeamID</key>
-    <string>$(ALP_TEAM_ID)</string>
-    <key>ALPBundlePrefix</key>
-    <string>$(ALP_BUNDLE_PREFIX)</string>
 </dict>
 </plist>

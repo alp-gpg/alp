@@ -12,9 +12,5 @@
     <string>1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
-    <key>ALPTeamID</key>
-    <string>$(ALP_TEAM_ID)</string>
-    <key>ALPBundlePrefix</key>
-    <string>$(ALP_BUNDLE_PREFIX)</string>
 </dict>
 </plist>

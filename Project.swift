@@ -1,13 +1,5 @@
 import ProjectDescription
 
-// ── Customisation ──────────────────────────────────────────────────────
-// Change these two values to match your Apple Developer account.
-// Everything else (bundle IDs, entitlements, Mach service names, code
-// signing requirements) is derived from them automatically.
-let teamID = "YOURTEAMID"
-let bundlePrefix = "com.example"
-// ───────────────────────────────────────────────────────────────────────
-
 let baseSettings: SettingsDictionary = [
     "SWIFT_VERSION": "6.3",
     "SWIFT_STRICT_CONCURRENCY": "complete",
@@ -17,13 +9,8 @@ let baseSettings: SettingsDictionary = [
     "ENABLE_HARDENED_RUNTIME": "YES",
     "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
     "SWIFT_EMIT_LOC_STRINGS": "YES",
-    // Auto-increment build number from git commit count.
-    // Plists reference $(CURRENT_PROJECT_VERSION) so each build gets a unique number.
     "CURRENT_PROJECT_VERSION": "1",
     "VERSIONING_SYSTEM": "apple-generic",
-    // Custom build settings propagated to Info.plist and Swift via BuildConfig.
-    "ALP_TEAM_ID": SettingValue(stringLiteral: teamID),
-    "ALP_BUNDLE_PREFIX": SettingValue(stringLiteral: bundlePrefix),
 ]
 
 let project = Project(
@@ -39,7 +26,7 @@ let project = Project(
             name: "Alp",
             destinations: .macOS,
             product: .app,
-            bundleId: "\(bundlePrefix).alp",
+            bundleId: "app.alp.Alp",
             deploymentTargets: .macOS("26.0"),
             infoPlist: .file(path: "Alp/SupportingFiles/Info.plist"),
             sources: ["Alp/Sources/**", "Shared/**"],
@@ -52,13 +39,12 @@ let project = Project(
                     script: """
                     DEST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchAgents"
                     mkdir -p "$DEST"
-                    sed "s/__ALP_BUNDLE_PREFIX__/${ALP_BUNDLE_PREFIX}/g" \
-                        "${SRCROOT}/AlpHelper/SupportingFiles/alp-helper.plist" \
-                        > "$DEST/${ALP_BUNDLE_PREFIX}.alp.helper.plist"
+                    cp "${SRCROOT}/AlpHelper/SupportingFiles/app.alp.Alp.helper.plist" \
+                       "$DEST/app.alp.Alp.helper.plist"
                     """,
                     name: "Copy LaunchAgent plist",
-                    inputPaths: ["$(SRCROOT)/AlpHelper/SupportingFiles/alp-helper.plist"],
-                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/$(ALP_BUNDLE_PREFIX).alp.helper.plist"],
+                    inputPaths: ["$(SRCROOT)/AlpHelper/SupportingFiles/app.alp.Alp.helper.plist"],
+                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.alp.Alp.helper.plist"],
                     basedOnDependencyAnalysis: false
                 ),
                 // Embed the AlpHelper command-line tool inside the app bundle so
@@ -82,7 +68,7 @@ let project = Project(
             settings: .settings(base: [
                 "CODE_SIGN_IDENTITY": "Apple Development",
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": SettingValue(stringLiteral: teamID),
+                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
                 "ENABLE_HARDENED_RUNTIME": "YES",
             ])
         ),
@@ -92,7 +78,7 @@ let project = Project(
             name: "AlpExtension",
             destinations: .macOS,
             product: .appExtension,
-            bundleId: "\(bundlePrefix).alp.extension",
+            bundleId: "app.alp.Alp.extension",
             deploymentTargets: .macOS("26.0"),
             infoPlist: .file(path: "AlpExtension/SupportingFiles/Info.plist"),
             sources: [
@@ -104,7 +90,7 @@ let project = Project(
             settings: .settings(base: [
                 "CODE_SIGN_IDENTITY": "Apple Development",
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": SettingValue(stringLiteral: teamID),
+                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
                 "ENABLE_HARDENED_RUNTIME": "YES",
             ])
         ),
@@ -114,7 +100,7 @@ let project = Project(
             name: "AlpHelper",
             destinations: .macOS,
             product: .commandLineTool,
-            bundleId: "\(bundlePrefix).alp.helper",
+            bundleId: "app.alp.Alp.helper",
             deploymentTargets: .macOS("26.0"),
             infoPlist: .file(path: "AlpHelper/SupportingFiles/Info.plist"),
             sources: [
@@ -125,10 +111,10 @@ let project = Project(
             settings: .settings(base: [
                 "CODE_SIGN_IDENTITY": "Apple Development",
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": SettingValue(stringLiteral: teamID),
+                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
                 "ENABLE_HARDENED_RUNTIME": "YES",
                 "CREATE_INFOPLIST_SECTION_IN_BINARY": "YES",
-                "OTHER_CODE_SIGN_FLAGS": SettingValue(stringLiteral: "--identifier \(bundlePrefix).alp.helper"),
+                "OTHER_CODE_SIGN_FLAGS": "--identifier app.alp.Alp.helper",
             ])
         ),
 
@@ -139,7 +125,7 @@ let project = Project(
             name: "AlpTests",
             destinations: .macOS,
             product: .unitTests,
-            bundleId: "\(bundlePrefix).alp.tests",
+            bundleId: "app.alp.Alp.tests",
             deploymentTargets: .macOS("26.0"),
             sources: [
                 .glob("Tests/**"),

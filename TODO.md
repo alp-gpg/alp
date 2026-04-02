@@ -20,15 +20,10 @@ can pass Mac App Store review.
   replace with a Swift-native OpenPGP library (e.g. OpenPGP.swift, PGPy FFI, or a
   libgpgme xcframework). This is the largest architectural change required.
 
-### 3. Hardcoded Team ID in Bundle Identifiers
-- Bundle IDs use `com.CXM87Z432P.alp` format (App ID prefix, not reverse-domain)
-- App Store expects conventional reverse-domain like `com.yourcompany.alp`
-- Affected files: `Project.swift`, all `Info.plist` files, all `.entitlements` files,
-  `com.CXM87Z432P.alp.helper.plist`, and code signing requirements in
-  `AlpHelper/Sources/main.swift`, `AlpExtension/Sources/GPGXPCClient.swift`,
-  `Alp/Sources/HelperXPCClient.swift`, `Shared/GPGError.swift`
-- **Action:** Choose a proper reverse-domain bundle ID and update all references.
-  Consider a Tuist variable or build setting to centralize the team/bundle ID.
+### 3. Bundle ID Prefix
+- Bundle IDs default to `com.REPLACE_ME.alp` — set a proper reverse-domain prefix
+  in `Project.swift` before release (e.g. `com.yourcompany`).
+- All references are derived from the two variables at the top of `Project.swift`.
 
 ## Should Fix
 

@@ -10,11 +10,9 @@ final class GPGXPCClient: @unchecked Sendable {
     private let connection: NSXPCConnection
 
     private init() {
-        connection = NSXPCConnection(machServiceName: "com.CXM87Z432P.alp.helper")
+        connection = NSXPCConnection(machServiceName: BuildConfig.helperMachService)
         connection.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
-        connection.setCodeSigningRequirement(
-            "anchor apple generic and certificate leaf[subject.OU] = \"3G6WR6H4M5\""
-        )
+        connection.setCodeSigningRequirement(BuildConfig.codeSigningRequirement)
         connection.resume()
     }
 

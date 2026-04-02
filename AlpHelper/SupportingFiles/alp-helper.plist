@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.CXM87Z432P.alp.helper</string>
+    <string>__ALP_BUNDLE_PREFIX__.alp.helper</string>
     <key>MachServices</key>
     <dict>
-        <key>com.CXM87Z432P.alp.helper</key>
+        <key>__ALP_BUNDLE_PREFIX__.alp.helper</key>
         <true/>
     </dict>
     <key>BundleProgram</key>

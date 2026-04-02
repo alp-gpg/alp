@@ -1,5 +1,13 @@
 import ProjectDescription
 
+// ── Customisation ──────────────────────────────────────────────────────
+// Change these two values to match your Apple Developer account.
+// Everything else (bundle IDs, entitlements, Mach service names, code
+// signing requirements) is derived from them automatically.
+let teamID = "YOURTEAMID"
+let bundlePrefix = "com.example"
+// ───────────────────────────────────────────────────────────────────────
+
 let baseSettings: SettingsDictionary = [
     "SWIFT_VERSION": "6.3",
     "SWIFT_STRICT_CONCURRENCY": "complete",
@@ -13,6 +21,9 @@ let baseSettings: SettingsDictionary = [
     // Plists reference $(CURRENT_PROJECT_VERSION) so each build gets a unique number.
     "CURRENT_PROJECT_VERSION": "1",
     "VERSIONING_SYSTEM": "apple-generic",
+    // Custom build settings propagated to Info.plist and Swift via BuildConfig.
+    "ALP_TEAM_ID": SettingValue(stringLiteral: teamID),
+    "ALP_BUNDLE_PREFIX": SettingValue(stringLiteral: bundlePrefix),
 ]
 
 let project = Project(
@@ -28,7 +39,7 @@ let project = Project(
             name: "Alp",
             destinations: .macOS,
             product: .app,
-            bundleId: "com.CXM87Z432P.alp",
+            bundleId: "\(bundlePrefix).alp",
             deploymentTargets: .macOS("26.0"),
             infoPlist: .file(path: "Alp/SupportingFiles/Info.plist"),
             sources: ["Alp/Sources/**", "Shared/**"],
@@ -41,16 +52,17 @@ let project = Project(
                     script: """
                     DEST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchAgents"
                     mkdir -p "$DEST"
-                    cp "${SRCROOT}/AlpHelper/SupportingFiles/com.CXM87Z432P.alp.helper.plist" \
-                       "$DEST/com.CXM87Z432P.alp.helper.plist"
+                    sed "s/__ALP_BUNDLE_PREFIX__/${ALP_BUNDLE_PREFIX}/g" \
+                        "${SRCROOT}/AlpHelper/SupportingFiles/alp-helper.plist" \
+                        > "$DEST/${ALP_BUNDLE_PREFIX}.alp.helper.plist"
                     """,
                     name: "Copy LaunchAgent plist",
-                    inputPaths: ["$(SRCROOT)/AlpHelper/SupportingFiles/com.CXM87Z432P.alp.helper.plist"],
-                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/com.CXM87Z432P.alp.helper.plist"],
+                    inputPaths: ["$(SRCROOT)/AlpHelper/SupportingFiles/alp-helper.plist"],
+                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/$(ALP_BUNDLE_PREFIX).alp.helper.plist"],
                     basedOnDependencyAnalysis: false
                 ),
                 // Embed the AlpHelper command-line tool inside the app bundle so
-                // SMAppService.daemon can locate it via BundleProgram = Contents/MacOS/AlpHelper.
+                // SMAppService can locate it via BundleProgram = Contents/MacOS/AlpHelper.
                 // Xcode's final bundle-signing step will re-sign the copied binary.
                 .post(
                     script: """
@@ -70,7 +82,7 @@ let project = Project(
             settings: .settings(base: [
                 "CODE_SIGN_IDENTITY": "Apple Development",
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
+                "DEVELOPMENT_TEAM": SettingValue(stringLiteral: teamID),
                 "ENABLE_HARDENED_RUNTIME": "YES",
             ])
         ),
@@ -80,7 +92,7 @@ let project = Project(
             name: "AlpExtension",
             destinations: .macOS,
             product: .appExtension,
-            bundleId: "com.CXM87Z432P.alp.extension",
+            bundleId: "\(bundlePrefix).alp.extension",
             deploymentTargets: .macOS("26.0"),
             infoPlist: .file(path: "AlpExtension/SupportingFiles/Info.plist"),
             sources: [
@@ -92,17 +104,17 @@ let project = Project(
             settings: .settings(base: [
                 "CODE_SIGN_IDENTITY": "Apple Development",
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
+                "DEVELOPMENT_TEAM": SettingValue(stringLiteral: teamID),
                 "ENABLE_HARDENED_RUNTIME": "YES",
             ])
         ),
 
-        // ── XPC Helper Daemon ──────────────────────��───────────────────
+        // ── XPC Helper Daemon ──────────────────────────────────────────
         .target(
             name: "AlpHelper",
             destinations: .macOS,
             product: .commandLineTool,
-            bundleId: "com.CXM87Z432P.alp.helper",
+            bundleId: "\(bundlePrefix).alp.helper",
             deploymentTargets: .macOS("26.0"),
             infoPlist: .file(path: "AlpHelper/SupportingFiles/Info.plist"),
             sources: [
@@ -113,10 +125,10 @@ let project = Project(
             settings: .settings(base: [
                 "CODE_SIGN_IDENTITY": "Apple Development",
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
+                "DEVELOPMENT_TEAM": SettingValue(stringLiteral: teamID),
                 "ENABLE_HARDENED_RUNTIME": "YES",
                 "CREATE_INFOPLIST_SECTION_IN_BINARY": "YES",
-                "OTHER_CODE_SIGN_FLAGS": "--identifier com.CXM87Z432P.alp.helper",
+                "OTHER_CODE_SIGN_FLAGS": SettingValue(stringLiteral: "--identifier \(bundlePrefix).alp.helper"),
             ])
         ),
 
@@ -127,7 +139,7 @@ let project = Project(
             name: "AlpTests",
             destinations: .macOS,
             product: .unitTests,
-            bundleId: "com.CXM87Z432P.alp.tests",
+            bundleId: "\(bundlePrefix).alp.tests",
             deploymentTargets: .macOS("26.0"),
             sources: [
                 .glob("Tests/**"),

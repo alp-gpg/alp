@@ -8,7 +8,7 @@
     <true/>
     <key>com.apple.security.application-groups</key>
     <array>
-        <string>group.com.CXM87Z432P.alp</string>
+        <string>group.$(ALP_BUNDLE_PREFIX).alp</string>
     </array>
 </dict>
 </plist>

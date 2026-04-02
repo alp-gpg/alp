@@ -76,7 +76,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
         // Read both pipes concurrently to avoid deadlock when either pipe's
         // OS buffer (~64 KB) fills while the other is still being written.
-        let stderrQueue = DispatchQueue(label: "com.CXM87Z432P.alp.stderr-reader")
+        let stderrQueue = DispatchQueue(label: "\(BuildConfig.bundlePrefix).alp.stderr-reader")
         nonisolated(unsafe) var stderrData = Data()
         stderrQueue.async { stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile() }
         let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()

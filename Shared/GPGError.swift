@@ -37,7 +37,7 @@ extension GPGError: LocalizedError {
 extension GPGError {
     var asNSError: NSError {
         NSError(
-            domain: "com.CXM87Z432P.alp.GPGError",
+            domain: "\(BuildConfig.bundlePrefix).alp.GPGError",
             code: nsErrorCode,
             userInfo: [NSLocalizedDescriptionKey: errorDescription ?? "Unknown error"]
         )

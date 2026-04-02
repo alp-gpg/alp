@@ -5,7 +5,7 @@ import ServiceManagement
 @Observable @MainActor
 final class SettingsViewModel {
     // Mirror writes into the app group so the sandboxed extension can read them.
-    private static let groupDefaults = UserDefaults(suiteName: "group.com.CXM87Z432P.alp")
+    private static let groupDefaults = UserDefaults(suiteName: BuildConfig.appGroup)
 
     // MARK: – Keys
 
@@ -138,6 +138,6 @@ final class SettingsViewModel {
     }
 
     private var helperService: SMAppService {
-        SMAppService.agent(plistName: "com.CXM87Z432P.alp.helper.plist")
+        SMAppService.agent(plistName: BuildConfig.helperPlistName)
     }
 }

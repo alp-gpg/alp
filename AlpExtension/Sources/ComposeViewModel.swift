@@ -17,7 +17,7 @@ final class ComposeViewModel {
     }
 
     private let session: MEComposeSession
-    private static let sharedDefaults = UserDefaults(suiteName: "group.com.CXM87Z432P.alp")
+    private static let sharedDefaults = UserDefaults(suiteName: BuildConfig.appGroup)
 
     init(session: MEComposeSession) {
         self.session = session

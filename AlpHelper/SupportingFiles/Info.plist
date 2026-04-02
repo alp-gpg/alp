@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.CXM87Z432P.alp.helper</string>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleName</key>
     <string>AlpHelper</string>
     <key>CFBundleVersion</key>
@@ -12,5 +12,9 @@
     <string>1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
+    <key>ALPTeamID</key>
+    <string>$(ALP_TEAM_ID)</string>
+    <key>ALPBundlePrefix</key>
+    <string>$(ALP_BUNDLE_PREFIX)</string>
 </dict>
 </plist>

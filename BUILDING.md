@@ -12,19 +12,14 @@ You need **Xcode 26** or later and an Apple Developer account (free or paid).
 
 ## Configure Signing
 
-Before building, replace the placeholder Team ID and bundle ID prefix in the following files:
+Before building, set your Apple Developer Team ID and bundle ID prefix at the top of `Project.swift`:
 
-**Team ID** — replace `3G6WR6H4M5` with your Apple Developer Team ID:
-- `Project.swift` — all `DEVELOPMENT_TEAM` entries
-- `AlpHelper/Sources/main.swift` — `setCodeSigningRequirement`
-- `AlpExtension/Sources/GPGXPCClient.swift` — `setCodeSigningRequirement`
-- `Alp/Sources/HelperXPCClient.swift` — `setCodeSigningRequirement`
+```swift
+let teamID = "YOUR_TEAM_ID"        // e.g. "ABCDE12345"
+let bundlePrefix = "com.yourcompany" // e.g. "com.example"
+```
 
-**Bundle ID prefix** — replace `com.CXM87Z432P.alp` if needed:
-- `Project.swift` — all `bundleId` entries
-- `AlpHelper/SupportingFiles/com.CXM87Z432P.alp.helper.plist` — `Label` and `MachServices`
-- All `*.entitlements` files — app group and Mach lookup names
-- Source files listed above — Mach service name strings
+All bundle IDs, entitlements, Mach service names, XPC code signing requirements, and the LaunchAgent plist are derived from these two variables automatically. No other files need editing.
 
 ## Generate & Build
 

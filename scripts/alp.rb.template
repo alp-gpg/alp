@@ -1,0 +1,29 @@
+# Homebrew cask formula for Alp.
+# Deploy to alp-gpg/homebrew-tap as Casks/alp.rb.
+# Update version and sha256 after each release.
+cask "alp" do
+  version "VERSION"
+  sha256 "SHA256"
+
+  url "https://github.com/alp-gpg/alp/releases/download/v#{version}/Alp-#{version}.dmg"
+  name "Alp"
+  desc "GPG encrypt, decrypt, sign, and verify in Apple Mail"
+  homepage "https://github.com/alp-gpg/alp"
+
+  depends_on formula: "gnupg"
+  depends_on formula: "pinentry-mac"
+  depends_on macos: ">= :tahoe"
+
+  app "Alp.app"
+
+  postflight do
+    ohai "Run Alp and click 'Install Helper' to register the background agent."
+    ohai "Then enable the extension in Mail → Settings → Extensions."
+  end
+
+  zap trash: [
+    "~/Library/Containers/app.alp.Alp",
+    "~/Library/Containers/app.alp.Alp.extension",
+    "~/Library/Group Containers/group.app.alp.Alp",
+  ]
+end

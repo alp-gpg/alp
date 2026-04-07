@@ -1,56 +1,37 @@
-# App Store Readiness TODOs
+# Release TODOs
 
-Remaining items that require architectural decisions or Apple engagement before the app
-can pass Mac App Store review.
+## Must Fix (manual steps)
 
-## Must Fix
+- Add GitHub secrets for release pipeline
+- Create `alp-gpg/homebrew-tap` repo with cask formula from `scripts/alp.rb.template`
 
-### 1. Sandbox Temporary Exception for Mach Lookup
-- `AlpExtension.entitlements` uses `com.apple.security.temporary-exception.mach-lookup.global-name`
-- Apple discourages temporary sandbox exceptions for App Store apps
-- **Action:** File a Technical Support Incident (TSI) with Apple to confirm the
-  accepted XPC pattern for Mail extensions communicating with an unsandboxed helper.
-  Alternatives: proper App Group XPC service, or `NSXPCConnection` via `SMAppService`
-  without a Mach lookup exception.
+## UX Improvements (in progress)
 
-### 2. External GPG Binary Dependency
-- The app requires `brew install gnupg` — App Store apps should be self-contained
-- The helper calls `/opt/homebrew/bin/gpg` (or other paths) via `Process()`
-- **Action:** Either bundle a statically-linked gpg binary inside the app bundle, or
-  replace with a Swift-native OpenPGP library (e.g. OpenPGP.swift, PGPy FFI, or a
-  libgpgme xcframework). This is the largest architectural change required.
+### Phase 1: First-Time User Journey
+- [ ] Setup checklist in GeneralSettingsView (helper → GPG → Mail extension → signing key)
+- [ ] Auto-navigate to problem area on launch
+- [ ] Extension heartbeat via app group defaults
 
-### 3. Bundle ID Registration
-- Register `app.alp.Alp`, `app.alp.Alp.extension`, and `app.alp.Alp.helper` in
-  the Apple Developer portal before submitting to the App Store.
-- Enable App Groups capability (`group.app.alp.Alp`) on the app and extension.
+### Phase 2: Compose Flow Correctness
+- [ ] Sign defaults to OFF when no key configured
+- [ ] Encrypt tooltip explaining why disabled
+- [ ] Multiple compose window state fix (use contextID)
+- [ ] "No GPG" indicator when both toggles off
 
-## Should Fix
+### Phase 3: Error Message Quality
+- [ ] Human-readable GPG error mapping
+- [ ] XPC reconnection + crash detection
+- [ ] Keyserver error differentiation
 
-### 4. Minimum Functionality — Host App
-- The main app is only a settings window. Apple sometimes rejects apps where the host
-  app has no standalone value (Guideline 4.0).
-- **Action:** Consider adding an onboarding flow, key management features, or a
-  status menu bar item to make the host app feel purposeful beyond extension settings.
+### Phase 4: Day-to-Day Polish
+- [ ] Key import from file in KeySettingsView
+- [ ] Expired key warnings (table badge + picker warning)
+- [ ] Periodic health check (every 5 min while visible)
+- [ ] Helper crash notification with reinstall button
 
-### 5. Localization Completeness
-- `Localizable.xcstrings` exists but verify all user-facing strings are covered,
-  including error messages in `GPGError.swift` and the new
-  `NSExtensionUsageDescription`.
-- **Action:** Audit all user-facing strings and add localization keys.
+## Done
 
-### 6. Test Coverage
-- Only 3 test files (~195 lines). Not an App Store requirement, but critical for
-  stability before public release.
-- **Action:** Add tests for `PGPMessageParser` edge cases, `ComposeViewModel` state
-  transitions, `SecurityHandler` encode/decode paths, and XPC connection failure modes.
-
-## Nice to Have
-
-### 7. Certificate Pinning for Keyserver
-- HTTPS calls to `keys.openpgp.org` have no certificate pinning.
-- Low risk (ATS enforces TLS), but pinning adds defense-in-depth.
-
-### 8. Accessibility Audit
-- Verify VoiceOver labels on compose toolbar toggles, key table, and status badges.
-- App Store reviewers occasionally test with VoiceOver.
+- ~~Test coverage~~ — 40 tests across 7 suites
+- ~~Release pipeline~~ — release.yml, build-release.sh, ExportOptions.plist, cask template
+- ~~Accessibility~~ — VoiceOver labels on all interactive elements
+- ~~Certificate pinning~~ — SPKI pinning with graceful fallback + UI warning + canary test

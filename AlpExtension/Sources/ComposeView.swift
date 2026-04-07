@@ -15,6 +15,8 @@ struct ComposeView: View {
             .tint(.blue)
             .disabled(!vm.canSign)
             .help(vm.canSign ? "" : "No signing key. Add a secret key in Alp → General.")
+            .accessibilityLabel("Sign message")
+            .accessibilityValue(vm.shouldSign ? "On" : "Off")
 
             if vm.shouldSign && vm.availableSecretKeys.count > 1 {
                 keyPickerMenu
@@ -29,6 +31,15 @@ struct ComposeView: View {
             .toggleStyle(.button)
             .tint(.green)
             .disabled(!vm.canEncrypt)
+            .help(encryptTooltip)
+            .accessibilityLabel("Encrypt message")
+            .accessibilityValue(vm.shouldEncrypt ? "On" : "Off")
+
+            if !vm.shouldSign && !vm.shouldEncrypt && vm.missingKeyEmails.isEmpty {
+                Text("No GPG")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
 
             if !vm.missingKeyEmails.isEmpty {
                 Button {
@@ -39,6 +50,8 @@ struct ComposeView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Missing keys for \(vm.missingKeyEmails.count) recipient(s) — click for details")
+                .accessibilityLabel("Missing keys warning")
+                .accessibilityHint("Missing public keys for \(vm.missingKeyEmails.count) recipients")
                 .popover(isPresented: $showingMissingKeys, arrowEdge: .bottom) {
                     MissingKeysView(emails: vm.missingKeyEmails) {
                         await vm.refresh()
@@ -53,6 +66,14 @@ struct ComposeView: View {
         .onChange(of: vm.shouldSign) { _, _ in syncStore() }
         .onChange(of: vm.shouldEncrypt) { _, _ in syncStore() }
         .onChange(of: vm.selectedSignerFingerprint) { _, _ in syncStore() }
+    }
+
+    private var encryptTooltip: String {
+        if vm.canEncrypt { return "" }
+        if !vm.missingKeyEmails.isEmpty {
+            return "Missing public keys for \(vm.missingKeyEmails.count) recipient(s)"
+        }
+        return "Add recipients to enable encryption"
     }
 
     @ViewBuilder
@@ -242,7 +263,32 @@ private struct EmailRow: View {
 // MARK: – Keyserver HTTP client
 
 private enum KeyserverClient {
-    enum Error: Swift.Error { case notFound, httpError(Int), networkError(Swift.Error) }
+    enum Error: Swift.Error, LocalizedError {
+        case notFound
+        case httpError(Int)
+        case networkError(Swift.Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .notFound:
+                return "No key found on keys.openpgp.org"
+            case let .httpError(code):
+                return "Keyserver returned error \(code)"
+            case let .networkError(inner):
+                let nsError = inner as NSError
+                switch nsError.code {
+                case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
+                    return "No internet connection"
+                case NSURLErrorTimedOut, NSURLErrorCannotConnectToHost, NSURLErrorCannotFindHost:
+                    return "Keyserver unreachable — keys.openpgp.org may be down"
+                case NSURLErrorServerCertificateUntrusted, NSURLErrorServerCertificateHasUnknownRoot:
+                    return "Keyserver certificate error — connection blocked for safety"
+                default:
+                    return nsError.localizedDescription
+                }
+            }
+        }
+    }
 
     static func fetch(email: String) async throws -> Data {
         guard let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
@@ -252,7 +298,7 @@ private enum KeyserverClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(from: url)
+            (data, response) = try await KeyserverSession.shared.data(from: url)
         } catch {
             throw Error.networkError(error)
         }

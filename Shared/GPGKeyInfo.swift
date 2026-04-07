@@ -13,6 +13,12 @@ struct GPGKeyInfo: Codable, Sendable, Identifiable {
 
     var id: String { fingerprint }
 
+    /// True when the key has an expiry date that has passed.
+    var isExpired: Bool {
+        guard let expiryDate else { return false }
+        return expiryDate < Date.now
+    }
+
     /// The primary UID display string (first UID, or fingerprint if empty).
     var displayName: String { userIDs.first ?? fingerprint }
 

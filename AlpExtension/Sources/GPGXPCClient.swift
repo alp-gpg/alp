@@ -7,13 +7,29 @@ import Foundation
 final class GPGXPCClient: @unchecked Sendable {
     static let shared = GPGXPCClient()
 
-    private let connection: NSXPCConnection
+    private var connection: NSXPCConnection
+    private let lock = NSLock()
+    private var connectionInvalidated = false
 
     private init() {
-        connection = NSXPCConnection(machServiceName: BuildConfig.helperMachService)
-        connection.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
-        connection.setCodeSigningRequirement(BuildConfig.codeSigningRequirement)
-        connection.resume()
+        connection = Self.makeConnection()
+    }
+
+    private static func makeConnection() -> NSXPCConnection {
+        let conn = NSXPCConnection(machServiceName: BuildConfig.helperMachService)
+        conn.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
+        conn.setCodeSigningRequirement(BuildConfig.codeSigningRequirement)
+        conn.resume()
+        return conn
+    }
+
+    private func ensureConnection() {
+        lock.lock()
+        defer { lock.unlock() }
+        if connectionInvalidated {
+            connection = Self.makeConnection()
+            connectionInvalidated = false
+        }
     }
 
     // MARK: – Async wrappers
@@ -123,9 +139,14 @@ final class GPGXPCClient: @unchecked Sendable {
     // MARK: – Private
 
     private func proxy<T>(_ cont: CheckedContinuation<T, any Error>, body: (any GPGHelperProtocol) -> Void) {
+        ensureConnection()
+        connection.invalidationHandler = { [weak self] in
+            self?.lock.withLock { self?.connectionInvalidated = true }
+        }
         // swiftlint:disable:next force_cast
-        let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-            cont.resume(throwing: error)
+        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] error in
+            self?.lock.withLock { self?.connectionInvalidated = true }
+            cont.resume(throwing: GPGError.xpcUnavailable)
         } as! any GPGHelperProtocol
         body(proxy)
     }

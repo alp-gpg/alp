@@ -81,17 +81,13 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         // Extract all needed values synchronously before the async boundary.
         let rawData = message.rawData
         let recipientEmails = message.allRecipientAddresses.map { $0.addressString ?? $0.rawString }
+        let contextID = composeContext.contextID
         let handler = unsafeBitCast(completionHandler, to: (@Sendable (MEMessageEncodingResult) -> Void).self)
 
         Task.detached {
-            // Access ComposeSessionStore on main actor — use first active session heuristic
+            // Look up the correct session state by context ID.
             let (shouldSign, shouldEncrypt, signerFP) = await MainActor.run {
-                let store = ComposeSessionStore.shared
-                return (
-                    store.shouldSignDefault,
-                    store.shouldEncryptDefault,
-                    store.signerFingerprintDefault
-                )
+                ComposeSessionStore.shared.state(forContextID: contextID)
             }
 
             do {

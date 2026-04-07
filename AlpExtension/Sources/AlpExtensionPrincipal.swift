@@ -8,6 +8,8 @@ import MailKit
 final class AlpExtensionPrincipal: NSObject, MEExtension {
     nonisolated override init() {
         super.init()
+        // Write a heartbeat so the host app can detect the extension is active.
+        UserDefaults(suiteName: BuildConfig.appGroup)?.set(Date(), forKey: "extensionLastSeen")
     }
 
     nonisolated func handlerForMessageSecurity() -> any MEMessageSecurityHandler {

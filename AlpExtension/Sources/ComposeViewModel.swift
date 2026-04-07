@@ -22,8 +22,8 @@ final class ComposeViewModel {
     init(session: MEComposeSession) {
         self.session = session
         let defaults = Self.sharedDefaults
-        // Respect stored compose defaults; fall back to sign=true, encrypt=false.
-        self.shouldSign = defaults?.object(forKey: "signByDefault") as? Bool ?? true
+        // Respect stored compose defaults; fall back to sign=false, encrypt=false.
+        self.shouldSign = defaults?.object(forKey: "signByDefault") as? Bool ?? false
         self.shouldEncrypt = defaults?.bool(forKey: "encryptByDefault") ?? false
     }
 
@@ -35,6 +35,11 @@ final class ComposeViewModel {
                 let savedFP = Self.sharedDefaults?.string(forKey: "defaultSignerFingerprint")
                 selectedSignerFingerprint = savedFP ?? keys.first?.fingerprint
             }
+        }
+
+        // Can't sign without a key — override the stored default.
+        if availableSecretKeys.isEmpty {
+            shouldSign = false
         }
 
         // Check recipient keys

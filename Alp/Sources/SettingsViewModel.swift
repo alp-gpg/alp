@@ -7,6 +7,32 @@ final class SettingsViewModel {
     // Mirror writes into the app group so the sandboxed extension can read them.
     private static let groupDefaults = UserDefaults(suiteName: BuildConfig.appGroup)
 
+    // MARK: – Setup
+
+    /// True when helper is running, GPG is healthy, extension has been seen, and a signing key is picked.
+    var setupComplete: Bool {
+        helperStatus == .enabled
+            && healthStatus?.allPassed == true
+            && extensionLastSeen != nil
+            && defaultSignerFingerprint != nil
+    }
+
+    /// Last time the Mail extension wrote a heartbeat to the app group.
+    var extensionLastSeen: Date? {
+        Self.groupDefaults?.object(forKey: "extensionLastSeen") as? Date
+    }
+
+    /// True if the extension heartbeat is present and less than 24 hours old.
+    var extensionRecentlySeen: Bool {
+        guard let seen = extensionLastSeen else { return false }
+        return seen.timeIntervalSinceNow > -86400
+    }
+
+    // MARK: – Pinning
+
+    /// True when a keyserver connection succeeded but no certificate pin matched.
+    var pinningDegraded = false
+
     // MARK: – Keys
 
     /// All keys in the local public keyring, with hasSecretKey set where a secret key exists.
@@ -45,15 +71,37 @@ final class SettingsViewModel {
 
     var healthStatus: GPGHealthStatus?
     var isCheckingHealth = false
+    /// True when health was previously OK but the latest check failed.
+    var helperUnresponsive = false
+    private var healthCheckTask: Task<Void, Never>?
 
     func refreshHealth() async {
         isCheckingHealth = true
         defer { isCheckingHealth = false }
+        let previouslyHealthy = healthStatus?.allPassed == true
         do {
             healthStatus = try await HelperXPCClient.shared.checkHealth()
+            helperUnresponsive = false
         } catch {
             healthStatus = nil
+            if previouslyHealthy { helperUnresponsive = true }
         }
+    }
+
+    func startPeriodicHealthCheck() {
+        healthCheckTask?.cancel()
+        healthCheckTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(300))
+                guard !Task.isCancelled else { break }
+                await refreshHealth()
+            }
+        }
+    }
+
+    func stopPeriodicHealthCheck() {
+        healthCheckTask?.cancel()
+        healthCheckTask = nil
     }
 
     // MARK: – Helper
@@ -62,9 +110,25 @@ final class SettingsViewModel {
     var helperError: String?
 
     func load() async {
+        #if DEBUG
+        // Don't assume helper is running — check if we can actually reach it.
+        // The user must click "Install Helper" to bootstrap via launchctl.
+        helperStatus = .notRegistered
+        #else
         helperStatus = helperService.status
-        await refreshKeys()
-        await refreshHealth()
+        #endif
+        NotificationCenter.default.addObserver(
+            forName: KeyserverSession.pinningDegradedNotification,
+            object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.pinningDegraded = true
+            }
+        }
+        if helperStatus == .enabled {
+            await refreshKeys()
+            await refreshHealth()
+        }
     }
 
     func refreshKeys() async {
@@ -88,12 +152,16 @@ final class SettingsViewModel {
     func installHelper() {
         helperError = nil
         do {
-            try helperService.register()
+            try HelperInstaller.install()
+            #if DEBUG
+            helperStatus = .enabled
+            #else
             helperStatus = helperService.status
+            #endif
             Task {
-                // Give launchd a moment to start the daemon before the first XPC call.
-                try? await Task.sleep(for: .milliseconds(800))
+                try? await Task.sleep(for: .milliseconds(500))
                 await refreshKeys()
+                await refreshHealth()
             }
         } catch {
             helperError = error.localizedDescription
@@ -103,8 +171,12 @@ final class SettingsViewModel {
     func uninstallHelper() {
         helperError = nil
         do {
-            try helperService.unregister()
+            try HelperInstaller.uninstall()
+            #if DEBUG
+            helperStatus = .notRegistered
+            #else
             helperStatus = helperService.status
+            #endif
             allKeys = []
             secretKeys = []
             keyserverStatus = [:]
@@ -126,7 +198,7 @@ final class SettingsViewModel {
         do {
             var req = URLRequest(url: url)
             req.httpMethod = "HEAD"
-            let (_, response) = try await URLSession.shared.data(for: req)
+            let (_, response) = try await KeyserverSession.shared.data(for: req)
             if let http = response as? HTTPURLResponse {
                 keyserverStatus[fingerprint] = http.statusCode == 200 ? .found : .notFound
             } else {

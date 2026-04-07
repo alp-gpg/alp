@@ -29,17 +29,26 @@ struct KeySettingsView: View {
                 ProgressView("Loading keys…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if vm.allKeys.isEmpty {
-                ContentUnavailableView(
-                    "No Keys Found",
-                    systemImage: "key.slash",
-                    description: Text("No GPG keys were found. Install gnupg and import or generate a key pair.")
-                )
+                ContentUnavailableView {
+                    Label("No Keys Found", systemImage: "key.slash")
+                } description: {
+                    Text("No GPG keys were found.")
+                } actions: {
+                    Button("Import Key File…") { importKeyFromFile() }
+                    Text("or generate one in Terminal:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("gpg --full-generate-key")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
             } else {
                 Table(sortedKeys, sortOrder: $sortOrder) {
                     // Type column: not header-sortable; ordering is guaranteed by the
                     // pub+sec tie-break in sortedKeys regardless of active sort column.
                     TableColumn("Type") { key in
-                        KeyTypeLabel(hasSecretKey: key.hasSecretKey)
+                        KeyTypeLabel(hasSecretKey: key.hasSecretKey, isExpired: key.isExpired)
                     }
                     .width(70)
 
@@ -69,6 +78,11 @@ struct KeySettingsView: View {
         }
         .toolbar {
             ToolbarItem {
+                Button("Import Key…", systemImage: "square.and.arrow.down") {
+                    importKeyFromFile()
+                }
+            }
+            ToolbarItem {
                 Button("Refresh", systemImage: "arrow.clockwise") {
                     Task { await vm.refreshKeys() }
                 }
@@ -76,19 +90,44 @@ struct KeySettingsView: View {
         }
         .navigationTitle("Keys")
     }
+
+    private func importKeyFromFile() {
+        let panel = NSOpenPanel()
+        panel.title = "Import GPG Key"
+        panel.allowedContentTypes = [
+            .init(filenameExtension: "asc")!,
+            .init(filenameExtension: "gpg")!,
+            .init(filenameExtension: "pgp")!,
+            .init(filenameExtension: "key")!,
+        ]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            do {
+                let data = try Data(contentsOf: url)
+                try await HelperXPCClient.shared.importKey(data)
+                await vm.refreshKeys()
+            } catch {
+                vm.helperError = error.localizedDescription
+            }
+        }
+    }
 }
 
 private struct KeyTypeLabel: View {
     let hasSecretKey: Bool
+    var isExpired: Bool = false
 
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: hasSecretKey ? "key.fill" : "key")
-                .foregroundStyle(hasSecretKey ? .primary : .secondary)
-            Text(hasSecretKey ? "pub+sec" : "pub")
+                .foregroundStyle(isExpired ? .red : (hasSecretKey ? .primary : .secondary))
+            Text(isExpired ? "EXPIRED" : (hasSecretKey ? "pub+sec" : "pub"))
                 .font(.caption2)
-                .foregroundStyle(hasSecretKey ? .primary : .secondary)
+                .foregroundStyle(isExpired ? .red : (hasSecretKey ? .primary : .secondary))
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isExpired ? "Expired key" : (hasSecretKey ? "Public and secret key" : "Public key only"))
     }
 }
 
@@ -108,10 +147,12 @@ private struct ExpiryLabel: View {
             Text(Self.formatter.string(from: date))
                 .font(.caption)
                 .foregroundStyle(expired ? .red : .secondary)
+                .accessibilityLabel(expired ? "Expired \(Self.formatter.string(from: date))" : "Expires \(Self.formatter.string(from: date))")
         } else {
             Text("Never")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Never expires")
         }
     }
 }
@@ -127,14 +168,17 @@ private struct KeyserverStatusLabel: View {
             Label("Published", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
                 .font(.caption)
+                .accessibilityLabel("Published on keyserver")
         case .notFound:
             Label("Not found", systemImage: "xmark.circle")
                 .foregroundStyle(.secondary)
                 .font(.caption)
+                .accessibilityLabel("Not found on keyserver")
         case .unreachable:
             Label("Unreachable", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.orange)
                 .font(.caption)
+                .accessibilityLabel("Keyserver unreachable")
         }
     }
 }

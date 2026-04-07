@@ -31,6 +31,16 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 520, minHeight: 360)
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            vm.startPeriodicHealthCheck()
+            // Guide user to the first unresolved problem.
+            if vm.helperStatus != .enabled {
+                selection = .helper
+            }
+        }
+        .onDisappear {
+            vm.stopPeriodicHealthCheck()
+        }
     }
 }

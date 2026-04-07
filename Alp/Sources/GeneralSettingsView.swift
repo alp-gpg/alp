@@ -5,21 +5,35 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("GPG Environment") {
-                if vm.isCheckingHealth {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Checking GPG setup…")
-                            .foregroundStyle(.secondary)
-                    }
-                } else if let health = vm.healthStatus {
-                    healthRows(health)
-                } else if vm.helperStatus != .enabled {
-                    Label("Install the helper to check GPG status.", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
-                } else {
-                    Label("Could not connect to helper.", systemImage: "xmark.circle")
-                        .foregroundStyle(.red)
+            if !vm.setupComplete {
+                setupChecklist
+            } else {
+                Section("Setup") {
+                    Label("All set — Alp is ready to use.", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+
+            if vm.helperUnresponsive {
+                Section {
+                    Label(
+                        "The GPG helper stopped responding. Keyserver lookups and GPG operations may fail.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(.red)
+                    .font(.callout)
+                    Button("Reinstall Helper") { vm.installHelper() }
+                }
+            }
+
+            if vm.pinningDegraded {
+                Section {
+                    Label(
+                        "Keyserver certificate pinning could not be verified. Key lookups are still encrypted (TLS) but the expected certificate has changed. Update Alp when a new version is available.",
+                        systemImage: "exclamationmark.shield"
+                    )
+                    .foregroundStyle(.orange)
+                    .font(.callout)
                 }
             }
 
@@ -37,12 +51,171 @@ struct GeneralSettingsView: View {
                                 .tag(Optional(key.fingerprint))
                         }
                     }
+                    if let fp = vm.defaultSignerFingerprint,
+                       let key = vm.secretKeys.first(where: { $0.fingerprint == fp }),
+                       key.isExpired
+                    {
+                        Label(
+                            "Selected signing key is expired. Recipients may reject your signature.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                    }
                 }
             }
         }
         .formStyle(.grouped)
         .navigationTitle("General")
     }
+
+    // MARK: – Setup Checklist
+
+    @ViewBuilder
+    private var setupChecklist: some View {
+        Section("Setup") {
+            // Step 1: Helper
+            setupRow(
+                "Install Helper",
+                passed: vm.helperStatus == .enabled,
+                detail: helperDetail
+            ) {
+                helperAction
+            }
+
+            if let error = vm.helperError {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .font(.callout)
+            }
+
+            // Step 2: GPG Environment
+            if vm.helperStatus == .enabled {
+                setupRow(
+                    "GPG Environment",
+                    passed: vm.healthStatus?.allPassed == true,
+                    detail: gpgDetail
+                ) {
+                    gpgAction
+                }
+            }
+
+            // Step 3: Mail Extension
+            if vm.helperStatus == .enabled {
+                setupRow(
+                    "Enable Mail Extension",
+                    passed: vm.extensionRecentlySeen,
+                    detail: vm.extensionRecentlySeen ? "Active" : "Not detected"
+                ) {
+                    if !vm.extensionRecentlySeen {
+                        Button("Open Mail Extensions Settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Step 4: Signing Key
+            if vm.helperStatus == .enabled && !vm.secretKeys.isEmpty {
+                setupRow(
+                    "Choose Signing Key",
+                    passed: vm.defaultSignerFingerprint != nil,
+                    detail: vm.defaultSignerFingerprint != nil
+                        ? (vm.secretKeys.first { $0.fingerprint == vm.defaultSignerFingerprint }?.shortName ?? "Selected")
+                        : "Not selected"
+                ) {
+                    if vm.defaultSignerFingerprint == nil {
+                        Picker("Key", selection: $vm.defaultSignerFingerprint) {
+                            Text("Select a key…").tag(String?.none)
+                            ForEach(vm.secretKeys) { key in
+                                Text(key.displayName).tag(Optional(key.fingerprint))
+                            }
+                        }
+                        .labelsHidden()
+                    }
+                }
+            }
+        }
+
+        // Collapsible GPG health details
+        if vm.helperStatus == .enabled, let health = vm.healthStatus, !health.allPassed {
+            Section("GPG Details") {
+                healthRows(health)
+            }
+        }
+    }
+
+    private var helperDetail: String {
+        switch vm.helperStatus {
+        case .enabled: "Running"
+        case .requiresApproval: "Needs approval in System Settings"
+        case .notRegistered: "Not installed"
+        default: "Unknown"
+        }
+    }
+
+    @ViewBuilder
+    private var helperAction: some View {
+        switch vm.helperStatus {
+        case .notRegistered:
+            Button("Install") { vm.installHelper() }
+        case .requiresApproval:
+            Button("Open Login Items") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private var gpgDetail: String {
+        if vm.isCheckingHealth {
+            return "Checking…"
+        }
+        guard let health = vm.healthStatus else {
+            return "Could not connect to helper"
+        }
+        return health.allPassed ? "All checks passed" : "\(health.issues.count) issue(s)"
+    }
+
+    @ViewBuilder
+    private var gpgAction: some View {
+        if vm.healthStatus?.allPassed != true {
+            Button("Recheck") {
+                Task { await vm.refreshHealth() }
+            }
+        }
+    }
+
+    // MARK: – Setup Row
+
+    private func setupRow<Action: View>(
+        _ title: String,
+        passed: Bool,
+        detail: String,
+        @ViewBuilder action: () -> Action
+    ) -> some View {
+        HStack {
+            Image(systemName: passed ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(passed ? .green : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            action()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(passed ? "complete" : "incomplete"), \(detail)")
+    }
+
+    // MARK: – Health Rows
 
     @ViewBuilder
     private func healthRows(_ health: GPGHealthStatus) -> some View {
@@ -82,5 +255,7 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(passed ? .green : .red)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(passed ? "passed" : "failed")\(detail.map { ", \($0)" } ?? "")")
     }
 }

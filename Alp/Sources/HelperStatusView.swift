@@ -46,15 +46,19 @@ struct HelperStatusView: View {
         case .enabled:
             Label("Running", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
+                .accessibilityLabel("Helper status: running")
         case .requiresApproval:
             Label("Requires Approval", systemImage: "exclamationmark.circle.fill")
                 .foregroundStyle(.orange)
+                .accessibilityLabel("Helper status: requires approval")
         case .notRegistered:
             Label("Not Installed", systemImage: "xmark.circle.fill")
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Helper status: not installed")
         default:
             Label("Unknown", systemImage: "questionmark.circle")
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Helper status: unknown")
         }
     }
 }

@@ -13,11 +13,19 @@ struct GPGErrorTests {
             .verificationFailed("untrusted"),
             .xpcUnavailable,
             .encodingError("nil data"),
+            .importRejected("bad key material"),
         ]
         for error in cases {
             #expect(error.errorDescription != nil)
             #expect(try !(#require(error.errorDescription?.isEmpty)))
         }
+    }
+
+    @Test
+    func `importRejected has a localized description`() {
+        let err = GPGError.importRejected("bad key material")
+        #expect(err.errorDescription?.isEmpty == false)
+        #expect(err.errorDescription?.contains("bad key material") == true)
     }
 
     @Test
@@ -52,6 +60,7 @@ struct GPGErrorTests {
             .gpgNotFound, .processError(exitCode: 0, stderr: ""),
             .noSigningKey, .missingKeys([]), .decryptionFailed(""),
             .verificationFailed(""), .xpcUnavailable, .encodingError(""),
+            .importRejected(""),
         ]
         let codes = cases.map(\.asNSError.code)
         #expect(Set(codes).count == codes.count)

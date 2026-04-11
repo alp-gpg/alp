@@ -101,6 +101,13 @@ struct XPCRoundtripTests {
         #expect(error != nil)
     }
 
+    @Test("_importKey throws on malformed payload")
+    func importKeyThrowsOnGarbage() async {
+        await #expect(throws: (any Error).self) {
+            _ = try await self.helper._importKey(Data("not a key".utf8))
+        }
+    }
+
     @Test("importKey bridge returns GPGImportResult")
     func importKeyBridgeReturnsResult() async throws {
         let fp = try await firstSecretKeyFingerprint()

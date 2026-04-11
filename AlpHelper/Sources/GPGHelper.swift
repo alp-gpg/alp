@@ -287,11 +287,15 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // emitted IMPORT_PROBLEM instead). Treat that as a genuine failure —
         // the caller shouldn't see a silent success.
         guard let result = Self.parseImportResult(from: stderrText) else {
-            throw GPGError.processError(exitCode: exitCode, stderr: stderrText)
+            throw GPGError.importRejected(stderrText)
         }
         return result
     }
 
+    /// Test-only helper — **not** exposed via GPGHelperProtocol. Exists solely
+    /// to let `XPCRoundtripTests` round-trip real armored key material through
+    /// the import bridge without hard-coding test fixtures. Safe against
+    /// argument injection via the `isValidFingerprint` check.
     func _export(_ fingerprint: String) async throws -> Data {
         guard Self.isValidFingerprint(fingerprint) else {
             throw GPGError.encodingError("invalid fingerprint")

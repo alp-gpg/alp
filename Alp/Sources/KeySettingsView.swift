@@ -103,20 +103,12 @@ struct KeySettingsView: View {
             do {
                 let data = try Data(contentsOf: url)
                 let result = try await HelperXPCClient.shared.importKey(data)
-                vm.lastImportSummary = Self.summarize(result)
+                vm.lastImportSummary = result.userFacingSummary
                 await vm.refreshKeys()
             } catch {
                 vm.helperError = error.localizedDescription
             }
         }
-    }
-
-    private static func summarize(_ result: GPGImportResult) -> String {
-        if result.newKey { return "Imported new key" }
-        if result.updatedSignatures || result.newSubkeys || result.newUserIDs {
-            return "Updated existing key"
-        }
-        return "Key already up to date"
     }
 }
 

@@ -111,6 +111,12 @@ final class SettingsViewModel {
 
     /// Non-error user feedback for the most recent key import. Shown as a
     /// transient summary in the Keys section.
+    ///
+    /// **Lifecycle:** set by the import flow on success, consumed by the UI
+    /// when displayed, and **must be cleared by the UI layer after display**
+    /// (e.g., on the next user interaction or after a short timeout) to
+    /// avoid a stale toast reappearing on view re-render. No one currently
+    /// reads this — UI wiring arrives with the Keys list hierarchy rework.
     var lastImportSummary: String?
 
     func load() async {

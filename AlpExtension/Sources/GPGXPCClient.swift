@@ -97,6 +97,8 @@ final class GPGXPCClient: @unchecked Sendable {
         }
     }
 
+    /// Decodes the JSON-encoded GPGImportResult from the helper's reply.
+    /// Mirror of the sibling client in the other target — keep them in sync.
     func importKey(_ armoredKey: Data) async throws -> GPGImportResult {
         try await call { proxy, resume in
             proxy.importKey(armoredKey: armoredKey) { data, error in

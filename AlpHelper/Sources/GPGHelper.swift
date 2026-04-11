@@ -488,7 +488,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                     primaryFingerprint = fields[9]
                 }
             } else if recordType == "uid" {
-                if pendingSubkey == nil, fields.count > 9, !fields[9].isEmpty {
+                if fields.count > 9, !fields[9].isEmpty {
                     primaryUIDs.append(fields[9])
                 }
             }

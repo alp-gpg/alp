@@ -65,6 +65,23 @@ struct ColonParserSubkeyTests {
         #expect(keys[0].subkeys[0].isExpired == true)
     }
 
+    @Test("Expired primary with a fresh subkey — both statuses preserved")
+    func expiredPrimaryFreshSubkey() async {
+        let helper = await GPGHelper()
+        let pastTs = String(Int(Date(timeIntervalSinceNow: -86400).timeIntervalSince1970))
+        let futureTs = String(Int(Date(timeIntervalSinceNow: 86400).timeIntervalSince1970))
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:\(pastTs)::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        sub:u:3072:1:BBBB2222CCCC3333:1700000000:\(futureTs):::::e::::::23:
+        fpr:::::::::BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys.count == 1)
+        #expect(keys[0].isExpired == true)
+        #expect(keys[0].subkeys.first?.isExpired == false)
+    }
+
     @Test("Multiple subkeys captured in order")
     func multipleSubkeys() async {
         let helper = await GPGHelper()

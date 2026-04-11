@@ -1,5 +1,16 @@
 import Foundation
 
+/// Summary of a `gpg --import` run, parsed from the IMPORT_OK status line.
+/// Bit mapping comes from gpg's `doc/DETAILS`:
+///   1 = new key, 2 = new user IDs, 4 = new signatures, 8 = new subkeys.
+struct GPGImportResult: Codable, Sendable {
+    let fingerprint: String?
+    let newKey: Bool
+    let newUserIDs: Bool
+    let updatedSignatures: Bool
+    let newSubkeys: Bool
+}
+
 /// Unsandboxed actor that drives the gpg(1) binary.
 ///
 /// All Process launches inherit the user's environment so gpg-agent socket,
@@ -186,6 +197,32 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             }
         }
         return nil
+    }
+
+    /// Parses gpg's `IMPORT_OK <reason> <fingerprint>` status line.
+    static func parseImportResult(from statusText: String) -> GPGImportResult {
+        for line in statusText.components(separatedBy: "\n") {
+            let parts = line.components(separatedBy: " ")
+            guard let idx = parts.firstIndex(of: "IMPORT_OK"),
+                  parts.count > idx + 2,
+                  let reason = Int(parts[idx + 1])
+            else { continue }
+            let fingerprint = parts[idx + 2]
+            return GPGImportResult(
+                fingerprint: fingerprint,
+                newKey: reason & 1 != 0,
+                newUserIDs: reason & 2 != 0,
+                updatedSignatures: reason & 4 != 0,
+                newSubkeys: reason & 8 != 0
+            )
+        }
+        return GPGImportResult(
+            fingerprint: nil,
+            newKey: false,
+            newUserIDs: false,
+            updatedSignatures: false,
+            newSubkeys: false
+        )
     }
 
     func _verify(_ data: Data, signature: Data?) async throws -> (Bool, String?, String?) {

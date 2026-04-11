@@ -147,6 +147,7 @@ let project = Project(
             sources: [
                 .glob("Tests/**"),
                 .glob("AlpHelper/Sources/**", excluding: ["AlpHelper/Sources/main.swift"]),
+                .glob("Alp/Sources/**", excluding: ["Alp/Sources/AlpApp.swift"]),
                 .glob("Shared/**"),
             ],
             dependencies: []

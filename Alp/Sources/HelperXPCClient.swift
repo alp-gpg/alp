@@ -62,6 +62,17 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    /// Decodes the JSON-encoded [GPGKeyInfo] preview from the helper's reply.
+    /// Mirror of the sibling client in AlpExtension — keep them in sync.
+    func previewKey(_ armoredKey: Data) async throws -> [GPGKeyInfo] {
+        try await call { proxy, resume in
+            proxy.previewKey(armoredKey: armoredKey) { dataList, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(Self.decodeKeys(dataList))) }
+            }
+        }
+    }
+
     /// Decodes the JSON-encoded GPGImportResult from the helper's reply.
     /// Mirror of the sibling client in the other target — keep them in sync.
     func importKey(_ armoredKey: Data) async throws -> GPGImportResult {

@@ -200,14 +200,24 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     }
 
     /// Parses gpg's `IMPORT_OK <reason> <fingerprint>` status line.
-    static func parseImportResult(from statusText: String) -> GPGImportResult {
-        for line in statusText.components(separatedBy: "\n") {
-            let parts = line.components(separatedBy: " ")
+    ///
+    /// Returns the **first** IMPORT_OK line encountered. For bundle imports
+    /// that emit multiple IMPORT_OK lines, callers should invoke gpg per-key
+    /// if they need per-key results. Returns nil when no IMPORT_OK line is
+    /// present (e.g., gpg emitted IMPORT_PROBLEM instead) — callers should
+    /// treat nil as a parse failure and inspect stderr directly.
+    static func parseImportResult(from statusText: String) -> GPGImportResult? {
+        for rawLine in statusText.components(separatedBy: "\n") {
+            let line = rawLine.trimmingCharacters(in: .init(charactersIn: "\r"))
+            let parts = line.split(whereSeparator: \.isWhitespace).map(String.init)
             guard let idx = parts.firstIndex(of: "IMPORT_OK"),
                   parts.count > idx + 2,
                   let reason = Int(parts[idx + 1])
             else { continue }
             let fingerprint = parts[idx + 2]
+            guard fingerprint.count == 40, fingerprint.allSatisfy(\.isHexDigit) else { continue }
+            // Bits ≥ 16 (e.g., 16 = contains secret key, 32 = contains sub secret)
+            // are intentionally ignored; Alp only imports public key material.
             return GPGImportResult(
                 fingerprint: fingerprint,
                 newKey: reason & 1 != 0,
@@ -216,13 +226,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 newSubkeys: reason & 8 != 0
             )
         }
-        return GPGImportResult(
-            fingerprint: nil,
-            newKey: false,
-            newUserIDs: false,
-            updatedSignatures: false,
-            newSubkeys: false
-        )
+        return nil
     }
 
     func _verify(_ data: Data, signature: Data?) async throws -> (Bool, String?, String?) {

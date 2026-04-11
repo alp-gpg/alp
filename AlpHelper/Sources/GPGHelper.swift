@@ -12,6 +12,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     /// Maximum recipients per encrypt call.
     private static let maxRecipients = 100
 
+    /// RFC 4880 full fingerprints are 40 hex chars. Reject anything else before
+    /// passing to gpg so a malicious caller cannot smuggle flags like
+    /// `--homedir /evil` through the --recipient / --local-user arguments.
+    static func isValidFingerprint(_ value: String) -> Bool {
+        guard value.count == 40 else { return false }
+        return value.allSatisfy { $0.isHexDigit }
+    }
+
     override init() {
         self.gpgPath = GPGHelper.detectGPGPath()
         super.init()
@@ -42,15 +50,16 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             "/nix/var/nix/profiles/default/bin/gpg", // Nix
             "/usr/local/MacGPG2/bin/gpg",         // GPG Suite (GPGTools)
         ]
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
-            ?? "gpg"  // last resort: rely on PATH
+        // No fallback to bare "gpg": Process.run with a relative path fails on
+        // macOS, and isExecutableFile against "gpg" always returns false.
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
     }
 
     // MARK: – Core runner
 
     /// Raw runner returning stdout, stderr, and exit code without throwing on non-zero exit.
     private func runGPGRaw(_ args: [String], input: Data? = nil) async throws -> (stdout: Data, stderr: Data, exitCode: Int32) {
-        guard gpgPath != "gpg" || FileManager.default.isExecutableFile(atPath: gpgPath) else {
+        guard !gpgPath.isEmpty, FileManager.default.isExecutableFile(atPath: gpgPath) else {
             throw GPGError.gpgNotFound
         }
 
@@ -103,6 +112,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         _ recipients: [String],
         _ signer: String?
     ) async throws -> Data {
+        if let signer, !Self.isValidFingerprint(signer) {
+            throw GPGError.encodingError("invalid signer fingerprint")
+        }
+        for fp in recipients {
+            guard Self.isValidFingerprint(fp) else {
+                throw GPGError.encodingError("invalid recipient fingerprint")
+            }
+        }
         var args = [
             "--batch", "--yes", "--armor",
             "--trust-model", "tofu+pgp",
@@ -126,13 +143,49 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return plain
     }
 
-    func _sign(_ data: Data, signer: String) async throws -> Data {
+    /// Returns (signature, micalgHashName). micalg is derived from the SIG_CREATED
+    /// status line so the outgoing PGP/MIME header matches the actual hash algorithm
+    /// (RFC 3156 §5). Falls back to "pgp-sha256" if the status line is missing.
+    func _sign(_ data: Data, signer: String) async throws -> (Data, String) {
+        guard Self.isValidFingerprint(signer) else {
+            throw GPGError.encodingError("invalid signer fingerprint")
+        }
         let args = [
             "--batch", "--yes", "--armor",
+            "--status-fd", "2",
             "--detach-sign", "--local-user", signer,
             "--output", "-",
         ]
-        return try await runGPG(args, input: data)
+        let (stdout, stderr, exitCode) = try await runGPGRaw(args, input: data)
+        guard exitCode == 0 else {
+            let errText = String(data: stderr, encoding: .utf8) ?? ""
+            throw GPGError.processError(exitCode: exitCode, stderr: errText)
+        }
+        let stderrText = String(data: stderr, encoding: .utf8) ?? ""
+        let micalg = Self.parseMicalg(from: stderrText) ?? "pgp-sha256"
+        return (stdout, micalg)
+    }
+
+    /// Parses the RFC 4880 hash algorithm number from gpg's SIG_CREATED status line
+    /// and maps it to the RFC 3156 micalg name. Format:
+    ///   [GNUPG:] SIG_CREATED <type> <pubkey_algo> <hash_algo> <class> <timestamp> <keyfpr>
+    static func parseMicalg(from statusText: String) -> String? {
+        for line in statusText.components(separatedBy: "\n") {
+            let parts = line.components(separatedBy: " ")
+            guard let idx = parts.firstIndex(of: "SIG_CREATED"),
+                  parts.count > idx + 3,
+                  let algoNum = Int(parts[idx + 3])
+            else { continue }
+            switch algoNum {
+            case 2: return "pgp-sha1"
+            case 8: return "pgp-sha256"
+            case 9: return "pgp-sha384"
+            case 10: return "pgp-sha512"
+            case 11: return "pgp-sha224"
+            default: return nil
+            }
+        }
+        return nil
     }
 
     func _verify(_ data: Data, signature: Data?) async throws -> (Bool, String?, String?) {
@@ -142,7 +195,15 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         if let signature {
             let sigURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString + ".asc")
-            try signature.write(to: sigURL)
+            // Create with 0600 so another local user cannot read the signature
+            // during the verify window.
+            guard FileManager.default.createFile(
+                atPath: sigURL.path,
+                contents: signature,
+                attributes: [.posixPermissions: 0o600]
+            ) else {
+                throw GPGError.encodingError("could not write signature tempfile")
+            }
             defer { try? FileManager.default.removeItem(at: sigURL) }
             let args = ["--batch", "--verify", "--status-fd", "2", sigURL.path, "-"]
             let (_, stderr, _) = try await runGPGRaw(args, input: data)
@@ -208,7 +269,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
         // 1. GPG binary
         let path = gpgPath
-        let found = path != "gpg" && FileManager.default.isExecutableFile(atPath: path)
+        let found = !path.isEmpty && FileManager.default.isExecutableFile(atPath: path)
         status.gpgPath = found ? path : nil
 
         // 2. Version
@@ -223,6 +284,12 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             }
         }
 
+        // sanitizedEnvironment() deliberately drops GNUPGHOME, so gpg always
+        // resolves its home to ~/.gnupg. Mirror that here — reading the current
+        // process's GNUPGHOME would report success against a different keyring
+        // than gpg actually uses.
+        let gnupgHome = NSHomeDirectory() + "/.gnupg"
+
         // 3. gpg-agent
         if found {
             let agentCheck = try? await runProcess("/usr/bin/env", args: ["gpgconf", "--check-programs"])
@@ -231,16 +298,12 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             }
             // Fallback: just check the socket exists
             if !status.agentRunning {
-                let gnupgHome = ProcessInfo.processInfo.environment["GNUPGHOME"]
-                    ?? (NSHomeDirectory() + "/.gnupg")
                 let socketPath = gnupgHome + "/S.gpg-agent"
                 status.agentRunning = FileManager.default.fileExists(atPath: socketPath)
             }
         }
 
         // 4. pinentry-mac
-        let gnupgHome = ProcessInfo.processInfo.environment["GNUPGHOME"]
-            ?? (NSHomeDirectory() + "/.gnupg")
         let agentConf = gnupgHome + "/gpg-agent.conf"
         if let confText = try? String(contentsOfFile: agentConf, encoding: .utf8) {
             for line in confText.components(separatedBy: "\n") {
@@ -443,19 +506,19 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     nonisolated func sign(
         data: Data,
         signingFingerprint: String,
-        reply: @escaping @Sendable (Data?, NSError?) -> Void
+        reply: @escaping @Sendable (Data?, String?, NSError?) -> Void
     ) {
         guard data.count <= Self.maxPayloadSize else {
-            reply(nil, GPGError.encodingError("payload too large").asNSError); return
+            reply(nil, nil, GPGError.encodingError("payload too large").asNSError); return
         }
         Task {
             do {
-                let sig = try await self._sign(data, signer: signingFingerprint)
-                reply(sig, nil)
+                let (sig, micalg) = try await self._sign(data, signer: signingFingerprint)
+                reply(sig, micalg, nil)
             } catch let e as GPGError {
-                reply(nil, e.asNSError)
+                reply(nil, nil, e.asNSError)
             } catch {
-                reply(nil, error as NSError)
+                reply(nil, nil, error as NSError)
             }
         }
     }

@@ -7,6 +7,9 @@ import Foundation
 final class HelperXPCClient: @unchecked Sendable {
     static let shared = HelperXPCClient()
 
+    /// Upper bound on any single helper call; see `GPGXPCClient.callTimeout`.
+    static let callTimeout: TimeInterval = 60
+
     private var connection: NSXPCConnection
     private let lock = NSLock()
     private var connectionInvalidated = false
@@ -23,85 +26,114 @@ final class HelperXPCClient: @unchecked Sendable {
         return conn
     }
 
-    /// Recreate the connection if it was invalidated (helper crash/restart).
-    private func ensureConnection() {
-        lock.lock()
-        defer { lock.unlock() }
-        if connectionInvalidated {
-            connection = Self.makeConnection()
-            connectionInvalidated = false
-        }
-    }
-
     func listSecretKeys() async throws -> [GPGKeyInfo] {
-        try await withCheckedThrowingContinuation { cont in
-            proxy(cont) { proxy in
-                proxy.listSecretKeys { dataList, error in
-                    if let error { cont.resume(throwing: error) }
-                    else { cont.resume(returning: Self.decodeKeys(dataList)) }
-                }
+        try await call { proxy, resume in
+            proxy.listSecretKeys { dataList, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(Self.decodeKeys(dataList))) }
             }
         }
     }
 
     func listAllKeys() async throws -> [GPGKeyInfo] {
-        try await withCheckedThrowingContinuation { cont in
-            proxy(cont) { proxy in
-                proxy.listAllKeys { dataList, error in
-                    if let error { cont.resume(throwing: error) }
-                    else { cont.resume(returning: Self.decodeKeys(dataList)) }
-                }
+        try await call { proxy, resume in
+            proxy.listAllKeys { dataList, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(Self.decodeKeys(dataList))) }
             }
         }
     }
 
     func checkHealth() async throws -> GPGHealthStatus {
-        try await withCheckedThrowingContinuation { cont in
-            proxy(cont) { proxy in
-                proxy.checkHealth { data, error in
-                    if let error { cont.resume(throwing: error) }
-                    else if let data {
-                        do {
-                            let status = try JSONDecoder().decode(GPGHealthStatus.self, from: data)
-                            cont.resume(returning: status)
-                        } catch {
-                            cont.resume(throwing: error)
-                        }
-                    } else {
-                        cont.resume(throwing: GPGError.xpcUnavailable)
+        try await call { proxy, resume in
+            proxy.checkHealth { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data {
+                    do {
+                        let status = try JSONDecoder().decode(GPGHealthStatus.self, from: data)
+                        resume(.success(status))
+                    } catch {
+                        resume(.failure(error))
                     }
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
                 }
             }
         }
     }
 
     func importKey(_ armoredKey: Data) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
-            proxy(cont) { proxy in
-                proxy.importKey(armoredKey: armoredKey) { error in
-                    if let error { cont.resume(throwing: error) }
-                    else { cont.resume() }
-                }
+        try await call { (proxy, resume: @escaping @Sendable (Result<Void, any Error>) -> Void) in
+            proxy.importKey(armoredKey: armoredKey) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(())) }
             }
         }
     }
 
     // MARK: – Private
 
-    private func proxy<T>(_ cont: CheckedContinuation<T, any Error>, body: (any GPGHelperProtocol) -> Void) {
-        ensureConnection()
-        connection.invalidationHandler = { [weak self] in
-            self?.lock.withLock { self?.connectionInvalidated = true }
+    /// Shared timeout + single-resume guard pattern. See `GPGXPCClient.call`
+    /// for rationale — both clients implement the same contract.
+    private func call<T: Sendable>(
+        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, any Error>) in
+            let resumedGuard = ResumeGuard()
+            let resume: @Sendable (Result<T, any Error>) -> Void = { result in
+                guard resumedGuard.claim() else { return }
+                switch result {
+                case .success(let value): cont.resume(returning: value)
+                case .failure(let error): cont.resume(throwing: error)
+                }
+            }
+
+            let timer = DispatchSource.makeTimerSource()
+            timer.schedule(deadline: .now() + Self.callTimeout)
+            timer.setEventHandler {
+                resume(.failure(GPGError.xpcUnavailable))
+                timer.cancel()
+            }
+            timer.resume()
+
+            lock.lock()
+            if connectionInvalidated {
+                connection = Self.makeConnection()
+                connectionInvalidated = false
+            }
+            connection.invalidationHandler = { [weak self] in
+                self?.lock.withLock { self?.connectionInvalidated = true }
+                resume(.failure(GPGError.xpcUnavailable))
+            }
+            // swiftlint:disable force_cast
+            let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] _ in
+                self?.lock.withLock { self?.connectionInvalidated = true }
+                resume(.failure(GPGError.xpcUnavailable))
+            } as! any GPGHelperProtocol
+            // swiftlint:enable force_cast
+            lock.unlock()
+
+            body(proxy) { result in
+                timer.cancel()
+                resume(result)
+            }
         }
-        // swiftlint:disable:next force_cast
-        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] error in
-            self?.lock.withLock { self?.connectionInvalidated = true }
-            cont.resume(throwing: GPGError.xpcUnavailable)
-        } as! any GPGHelperProtocol
-        body(proxy)
     }
 
     private static func decodeKeys(_ dataList: [Data]?) -> [GPGKeyInfo] {
         (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
+    }
+}
+
+/// Single-shot guard; duplicated from GPGXPCClient because the two clients
+/// live in different targets and shouldn't share private implementation types.
+private final class ResumeGuard: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+    func claim() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if claimed { return false }
+        claimed = true
+        return true
     }
 }

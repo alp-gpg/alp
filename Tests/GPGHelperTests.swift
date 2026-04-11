@@ -53,7 +53,8 @@ struct GPGHelperTests {
     func signVerify() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let data = Data("Signed message".utf8)
-        let signature = try await helper._sign(data, signer: fp)
+        let (signature, micalg) = try await helper._sign(data, signer: fp)
+        #expect(micalg.hasPrefix("pgp-"))
         let (valid, signer, _) = try await helper._verify(data, signature: signature)
         #expect(valid)
         #expect(signer != nil)

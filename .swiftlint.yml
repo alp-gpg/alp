@@ -35,8 +35,8 @@ opt_in_rules:
   - force_unwrapping
   - yoda_condition
 
-force_cast: warning
-force_unwrapping: warning
+force_cast: error
+force_unwrapping: error
 
 identifier_name:
   min_length: 2

@@ -123,6 +123,72 @@ struct PGPMessageParserTests {
         }
     }
 
+    @Test("Handles boundary with spaces when quoted")
+    func boundaryWithSpacesQuoted() {
+        // RFC 2045 allows boundary values with spaces when quoted. The old
+        // regex truncated at the first whitespace and mis-parsed later parts.
+        let mime = """
+        Content-Type: multipart/encrypted; boundary="bnd with spaces"; protocol="application/pgp-encrypted"
+
+        --bnd with spaces
+        Content-Type: application/pgp-encrypted
+
+        Version: 1
+
+        --bnd with spaces
+        Content-Type: application/octet-stream
+
+        -----BEGIN PGP MESSAGE-----
+        dGVzdA==
+        -----END PGP MESSAGE-----
+
+        --bnd with spaces--
+        """
+        let result = parser.parse(Data(mime.utf8))
+        if case .mime = result { } else {
+            Issue.record("Expected .mime for quoted boundary with spaces, got \(String(describing: result))")
+        }
+    }
+
+    @Test("Handles unquoted boundary value")
+    func boundaryUnquoted() {
+        let mime = """
+        Content-Type: multipart/encrypted; boundary=abc123; protocol="application/pgp-encrypted"
+
+        --abc123
+        Content-Type: application/pgp-encrypted
+
+        Version: 1
+
+        --abc123
+        Content-Type: application/octet-stream
+
+        -----BEGIN PGP MESSAGE-----
+        dGVzdA==
+        -----END PGP MESSAGE-----
+
+        --abc123--
+        """
+        let result = parser.parse(Data(mime.utf8))
+        if case .mime = result { } else {
+            Issue.record("Expected .mime for unquoted boundary, got \(String(describing: result))")
+        }
+    }
+
+    @Test("Handles very large payloads near size cap")
+    func largePayload() {
+        // ~4 MB of body — well under the 50 MB XPC cap but large enough that
+        // an O(n^2) parser would be visibly slow.
+        let body = String(repeating: "Hello, world. ", count: 300_000)
+        #expect(parser.parse(Data(body.utf8)) == nil)
+    }
+
+    @Test("Plain text containing 'boundary' word is not misdetected")
+    func plainTextWithBoundaryWord() {
+        let text = "Subject: test\n\nWe discussed the boundary of the project today.\n"
+        #expect(parser.parse(Data(text.utf8)) == nil)
+    }
+
     @Test("Detects PGP/MIME signed message")
     func detectsMIMESigned() {
         let mime = """

@@ -39,6 +39,19 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
         run: echo "version=${TAG_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Generate Xcode project
+        run: tuist generate --no-open
+
+      - name: Run tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -workspace Alp.xcworkspace \
+            -scheme Alp \
+            -destination 'platform=macOS' \
+            -resultBundlePath build/TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
       - name: Import signing certificate
         env:
           CERTIFICATE_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
@@ -68,8 +81,17 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: bash scripts/build-release.sh "$RELEASE_VERSION"
 
+      - name: Generate SHA256 checksum
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd build
+          shasum -a 256 "Alp-${RELEASE_VERSION}.dmg" > "Alp-${RELEASE_VERSION}.dmg.sha256"
+
       - name: Upload DMG
         uses: softprops/action-gh-release@v2
         with:
-          files: build/Alp-${{ steps.version.outputs.version }}.dmg
+          files: |
+            build/Alp-${{ steps.version.outputs.version }}.dmg
+            build/Alp-${{ steps.version.outputs.version }}.dmg.sha256
           generate_release_notes: true

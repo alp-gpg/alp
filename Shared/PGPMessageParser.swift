@@ -114,9 +114,14 @@ struct PGPMessageParser: Sendable {
     }
 
     private func extractBoundary(from text: String) -> String? {
-        // Look for: boundary="..." or boundary=...
-        let pattern = #/boundary="?([^"\s;]+)"?/#
-        if let match = text.firstMatch(of: pattern) {
+        // RFC 2045 allows boundary values to contain spaces when quoted, so we
+        // must match `boundary="..."` separately from the unquoted form —
+        // otherwise a boundary like `boundary="abc def"` would truncate at the
+        // space and mis-identify later MIME parts.
+        if let match = text.firstMatch(of: #/boundary="([^"]+)"/#) {
+            return String(match.1)
+        }
+        if let match = text.firstMatch(of: #/boundary=([^\s;]+)/#) {
             return String(match.1)
         }
         return nil

@@ -32,7 +32,13 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             decoded = await Self.decrypt(data: data, parser: parser)
             sema.signal()
         }
-        sema.wait()
+        // Bound the wait so a stuck gpg/gpg-agent cannot freeze Mail's XPC
+        // thread indefinitely. On timeout we return .notSecured (best-effort
+        // decode), which Mail renders as the original MIME without decryption.
+        if sema.wait(timeout: .now() + 30) == .timedOut {
+            log.error("decodedMessage timed out after 30s")
+            return MEDecodedMessage(data: data, securityInformation: .notSecured, context: nil)
+        }
         return decoded
     }
 
@@ -46,7 +52,11 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         // Extract values synchronously on the calling thread, then do async work.
         let allAddresses = message.allRecipientAddresses
         let emails = allAddresses.map { $0.addressString ?? $0.rawString }
-        let handler = unsafeBitCast(completionHandler, to: (@Sendable (MEOutgoingMessageEncodingStatus) -> Void).self)
+        // MailKit's completion handlers aren't annotated @Sendable but are
+        // designed to be invoked from arbitrary XPC callback queues. Use
+        // nonisolated(unsafe) so the detached Task can capture the handler
+        // without unsafeBitCast lying about the type.
+        nonisolated(unsafe) let handler = completionHandler
 
         Task.detached {
             var missingEmails: [String] = []
@@ -82,7 +92,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         let rawData = message.rawData
         let recipientEmails = message.allRecipientAddresses.map { $0.addressString ?? $0.rawString }
         let contextID = composeContext.contextID
-        let handler = unsafeBitCast(completionHandler, to: (@Sendable (MEMessageEncodingResult) -> Void).self)
+        nonisolated(unsafe) let handler = completionHandler
 
         Task.detached {
             // Look up the correct session state by context ID.
@@ -205,9 +215,11 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 
         if shouldSign {
             guard let fp = signerFingerprint else { throw GPGError.noSigningKey }
-            let signature = try await GPGXPCClient.shared.sign(rawData, signer: fp)
+            let canonicalBody = canonicalizeForSigning(rawData)
+            let (signature, micalg) = try await GPGXPCClient.shared.sign(canonicalBody, signer: fp)
             return MEEncodedOutgoingMessage(
-                rawData: pgpMIMESigned(rawData, signature: signature), isSigned: true, isEncrypted: false
+                rawData: pgpMIMESigned(canonicalBody, signature: signature, micalg: micalg),
+                isSigned: true, isEncrypted: false
             )
         }
 
@@ -216,47 +228,80 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 
     // MARK: – PGP/MIME builders
 
+    /// Builds a multipart/encrypted RFC 3156 message.
+    /// Ciphertext is appended as bytes — never round-tripped through String —
+    /// so ASCII-armored output is preserved exactly and binary ciphertext is
+    /// never silently replaced with an empty string.
     private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data) -> Data {
         let boundary = "AlpBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
-        let cipher = String(data: ciphertext, encoding: .utf8) ?? ""
-        let mime = """
-        Content-Type: multipart/encrypted; boundary="\(boundary)"; protocol="application/pgp-encrypted"\r
-        \r
-        --\(boundary)\r
-        Content-Type: application/pgp-encrypted\r
-        Content-Description: PGP/MIME version identification\r
-        \r
-        Version: 1\r
-        \r
-        --\(boundary)\r
-        Content-Type: application/octet-stream; name="encrypted.asc"\r
-        Content-Description: OpenPGP encrypted message\r
-        Content-Disposition: inline; filename="encrypted.asc"\r
-        \r
-        \(cipher)\r
-        --\(boundary)--\r
-        """
-        return Data(mime.utf8)
+        let header = [
+            "Content-Type: multipart/encrypted; boundary=\"\(boundary)\"; protocol=\"application/pgp-encrypted\"",
+            "",
+            "--\(boundary)",
+            "Content-Type: application/pgp-encrypted",
+            "Content-Description: PGP/MIME version identification",
+            "",
+            "Version: 1",
+            "",
+            "--\(boundary)",
+            "Content-Type: application/octet-stream; name=\"encrypted.asc\"",
+            "Content-Description: OpenPGP encrypted message",
+            "Content-Disposition: inline; filename=\"encrypted.asc\"",
+            "",
+            "",  // trailing empty = extra CRLF before body
+        ].joined(separator: "\r\n")
+        var out = Data(header.utf8)
+        out.append(ciphertext)
+        out.appendUTF8("\r\n--\(boundary)--\r\n")
+        return out
     }
 
-    private nonisolated static func pgpMIMESigned(_ body: Data, signature: Data) -> Data {
+    /// Builds a multipart/signed RFC 3156 message.
+    /// - `body` is expected to already be canonicalized (CRLF) because the same
+    ///   bytes are hashed by gpg for the signature.
+    /// - `micalg` must match the actual hash algorithm used by gpg; we pass it
+    ///   through from the SIG_CREATED status line rather than hardcoding it.
+    private nonisolated static func pgpMIMESigned(_ body: Data, signature: Data, micalg: String) -> Data {
         let boundary = "AlpSigBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
-        let bodyStr = String(data: body, encoding: .utf8) ?? ""
-        let sigStr = String(data: signature, encoding: .utf8) ?? ""
-        let mime = """
-        Content-Type: multipart/signed; boundary="\(boundary)"; protocol="application/pgp-signature"; micalg="pgp-sha256"\r
-        \r
-        --\(boundary)\r
-        \(bodyStr)\r
-        --\(boundary)\r
-        Content-Type: application/pgp-signature; name="signature.asc"\r
-        Content-Description: OpenPGP digital signature\r
-        Content-Disposition: attachment; filename="signature.asc"\r
-        \r
-        \(sigStr)\r
-        --\(boundary)--\r
-        """
-        return Data(mime.utf8)
+        let header = [
+            "Content-Type: multipart/signed; boundary=\"\(boundary)\"; protocol=\"application/pgp-signature\"; micalg=\"\(micalg)\"",
+            "",
+            "--\(boundary)",
+            "",
+        ].joined(separator: "\r\n")
+        var out = Data(header.utf8)
+        out.append(body)
+        let sigHeader = [
+            "",
+            "--\(boundary)",
+            "Content-Type: application/pgp-signature; name=\"signature.asc\"",
+            "Content-Description: OpenPGP digital signature",
+            "Content-Disposition: attachment; filename=\"signature.asc\"",
+            "",
+            "",
+        ].joined(separator: "\r\n")
+        out.appendUTF8(sigHeader)
+        out.append(signature)
+        out.appendUTF8("\r\n--\(boundary)--\r\n")
+        return out
+    }
+
+    /// Canonicalize a message body per RFC 3156 §5: normalize line endings to
+    /// CRLF and ensure a trailing CRLF. The same byte sequence is then hashed
+    /// for the signature and included in the multipart/signed body, so a
+    /// receiving client sees identical bytes in both.
+    private nonisolated static func canonicalizeForSigning(_ data: Data) -> Data {
+        guard let text = String(data: data, encoding: .utf8) else {
+            // If the body isn't valid UTF-8 we cannot safely normalize line
+            // endings — just guarantee a trailing CRLF and return the bytes.
+            var out = data
+            if !out.hasSuffix([0x0D, 0x0A]) { out.append(contentsOf: [0x0D, 0x0A]) }
+            return out
+        }
+        var normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        normalized = normalized.replacingOccurrences(of: "\n", with: "\r\n")
+        if !normalized.hasSuffix("\r\n") { normalized += "\r\n" }
+        return Data(normalized.utf8)
     }
 
     // MARK: – Helpers
@@ -288,5 +333,16 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 private extension MEMessageSecurityInformation {
     static var notSecured: MEMessageSecurityInformation {
         MEMessageSecurityInformation(signers: [], isEncrypted: false, signingError: nil, encryptionError: nil)
+    }
+}
+
+private extension Data {
+    mutating func appendUTF8(_ string: String) {
+        append(Data(string.utf8))
+    }
+
+    func hasSuffix(_ bytes: [UInt8]) -> Bool {
+        guard count >= bytes.count else { return false }
+        return suffix(bytes.count).elementsEqual(bytes)
     }
 }

@@ -16,10 +16,13 @@ import Foundation
         reply: @escaping @Sendable (Data?, String?, String?, NSError?) -> Void
     )
 
+    /// reply: (signature, micalgHashAlgorithm?, error?)
+    /// `micalgHashAlgorithm` is the RFC 3156 hash name (e.g. "pgp-sha256", "pgp-sha512")
+    /// parsed from gpg's SIG_CREATED status line.
     func sign(
         data: Data,
         signingFingerprint: String,
-        reply: @escaping @Sendable (Data?, NSError?) -> Void
+        reply: @escaping @Sendable (Data?, String?, NSError?) -> Void
     )
 
     /// reply: (valid, signerFingerprint?, signerDisplayName?, error?)

@@ -291,10 +291,18 @@ private enum KeyserverClient {
     }
 
     static func fetch(email: String) async throws -> Data {
-        guard let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-              let url = URL(string: "https://keys.openpgp.org/vks/v1/by-email/\(encoded)"),
-              url.scheme == "https"
-        else { throw Error.notFound }
+        // Build with URLComponents so scheme and host are fixed — a crafted
+        // email cannot introduce a new host or additional path segments.
+        guard let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            throw Error.notFound
+        }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "keys.openpgp.org"
+        components.percentEncodedPath = "/vks/v1/by-email/" + encoded
+        guard let url = components.url, url.scheme == "https" else {
+            throw Error.notFound
+        }
 
         let (data, response): (Data, URLResponse)
         do {

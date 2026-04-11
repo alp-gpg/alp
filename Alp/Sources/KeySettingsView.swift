@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct KeySettingsView: View {
     @Bindable var vm: SettingsViewModel
@@ -94,12 +95,8 @@ struct KeySettingsView: View {
     private func importKeyFromFile() {
         let panel = NSOpenPanel()
         panel.title = "Import GPG Key"
-        panel.allowedContentTypes = [
-            .init(filenameExtension: "asc")!,
-            .init(filenameExtension: "gpg")!,
-            .init(filenameExtension: "pgp")!,
-            .init(filenameExtension: "key")!,
-        ]
+        panel.allowedContentTypes = ["asc", "gpg", "pgp", "key"]
+            .compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task {

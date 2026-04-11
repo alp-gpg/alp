@@ -24,6 +24,13 @@ __MACOSX/
 # Credentials / local config
 *.entitlements.local
 secrets.xcconfig
+*.p12
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*
 
 # Claude Code
 .claude/

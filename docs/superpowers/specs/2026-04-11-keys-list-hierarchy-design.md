@@ -159,10 +159,10 @@ place — no new method.
 ```swift
 struct GPGImportResult: Codable, Sendable {
     let fingerprint: String?
-    let newKey: Bool              // IMPORT_OK reason bit 0 (1)
-    let updatedSignatures: Bool   // IMPORT_OK reason bit 1 (2) — new self-sig
-    let newSubkeys: Bool          // IMPORT_OK reason bit 2 (4)
-    let newUserIDs: Bool          // IMPORT_OK reason bit 3 (8)
+    let newKey: Bool              // IMPORT_OK reason bit 0 (value 1)
+    let newUserIDs: Bool          // IMPORT_OK reason bit 1 (value 2)
+    let updatedSignatures: Bool   // IMPORT_OK reason bit 2 (value 4)
+    let newSubkeys: Bool          // IMPORT_OK reason bit 3 (value 8)
 }
 
 func importKey(
@@ -306,10 +306,13 @@ for genuinely unexpected failures.
 
 **Import-result tests:**
 
-- Parse `IMPORT_OK 0 ABC…` → `newKey=false, updatedSignatures=false`.
+- Parse `IMPORT_OK 0 ABC…` → all flags false.
 - Parse `IMPORT_OK 1 ABC…` → `newKey=true`.
-- Parse `IMPORT_OK 2 ABC…` → `updatedSignatures=true`.
-- Parse `IMPORT_OK 4 ABC…` → `newSubkeys=true`.
+- Parse `IMPORT_OK 2 ABC…` → `newUserIDs=true`.
+- Parse `IMPORT_OK 4 ABC…` → `updatedSignatures=true`.
+- Parse `IMPORT_OK 8 ABC…` → `newSubkeys=true`.
+- Parse `IMPORT_OK 12 ABC…` → `updatedSignatures=true && newSubkeys=true`
+  (combined flags).
 - Missing `IMPORT_OK` → throws the underlying `GPGError.processError`.
 
 **UI / view-model tests:**

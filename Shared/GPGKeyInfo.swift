@@ -1,25 +1,56 @@
 import Foundation
 
-/// A GPG key summary, JSON-serialisable for transport over XPC.
-struct GPGKeyInfo: Codable, Sendable, Identifiable {
+/// Subkey material attached to a primary key.
+struct GPGSubkey: Codable, Sendable, Identifiable, Hashable {
     let fingerprint: String
-    let userIDs: [String]
-    /// Capability flags from gpg --with-colons: e.g. "scESC"
+    /// gpg capability flags, e.g. "e", "s", "sca".
     let capabilities: String
-    /// True when a matching secret key is available in the local keyring.
-    var hasSecretKey: Bool
-    /// Expiry date of the primary key, or nil if the key never expires.
-    var expiryDate: Date?
+    /// Unix-timestamped expiry, nil for non-expiring subkeys.
+    let expiryDate: Date?
+    /// Human-readable algorithm + size, e.g. "RSA 3072", "Ed25519". Nil when
+    /// the listing didn't include enough information to format it.
+    let algorithm: String?
+    /// True when the subkey is revoked (`sub r:...` in colon output).
+    let isRevoked: Bool
 
     var id: String { fingerprint }
 
-    /// True when the key has an expiry date that has passed.
     var isExpired: Bool {
         guard let expiryDate else { return false }
         return expiryDate < Date.now
     }
 
-    /// The primary UID display string (first UID, or fingerprint if empty).
+    /// SF Symbol names to render for each capability flag.
+    var capabilityIcons: [String] {
+        var icons: [String] = []
+        let caps = capabilities.lowercased()
+        if caps.contains("s") { icons.append("signature") }
+        if caps.contains("e") { icons.append("lock") }
+        if caps.contains("a") { icons.append("person.badge.key") }
+        return icons
+    }
+}
+
+/// A GPG primary key summary, JSON-serialisable for transport over XPC.
+struct GPGKeyInfo: Codable, Sendable, Identifiable, Hashable {
+    let fingerprint: String
+    let userIDs: [String]
+    /// gpg capability flags for the primary key itself.
+    let capabilities: String
+    /// True when a matching secret key is available in the local keyring.
+    var hasSecretKey: Bool
+    /// Primary-key expiry, nil for non-expiring keys.
+    var expiryDate: Date?
+    /// Subkeys attached to this primary. Empty when the key has none.
+    var subkeys: [GPGSubkey]
+
+    var id: String { fingerprint }
+
+    var isExpired: Bool {
+        guard let expiryDate else { return false }
+        return expiryDate < Date.now
+    }
+
     var displayName: String { userIDs.first ?? fingerprint }
 
     /// Name-only portion of the primary UID, stripped of the email address.
@@ -43,21 +74,19 @@ struct GPGKeyInfo: Codable, Sendable, Identifiable {
         }.joined(separator: " ")
     }
 
-    // Custom Codable so hasSecretKey defaults to false when absent (e.g. old XPC responses).
-    init(fingerprint: String, userIDs: [String], capabilities: String, hasSecretKey: Bool = false, expiryDate: Date? = nil) {
+    init(
+        fingerprint: String,
+        userIDs: [String],
+        capabilities: String,
+        hasSecretKey: Bool = false,
+        expiryDate: Date? = nil,
+        subkeys: [GPGSubkey] = []
+    ) {
         self.fingerprint = fingerprint
         self.userIDs = userIDs
         self.capabilities = capabilities
         self.hasSecretKey = hasSecretKey
         self.expiryDate = expiryDate
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        fingerprint  = try c.decode(String.self,   forKey: .fingerprint)
-        userIDs      = try c.decode([String].self, forKey: .userIDs)
-        capabilities = try c.decode(String.self,   forKey: .capabilities)
-        hasSecretKey = try c.decodeIfPresent(Bool.self, forKey: .hasSecretKey) ?? false
-        expiryDate   = try c.decodeIfPresent(Date.self, forKey: .expiryDate)
+        self.subkeys = subkeys
     }
 }

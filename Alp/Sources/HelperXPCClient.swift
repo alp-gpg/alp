@@ -62,11 +62,20 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
-    func importKey(_ armoredKey: Data) async throws {
-        try await call { (proxy, resume: @escaping @Sendable (Result<Void, any Error>) -> Void) in
-            proxy.importKey(armoredKey: armoredKey) { error in
+    func importKey(_ armoredKey: Data) async throws -> GPGImportResult {
+        try await call { proxy, resume in
+            proxy.importKey(armoredKey: armoredKey) { data, error in
                 if let error { resume(.failure(error)) }
-                else { resume(.success(())) }
+                else if let data {
+                    do {
+                        let result = try JSONDecoder().decode(GPGImportResult.self, from: data)
+                        resume(.success(result))
+                    } catch {
+                        resume(.failure(error))
+                    }
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }

@@ -1,16 +1,5 @@
 import Foundation
 
-/// Summary of a `gpg --import` run, parsed from the IMPORT_OK status line.
-/// Bit mapping comes from gpg's `doc/DETAILS`:
-///   1 = new key, 2 = new user IDs, 4 = new signatures, 8 = new subkeys.
-struct GPGImportResult: Codable, Sendable {
-    let fingerprint: String?
-    let newKey: Bool
-    let newUserIDs: Bool
-    let updatedSignatures: Bool
-    let newSubkeys: Bool
-}
-
 /// Unsandboxed actor that drives the gpg(1) binary.
 ///
 /// All Process launches inherit the user's environment so gpg-agent socket,
@@ -287,8 +276,28 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return parseColonKeyListing(String(data: out, encoding: .utf8) ?? "")
     }
 
-    func _importKey(_ armoredKey: Data) async throws {
-        _ = try await runGPG(["--batch", "--yes", "--import"], input: armoredKey)
+    func _importKey(_ armoredKey: Data) async throws -> GPGImportResult {
+        let args = ["--batch", "--yes", "--status-fd", "2", "--import"]
+        let (_, stderr, exitCode) = try await runGPGRaw(args, input: armoredKey)
+        let stderrText = String(data: stderr, encoding: .utf8) ?? ""
+        guard exitCode == 0 else {
+            throw GPGError.processError(exitCode: exitCode, stderr: stderrText)
+        }
+        // parseImportResult returns nil when IMPORT_OK is missing (e.g., gpg
+        // emitted IMPORT_PROBLEM instead). Treat that as a genuine failure —
+        // the caller shouldn't see a silent success.
+        guard let result = Self.parseImportResult(from: stderrText) else {
+            throw GPGError.processError(exitCode: exitCode, stderr: stderrText)
+        }
+        return result
+    }
+
+    func _export(_ fingerprint: String) async throws -> Data {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        let args = ["--batch", "--yes", "--armor", "--export", fingerprint]
+        return try await runGPG(args)
     }
 
     func _publicKeyExists(email: String) async throws -> (Bool, String?) {
@@ -699,19 +708,20 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     nonisolated func importKey(
         armoredKey: Data,
-        reply: @escaping @Sendable (NSError?) -> Void
+        reply: @escaping @Sendable (Data?, NSError?) -> Void
     ) {
         guard armoredKey.count <= Self.maxPayloadSize else {
-            reply(GPGError.encodingError("payload too large").asNSError); return
+            reply(nil, GPGError.encodingError("payload too large").asNSError); return
         }
         Task {
             do {
-                try await self._importKey(armoredKey)
-                reply(nil)
+                let result = try await self._importKey(armoredKey)
+                let encoded = try JSONEncoder().encode(result)
+                reply(encoded, nil)
             } catch let e as GPGError {
-                reply(e.asNSError)
+                reply(nil, e.asNSError)
             } catch {
-                reply(error as NSError)
+                reply(nil, error as NSError)
             }
         }
     }

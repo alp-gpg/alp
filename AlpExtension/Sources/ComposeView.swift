@@ -162,7 +162,7 @@ private struct MissingKeysView: View {
         case .import(let armoredKey):
             states[email] = .importing
             do {
-                try await GPGXPCClient.shared.importKey(armoredKey)
+                _ = try await GPGXPCClient.shared.importKey(armoredKey)
                 states[email] = .imported
                 await onImported()
             } catch {

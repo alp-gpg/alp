@@ -109,6 +109,10 @@ final class SettingsViewModel {
     var helperStatus: SMAppService.Status = .notRegistered
     var helperError: String?
 
+    /// Non-error user feedback for the most recent key import. Shown as a
+    /// transient summary in the Keys section.
+    var lastImportSummary: String?
+
     func load() async {
         #if DEBUG
         // Don't assume helper is running — check if we can actually reach it.

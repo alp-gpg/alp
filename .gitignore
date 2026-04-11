@@ -35,5 +35,8 @@ secrets.xcconfig
 # Claude Code
 .claude/
 
+# Git worktrees (feature branches checked out locally)
+.worktrees/
+
 # Test artifacts
 test_mailkit

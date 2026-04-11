@@ -22,6 +22,27 @@ struct AsyncSemaphoreTests {
 
         let peak = await counter.peak
         #expect(peak <= 2, "Peak concurrency \(peak) exceeded semaphore limit 2")
+        #expect(peak >= 2, "Test didn't exercise contention — only \(peak) concurrent holders observed")
+    }
+
+    @Test("wait suspends when permits are zero and resumes on external signal")
+    func suspendAndResume() async {
+        let sem = AsyncSemaphore(value: 0)
+
+        // Start a waiter that should suspend immediately.
+        let waiterTask = Task {
+            await sem.wait()
+            return "resumed"
+        }
+
+        // Give the waiter a chance to actually enter the suspension.
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
+        // Signal from outside — the suspended waiter should now resume.
+        await sem.signal()
+
+        let result = await waiterTask.value
+        #expect(result == "resumed")
     }
 }
 

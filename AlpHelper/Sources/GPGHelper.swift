@@ -403,59 +403,124 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     private func parseColonKeyListing(_ text: String) -> [GPGKeyInfo] {
         var keys: [GPGKeyInfo] = []
-        var currentFingerprint: String?
-        var currentUIDs: [String] = []
-        var currentCapabilities = ""
-        var currentExpiryDate: Date?
-        // Tracks whether the current fpr/uid line belongs to a subkey rather than
-        // the primary key. GPG emits sub/ssb variants (sub#, ssb>, ssb#) for
-        // smartcard/stub keys; primary key variants are pub, sec, sec#, sec>.
-        var inSubkey = false
 
-        func flush() {
-            guard let fp = currentFingerprint, !fp.isEmpty else { return }
+        var primaryFingerprint: String?
+        var primaryUIDs: [String] = []
+        var primaryCapabilities = ""
+        var primaryExpiry: Date?
+        var subkeys: [GPGSubkey] = []
+
+        /// Staging area for the subkey we're currently filling in. We can't
+        /// build the final `GPGSubkey` until its `fpr` line arrives because
+        /// the subkey's full fingerprint appears on a subsequent record.
+        struct PendingSubkey {
+            var fingerprint: String = ""
+            var capabilities: String = ""
+            var expiry: Date?
+            var algorithm: String?
+            var isRevoked: Bool = false
+        }
+        var pendingSubkey: PendingSubkey?
+
+        func flushSubkey() {
+            guard let pending = pendingSubkey, !pending.fingerprint.isEmpty else {
+                pendingSubkey = nil
+                return
+            }
+            subkeys.append(GPGSubkey(
+                fingerprint: pending.fingerprint,
+                capabilities: pending.capabilities,
+                expiryDate: pending.expiry,
+                algorithm: pending.algorithm,
+                isRevoked: pending.isRevoked
+            ))
+            pendingSubkey = nil
+        }
+
+        func flushPrimary() {
+            flushSubkey()
+            guard let fp = primaryFingerprint, !fp.isEmpty else { return }
             keys.append(GPGKeyInfo(
                 fingerprint: fp,
-                userIDs: currentUIDs,
-                capabilities: currentCapabilities,
-                expiryDate: currentExpiryDate
+                userIDs: primaryUIDs,
+                capabilities: primaryCapabilities,
+                expiryDate: primaryExpiry,
+                subkeys: subkeys
             ))
+            primaryFingerprint = nil
+            primaryUIDs = []
+            primaryCapabilities = ""
+            primaryExpiry = nil
+            subkeys = []
         }
 
         for raw in text.components(separatedBy: "\n") {
-            // Trim \r so the parser is robust against \r\n line endings.
             let fields = raw.trimmingCharacters(in: .init(charactersIn: "\r"))
                             .components(separatedBy: ":")
             guard let recordType = fields.first, !recordType.isEmpty else { continue }
 
             if recordType.hasPrefix("pub") || recordType.hasPrefix("sec") {
-                // New primary key block — flush the previous one and reset.
-                flush()
-                currentFingerprint = nil
-                currentUIDs = []
-                currentCapabilities = fields.count > 11 ? fields[11] : ""
-                // Field 6 is the expiry Unix timestamp (empty string = no expiry).
+                flushPrimary()
+                primaryCapabilities = fields.count > 11 ? fields[11] : ""
                 if fields.count > 6, let ts = TimeInterval(fields[6]), ts > 0 {
-                    currentExpiryDate = Date(timeIntervalSince1970: ts)
+                    primaryExpiry = Date(timeIntervalSince1970: ts)
                 } else {
-                    currentExpiryDate = nil
+                    primaryExpiry = nil
                 }
-                inSubkey = false
             } else if recordType.hasPrefix("sub") || recordType.hasPrefix("ssb") {
-                // Entering a subkey block; subsequent fpr records belong to the subkey.
-                inSubkey = true
+                flushSubkey()
+                var pending = PendingSubkey()
+                pending.isRevoked = fields.count > 1 && fields[1] == "r"
+                pending.capabilities = fields.count > 11 ? fields[11] : ""
+                if fields.count > 6, let ts = TimeInterval(fields[6]), ts > 0 {
+                    pending.expiry = Date(timeIntervalSince1970: ts)
+                }
+                pending.algorithm = Self.formatAlgorithm(
+                    id: fields.count > 3 ? fields[3] : "",
+                    bits: fields.count > 2 ? fields[2] : "",
+                    curve: fields.count > 16 ? fields[16] : ""
+                )
+                pendingSubkey = pending
             } else if recordType == "fpr" {
-                if !inSubkey, currentFingerprint == nil, fields.count > 9 {
-                    currentFingerprint = fields[9]
+                if pendingSubkey != nil {
+                    if fields.count > 9 { pendingSubkey?.fingerprint = fields[9] }
+                } else if primaryFingerprint == nil, fields.count > 9 {
+                    primaryFingerprint = fields[9]
                 }
             } else if recordType == "uid" {
-                if fields.count > 9, !fields[9].isEmpty {
-                    currentUIDs.append(fields[9])
+                if pendingSubkey == nil, fields.count > 9, !fields[9].isEmpty {
+                    primaryUIDs.append(fields[9])
                 }
             }
         }
-        flush()
+        flushPrimary()
         return keys
+    }
+
+    /// Maps gpg's numeric algorithm id + bit size + curve name to a
+    /// human-readable label, e.g. "RSA 3072" or "Ed25519".
+    ///
+    /// Algorithm ids come from RFC 4880 + gpg extensions:
+    ///   1 = RSA, 16 = ElGamal, 17 = DSA, 18 = ECDH, 19 = ECDSA, 22 = EdDSA.
+    static func formatAlgorithm(id: String, bits: String, curve: String) -> String? {
+        guard let algoId = Int(id) else { return nil }
+        let name: String
+        switch algoId {
+        case 1:  name = "RSA"
+        case 16: name = "ElGamal"
+        case 17: name = "DSA"
+        case 18: name = "ECDH"
+        case 19: name = "ECDSA"
+        case 22: name = "EdDSA"
+        default: return nil
+        }
+        // ECC keys prefer the curve name when it's present — "Ed25519" is
+        // more useful than "EdDSA 255".
+        if [18, 19, 22].contains(algoId), !curve.isEmpty {
+            return curve.capitalized
+        }
+        if !bits.isEmpty { return "\(name) \(bits)" }
+        return name
     }
 
     // MARK: – nonisolated XPC bridge methods
@@ -641,3 +706,13 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         }
     }
 }
+
+#if DEBUG
+extension GPGHelper {
+    /// Test-only hook into the colon listing parser. Kept inside `#if DEBUG`
+    /// so it does not ship in Release builds.
+    func testParseColonKeyListing(_ text: String) -> [GPGKeyInfo] {
+        parseColonKeyListing(text)
+    }
+}
+#endif

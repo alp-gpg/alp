@@ -46,6 +46,27 @@ final class SettingsViewModel {
 
     var isLoadingKeys = false
 
+    /// Returns the primary keys that should be shown given the "Show expired"
+    /// toggle state. A primary is hidden only when its *own* expiry has
+    /// passed; subkeys expiring independently do not hide their parent.
+    func filteredKeys(showExpired: Bool) -> [GPGKeyInfo] {
+        guard !showExpired else { return allKeys }
+        return allKeys.filter { !$0.isExpired }
+    }
+
+    /// Count of expired primary keys that are published on keys.openpgp.org —
+    /// i.e. the ones Alp can plausibly refresh. Used to drive the banner in
+    /// KeySettingsView.
+    var expiredPublishedCount: Int {
+        allKeys.filter { key in
+            key.isExpired && keyserverStatus[key.fingerprint] == .found
+        }.count
+    }
+
+    /// Shared across the Keys settings view's banner + per-row actions.
+    @ObservationIgnored
+    private(set) var expiredRefresher = ExpiredKeyRefresher()
+
     // MARK: – Compose defaults (stored so @Observable tracks mutations for Picker bindings)
 
     var defaultSignerFingerprint: String? = UserDefaults.standard.string(forKey: "defaultSignerFingerprint") {

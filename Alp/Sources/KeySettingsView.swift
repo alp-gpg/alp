@@ -3,25 +3,16 @@ import UniformTypeIdentifiers
 
 struct KeySettingsView: View {
     @Bindable var vm: SettingsViewModel
-    /// Column-header sort state. KeyPathComparator works with plain Swift structs;
-    /// SortDescriptor requires an NSObject root and won't compile for GPGKeyInfo.
-    @State private var sortOrder: [KeyPathComparator<GPGKeyInfo>] = []
+    @AppStorage("showExpiredKeys") private var showExpired = false
 
-    /// Sorted view of allKeys. Applies the user's column sort, with pub+sec as a
-    /// stable tie-break so it always floats to the top within equal-valued groups.
-    private var sortedKeys: [GPGKeyInfo] {
-        vm.allKeys.sorted { a, b in
-            for comparator in sortOrder {
-                switch comparator.compare(a, b) {
-                case .orderedAscending:  return true
-                case .orderedDescending: return false
-                case .orderedSame:       continue
-                }
-            }
-            // Default / tie-break: pub+sec before pub-only, then alphabetical.
-            if a.hasSecretKey != b.hasSecretKey { return a.hasSecretKey }
-            return a.displayName.localizedCompare(b.displayName) == .orderedAscending
+    /// Primary rows built from filtered keys, sorted with pub+sec first.
+    private var primaryRows: [KeyRow] {
+        let filtered = vm.filteredKeys(showExpired: showExpired)
+        let sorted = filtered.sorted { lhs, rhs in
+            if lhs.hasSecretKey != rhs.hasSecretKey { return lhs.hasSecretKey }
+            return lhs.displayName.localizedCompare(rhs.displayName) == .orderedAscending
         }
+        return sorted.map { .primary($0) }
     }
 
     var body: some View {
@@ -45,35 +36,61 @@ struct KeySettingsView: View {
                         .textSelection(.enabled)
                 }
             } else {
-                Table(sortedKeys, sortOrder: $sortOrder) {
-                    // Type column: not header-sortable; ordering is guaranteed by the
-                    // pub+sec tie-break in sortedKeys regardless of active sort column.
-                    TableColumn("Type") { key in
-                        KeyTypeLabel(hasSecretKey: key.hasSecretKey, isExpired: key.isExpired)
+                Table(of: KeyRow.self) {
+                    TableColumn("Type") { row in
+                        KeyRowTypeLabel(row: row)
                     }
                     .width(70)
 
-                    TableColumn("User ID", value: \.displayName) { key in
-                        Text(key.displayName)
+                    TableColumn("User ID") { row in
+                        Text(row.displayName)
                             .lineLimit(1)
+                            .strikethrough(row.isRevoked || row.isExpired)
                     }
 
-                    TableColumn("Fingerprint", value: \.shortFingerprint) { key in
-                        Text(key.shortFingerprint)
+                    TableColumn("Capabilities") { row in
+                        HStack(spacing: 4) {
+                            ForEach(row.capabilityIcons, id: \.self) { sym in
+                                Image(systemName: sym)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .width(80)
+
+                    TableColumn("Fingerprint") { row in
+                        Text(row.shortFingerprint)
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                     }
-                    .width(120)
+                    .width(160)
 
-                    TableColumn("Expires") { key in
-                        ExpiryLabel(date: key.expiryDate)
+                    TableColumn("Expires") { row in
+                        ExpiryLabel(date: row.expiryDate)
                     }
                     .width(100)
 
-                    TableColumn("keys.openpgp.org") { key in
-                        KeyserverStatusLabel(status: vm.keyserverStatus[key.fingerprint])
+                    TableColumn("keys.openpgp.org") { row in
+                        if case .primary(let key) = row {
+                            KeyserverStatusLabel(status: vm.keyserverStatus[key.fingerprint])
+                        } else {
+                            EmptyView()
+                        }
                     }
                     .width(140)
+                } rows: {
+                    ForEach(primaryRows) { primaryRow in
+                        if let children = primaryRow.children {
+                            DisclosureTableRow(primaryRow) {
+                                ForEach(children) { child in
+                                    TableRow(child)
+                                }
+                            }
+                        } else {
+                            TableRow(primaryRow)
+                        }
+                    }
                 }
             }
         }
@@ -126,6 +143,27 @@ private struct KeyTypeLabel: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isExpired ? "Expired key" : (hasSecretKey ? "Public and secret key" : "Public key only"))
+    }
+}
+
+private struct KeyRowTypeLabel: View {
+    let row: KeyRow
+    var body: some View {
+        switch row {
+        case .primary(let key):
+            KeyTypeLabel(hasSecretKey: key.hasSecretKey, isExpired: key.isExpired)
+        case .subkey(let sub, _):
+            HStack(spacing: 4) {
+                Image(systemName: "key")
+                    .foregroundStyle(.secondary)
+                Text(sub.isRevoked ? "REVOKED" : "sub")
+                    .font(.caption2)
+                    .foregroundStyle(sub.isRevoked ? .red : .secondary)
+                    .strikethrough(sub.isRevoked)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(sub.isRevoked ? "Revoked subkey" : "Subkey")
+        }
     }
 }
 

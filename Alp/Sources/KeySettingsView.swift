@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct KeySettingsView: View {
     @Bindable var vm: SettingsViewModel
     @AppStorage("showExpiredKeys") private var showExpired = false
+    @AppStorage("autoRefreshExpiredOnShow") private var autoRefresh = false
 
     /// Primary rows built from filtered keys, sorted with pub+sec first.
     private var primaryRows: [KeyRow] {
@@ -36,6 +37,15 @@ struct KeySettingsView: View {
                         .textSelection(.enabled)
                 }
             } else {
+                VStack(spacing: 0) {
+                    if showExpired && vm.expiredPublishedCount > 0 {
+                        ExpiredKeysBanner(
+                            expiredPublishedCount: vm.expiredPublishedCount,
+                            isRunning: vm.expiredRefresher.isRunning,
+                            onCheckNow: { startBatchRefresh() },
+                            onCancel: { vm.expiredRefresher.cancel() }
+                        )
+                    }
                 Table(of: KeyRow.self) {
                     TableColumn("Type") { row in
                         KeyRowTypeLabel(row: row)
@@ -92,6 +102,12 @@ struct KeySettingsView: View {
                         }
                     }
                 }
+                }
+                .onChange(of: showExpired) { _, newValue in
+                    if newValue && autoRefresh && vm.expiredPublishedCount > 0 {
+                        startBatchRefresh()
+                    }
+                }
             }
         }
         .toolbar {
@@ -105,8 +121,23 @@ struct KeySettingsView: View {
                     Task { await vm.refreshKeys() }
                 }
             }
+            ToolbarItem {
+                Toggle(isOn: $showExpired) {
+                    Label(showExpired ? "Hide expired" : "Show all",
+                          systemImage: showExpired ? "eye.slash" : "eye")
+                }
+                .toggleStyle(.button)
+                .help(showExpired ? "Hide expired keys" : "Show expired keys")
+            }
         }
         .navigationTitle("Keys")
+    }
+
+    private func startBatchRefresh() {
+        let candidates = vm.allKeys.filter { key in
+            key.isExpired && vm.keyserverStatus[key.fingerprint] == .found
+        }
+        vm.expiredRefresher.start(keys: candidates)
     }
 
     private func importKeyFromFile() {

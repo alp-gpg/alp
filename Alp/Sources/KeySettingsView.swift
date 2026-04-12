@@ -48,9 +48,13 @@ struct KeySettingsView: View {
                     }
                 Table(of: KeyRow.self) {
                     TableColumn("Type") { row in
-                        KeyRowTypeLabel(row: row)
+                        HStack(spacing: 4) {
+                            KeyRowTypeLabel(row: row)
+                            rowStateBadge(for: row)
+                        }
+                        .contextMenu { contextMenu(for: row) }
                     }
-                    .width(70)
+                    .width(90)
 
                     TableColumn("User ID") { row in
                         Text(row.displayName)
@@ -138,6 +142,65 @@ struct KeySettingsView: View {
             key.isExpired && vm.keyserverStatus[key.fingerprint] == .found
         }
         vm.expiredRefresher.start(keys: candidates)
+    }
+
+    @ViewBuilder
+    private func contextMenu(for row: KeyRow) -> some View {
+        switch row {
+        case .primary(let key):
+            Button("Copy fingerprint") { copyToPasteboard(key.fingerprint) }
+            Button("Refresh from keyserver") {
+                Task { await refreshSingle(fingerprint: key.fingerprint) }
+            }
+            .disabled(vm.keyserverStatus[key.fingerprint] != .found)
+            Button("Reveal on keys.openpgp.org…") { openKeyserverPage(for: key.fingerprint) }
+        case .subkey(let sub, _):
+            Button("Copy fingerprint") { copyToPasteboard(sub.fingerprint) }
+        }
+    }
+
+    @ViewBuilder
+    private func rowStateBadge(for row: KeyRow) -> some View {
+        if case .primary(let key) = row {
+            switch vm.expiredRefresher.rowState[key.fingerprint] {
+            case .fetching:
+                ProgressView().controlSize(.mini)
+            case .failed(let message):
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+                    .help(message)
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    private func copyToPasteboard(_ string: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
+    }
+
+    private func openKeyserverPage(for fingerprint: String) {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "keys.openpgp.org"
+        components.percentEncodedPath = "/pks/lookup"
+        components.queryItems = [
+            .init(name: "op", value: "get"),
+            .init(name: "search", value: "0x" + fingerprint)
+        ]
+        guard let url = components.url else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func refreshSingle(fingerprint: String) async {
+        let service = KeyserverRefreshService()
+        do {
+            _ = try await service.refresh(fingerprint: fingerprint)
+            await vm.refreshKeys()
+        } catch {
+            vm.helperError = error.localizedDescription
+        }
     }
 
     private func importKeyFromFile() {

@@ -26,6 +26,8 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            keysSection
+
             if vm.pinningDegraded {
                 Section {
                     Label(
@@ -68,6 +70,26 @@ struct GeneralSettingsView: View {
         .formStyle(.grouped)
         .navigationTitle("General")
     }
+
+    // MARK: – Keys
+
+    private var keysSection: some View {
+        GroupBox("Keys") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $autoRefreshExpiredOnShow) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Automatically check keyserver when showing expired keys")
+                        Text("When enabled, Alp will fetch updates from keys.openpgp.org whenever you reveal expired keys. Uses a pinned TLS connection.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(8)
+        }
+    }
+
+    @AppStorage("autoRefreshExpiredOnShow") private var autoRefreshExpiredOnShow = false
 
     // MARK: – Setup Checklist
 

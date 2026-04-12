@@ -121,9 +121,10 @@ struct KeySettingsView: View {
                 }
             }
             ToolbarItem {
-                Button("Refresh", systemImage: "arrow.clockwise") {
+                Button("Reload", systemImage: "arrow.clockwise") {
                     Task { await vm.refreshKeys() }
                 }
+                .help("Re-read keys from the local keyring")
             }
             ToolbarItem {
                 Toggle(isOn: $showExpired) {

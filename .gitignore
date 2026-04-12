@@ -32,11 +32,11 @@ secrets.xcconfig
 .env
 .env.*
 
+# Git worktrees (feature-branch isolation)
+.worktrees/
+
 # Claude Code
 .claude/
-
-# Git worktrees (feature branches checked out locally)
-.worktrees/
 
 # Test artifacts
 test_mailkit

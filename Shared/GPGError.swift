@@ -9,6 +9,7 @@ enum GPGError: Error, Sendable {
     case verificationFailed(String)
     case xpcUnavailable
     case encodingError(String)
+    case importRejected(String)
 }
 
 extension GPGError: LocalizedError {
@@ -30,6 +31,8 @@ extension GPGError: LocalizedError {
             "GPG helper service is not running. Open Alp and install the helper."
         case let .encodingError(detail):
             "Message encoding error: \(detail)"
+        case let .importRejected(detail):
+            "gpg refused to import the key: \(detail)"
         }
     }
 }
@@ -82,6 +85,7 @@ extension GPGError {
         case .verificationFailed: 6
         case .xpcUnavailable: 7
         case .encodingError: 8
+        case .importRejected: 9
         }
     }
 }

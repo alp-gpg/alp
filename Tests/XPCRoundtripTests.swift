@@ -100,4 +100,29 @@ struct XPCRoundtripTests {
         }
         #expect(error != nil)
     }
+
+    @Test("_importKey throws on malformed payload")
+    func importKeyThrowsOnGarbage() async {
+        await #expect(throws: (any Error).self) {
+            _ = try await self.helper._importKey(Data("not a key".utf8))
+        }
+    }
+
+    @Test("importKey bridge returns GPGImportResult")
+    func importKeyBridgeReturnsResult() async throws {
+        let fp = try await firstSecretKeyFingerprint()
+        // Export an existing key so we have real armored data to re-import.
+        let exported = try await helper._export(fp)
+        let resultData: Data = try await withCheckedThrowingContinuation { cont in
+            helper.importKey(armoredKey: exported) { data, error in
+                if let error { cont.resume(throwing: error) }
+                else if let data { cont.resume(returning: data) }
+                else { cont.resume(throwing: GPGError.encodingError("nil")) }
+            }
+        }
+        let result = try JSONDecoder().decode(GPGImportResult.self, from: resultData)
+        // Re-importing an already-present key should not mark it as new.
+        #expect(result.newKey == false)
+        #expect(result.fingerprint != nil)
+    }
 }

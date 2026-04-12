@@ -65,11 +65,30 @@ struct GPGKeyInfoTests {
     }
 
     @Test
-    func `Decoding without hasSecretKey defaults to false`() throws {
-        let json = #"{"fingerprint":"AA","userIDs":[],"capabilities":"e"}"#
-        let decoded = try JSONDecoder().decode(GPGKeyInfo.self, from: Data(json.utf8))
-        #expect(decoded.hasSecretKey == false)
-        #expect(decoded.expiryDate == nil)
+    func `Codable roundtrip with subkeys preserves all fields`() throws {
+        let sub = GPGSubkey(
+            fingerprint: String(repeating: "B", count: 40),
+            capabilities: "e",
+            expiryDate: Date(timeIntervalSince1970: 1_800_000_000),
+            algorithm: "RSA 3072",
+            isRevoked: false,
+        )
+        let original = GPGKeyInfo(
+            fingerprint: "AA",
+            userIDs: ["Test <test@test.com>"],
+            capabilities: "scESC",
+            hasSecretKey: true,
+            expiryDate: Date(timeIntervalSince1970: 1_700_000_000),
+            subkeys: [sub],
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(GPGKeyInfo.self, from: data)
+        #expect(decoded.fingerprint == original.fingerprint)
+        #expect(decoded.userIDs == original.userIDs)
+        #expect(decoded.capabilities == original.capabilities)
+        #expect(decoded.hasSecretKey == true)
+        #expect(decoded.expiryDate == original.expiryDate)
+        #expect(decoded.subkeys == original.subkeys)
     }
 
     @Test

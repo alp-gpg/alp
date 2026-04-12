@@ -62,11 +62,33 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
-    func importKey(_ armoredKey: Data) async throws {
-        try await call { (proxy, resume: @escaping @Sendable (Result<Void, any Error>) -> Void) in
-            proxy.importKey(armoredKey: armoredKey) { error in
+    /// Decodes the JSON-encoded [GPGKeyInfo] preview from the helper's reply.
+    /// Mirror of the sibling client in AlpExtension — keep them in sync.
+    func previewKey(_ armoredKey: Data) async throws -> [GPGKeyInfo] {
+        try await call { proxy, resume in
+            proxy.previewKey(armoredKey: armoredKey) { dataList, error in
                 if let error { resume(.failure(error)) }
-                else { resume(.success(())) }
+                else { resume(.success(Self.decodeKeys(dataList))) }
+            }
+        }
+    }
+
+    /// Decodes the JSON-encoded GPGImportResult from the helper's reply.
+    /// Mirror of the sibling client in the other target — keep them in sync.
+    func importKey(_ armoredKey: Data) async throws -> GPGImportResult {
+        try await call { proxy, resume in
+            proxy.importKey(armoredKey: armoredKey) { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data {
+                    do {
+                        let result = try JSONDecoder().decode(GPGImportResult.self, from: data)
+                        resume(.success(result))
+                    } catch {
+                        resume(.failure(error))
+                    }
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }

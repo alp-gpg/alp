@@ -33,10 +33,11 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             sema.signal()
         }
         // Bound the wait so a stuck gpg/gpg-agent cannot freeze Mail's XPC
-        // thread indefinitely. On timeout we return .notSecured (best-effort
-        // decode), which Mail renders as the original MIME without decryption.
-        if sema.wait(timeout: .now() + 30) == .timedOut {
-            log.error("decodedMessage timed out after 30s")
+        // thread indefinitely. Must exceed GPGXPCClient.callTimeout (60s) so
+        // legitimate slow XPC replies (pinentry, slow keyserver) aren't cut
+        // short by this outer guard.
+        if sema.wait(timeout: .now() + 75) == .timedOut {
+            log.error("decodedMessage timed out after 75s")
             return MEDecodedMessage(data: data, securityInformation: .notSecured, context: nil)
         }
         return decoded

@@ -54,7 +54,12 @@ final class ComposeViewModel {
         missingKeyEmails = missing
         canEncrypt = missing.isEmpty && !allAddresses.isEmpty
 
-        // Push current state to the session store so SecurityHandler can read it
+        syncStateToStore()
+    }
+
+    /// Push current toggle state to the session store without re-running the
+    /// XPC keyserver/recipient checks. Cheap; safe to call on every toggle.
+    func syncStateToStore() {
         ComposeSessionStore.shared.register(
             session: session,
             sign: shouldSign,

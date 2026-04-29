@@ -63,9 +63,9 @@ struct ComposeView: View {
         .padding(.vertical, 6)
         .glassEffect(.regular, in: .capsule)
         .task { await vm.refresh() }
-        .onChange(of: vm.shouldSign) { _, _ in syncStore() }
-        .onChange(of: vm.shouldEncrypt) { _, _ in syncStore() }
-        .onChange(of: vm.selectedSignerFingerprint) { _, _ in syncStore() }
+        .onChange(of: vm.shouldSign) { _, _ in vm.syncStateToStore() }
+        .onChange(of: vm.shouldEncrypt) { _, _ in vm.syncStateToStore() }
+        .onChange(of: vm.selectedSignerFingerprint) { _, _ in vm.syncStateToStore() }
     }
 
     private var encryptTooltip: String {
@@ -104,10 +104,6 @@ struct ComposeView: View {
         .fixedSize()
     }
 
-    @MainActor
-    private func syncStore() {
-        Task { await vm.refresh() }
-    }
 }
 
 // MARK: – Missing keys popover

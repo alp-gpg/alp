@@ -1,4 +1,7 @@
 import Foundation
+import os.log
+
+private let log = Logger(subsystem: "app.alp.Alp.helper", category: "GPGHelper")
 
 /// Unsandboxed actor that drives the gpg(1) binary.
 ///
@@ -234,7 +237,13 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             ) else {
                 throw GPGError.encodingError("could not write signature tempfile")
             }
-            defer { try? FileManager.default.removeItem(at: sigURL) }
+            defer {
+                do {
+                    try FileManager.default.removeItem(at: sigURL)
+                } catch {
+                    log.error("Failed to remove signature tempfile \(sigURL.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
             let args = ["--batch", "--verify", "--status-fd", "2", sigURL.path, "-"]
             let (_, stderr, _) = try await runGPGRaw(args, input: data)
             let statusText = String(data: stderr, encoding: .utf8) ?? ""

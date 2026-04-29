@@ -5,8 +5,8 @@ import Testing
 struct PGPMessageParserTests {
     let parser = PGPMessageParser()
 
-    @Test("Detects PGP/MIME encrypted message")
-    func detectsMIMEEncrypted() {
+    @Test
+    func `Detects PGP/MIME encrypted message`() {
         let mime = """
         MIME-Version: 1.0
         Content-Type: multipart/encrypted; boundary="abc123"; protocol="application/pgp-encrypted"
@@ -31,8 +31,8 @@ struct PGPMessageParserTests {
         }
     }
 
-    @Test("Detects inline PGP message")
-    func detectsInlinePGP() {
+    @Test
+    func `Detects inline PGP message`() {
         let inline = """
         Subject: Test
 
@@ -46,15 +46,15 @@ struct PGPMessageParserTests {
         }
     }
 
-    @Test("Returns nil for plain message")
-    func returnsNilForPlain() {
+    @Test
+    func `Returns nil for plain message`() {
         let plain = "Hello, world!\nThis is a plain text email."
         let result = parser.parse(Data(plain.utf8))
         #expect(result == nil)
     }
 
-    @Test("Detects inline clearsigned message")
-    func detectsInlineClearsigned() {
+    @Test
+    func `Detects inline clearsigned message`() {
         let signed = """
         Subject: Test
 
@@ -72,19 +72,19 @@ struct PGPMessageParserTests {
         }
     }
 
-    @Test("Returns nil for empty data")
-    func emptyData() {
+    @Test
+    func `Returns nil for empty data`() {
         #expect(parser.parse(Data()) == nil)
     }
 
-    @Test("Returns nil for binary garbage")
-    func binaryGarbage() {
+    @Test
+    func `Returns nil for binary garbage`() {
         let bytes: [UInt8] = [0xFF, 0xFE, 0x00, 0x01, 0x80, 0x90]
         #expect(parser.parse(Data(bytes)) == nil)
     }
 
-    @Test("Handles PGP markers in headers without body")
-    func pgpMarkerInHeaderOnly() {
+    @Test
+    func `Handles PGP markers in headers without body`() {
         // Content-Type mentions pgp-encrypted but there's no valid MIME structure
         let broken = """
         Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"
@@ -95,8 +95,8 @@ struct PGPMessageParserTests {
         #expect(parser.parse(Data(broken.utf8)) == nil)
     }
 
-    @Test("Extracts ciphertext from properly bounded MIME")
-    func extractsCiphertext() {
+    @Test
+    func `Extracts ciphertext from properly bounded MIME`() {
         let mime = """
         Content-Type: multipart/encrypted; boundary="bound"; protocol="application/pgp-encrypted"
 
@@ -115,7 +115,7 @@ struct PGPMessageParserTests {
         --bound--
         """
         let result = parser.parse(Data(mime.utf8))
-        if case .mime(let ciphertext) = result {
+        if case let .mime(ciphertext) = result {
             let str = String(data: ciphertext, encoding: .utf8) ?? ""
             #expect(str.contains("BEGIN PGP MESSAGE"))
         } else {
@@ -123,8 +123,8 @@ struct PGPMessageParserTests {
         }
     }
 
-    @Test("Handles boundary with spaces when quoted")
-    func boundaryWithSpacesQuoted() {
+    @Test
+    func `Handles boundary with spaces when quoted`() {
         // RFC 2045 allows boundary values with spaces when quoted. The old
         // regex truncated at the first whitespace and mis-parsed later parts.
         let mime = """
@@ -150,8 +150,8 @@ struct PGPMessageParserTests {
         }
     }
 
-    @Test("Handles unquoted boundary value")
-    func boundaryUnquoted() {
+    @Test
+    func `Handles unquoted boundary value`() {
         let mime = """
         Content-Type: multipart/encrypted; boundary=abc123; protocol="application/pgp-encrypted"
 
@@ -175,22 +175,22 @@ struct PGPMessageParserTests {
         }
     }
 
-    @Test("Handles very large payloads near size cap")
-    func largePayload() {
+    @Test
+    func `Handles very large payloads near size cap`() {
         // ~4 MB of body — well under the 50 MB XPC cap but large enough that
         // an O(n^2) parser would be visibly slow.
         let body = String(repeating: "Hello, world. ", count: 300_000)
         #expect(parser.parse(Data(body.utf8)) == nil)
     }
 
-    @Test("Plain text containing 'boundary' word is not misdetected")
-    func plainTextWithBoundaryWord() {
+    @Test
+    func `Plain text containing 'boundary' word is not misdetected`() {
         let text = "Subject: test\n\nWe discussed the boundary of the project today.\n"
         #expect(parser.parse(Data(text.utf8)) == nil)
     }
 
-    @Test("Detects PGP/MIME signed message")
-    func detectsMIMESigned() {
+    @Test
+    func `Detects PGP/MIME signed message`() {
         let mime = """
         MIME-Version: 1.0
         Content-Type: multipart/signed; boundary="sigbound"; protocol="application/pgp-signature"; micalg="pgp-sha256"

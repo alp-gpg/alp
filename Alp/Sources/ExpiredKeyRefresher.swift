@@ -21,7 +21,8 @@ final class ExpiredKeyRefresher {
     private var currentTask: Task<Void, Never>?
 
     init(service: KeyserverRefreshService = KeyserverRefreshService(),
-         maxConcurrent: Int = 4) {
+         maxConcurrent: Int = 4)
+    {
         self.service = service
         self.maxConcurrent = maxConcurrent
     }
@@ -29,10 +30,12 @@ final class ExpiredKeyRefresher {
     func start(keys: [GPGKeyInfo]) {
         guard !isRunning else { return }
         isRunning = true
-        for key in keys { rowState[key.fingerprint] = .idle }
+        for key in keys {
+            rowState[key.fingerprint] = .idle
+        }
         currentTask = Task { [weak self] in
             guard let self else { return }
-            await self.run(keys: keys)
+            await run(keys: keys)
             await MainActor.run { self.isRunning = false }
         }
     }
@@ -62,9 +65,9 @@ final class ExpiredKeyRefresher {
                         guard !Task.isCancelled else { return }
                         await MainActor.run { [outcome] in
                             switch outcome {
-                            case .updated:        self?.rowState[fp] = .updated
+                            case .updated: self?.rowState[fp] = .updated
                             case .alreadyCurrent: self?.rowState[fp] = .alreadyCurrent
-                            case .notPublished:   self?.rowState[fp] = .notPublished
+                            case .notPublished: self?.rowState[fp] = .notPublished
                             }
                         }
                     } catch {

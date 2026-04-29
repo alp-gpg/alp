@@ -9,7 +9,7 @@ struct ComposeSessionStoreTests {
     private func makeStore(
         signDefault: Bool = false,
         encryptDefault: Bool = false,
-        signerDefault: String? = nil
+        signerDefault: String? = nil,
     ) throws -> ComposeSessionStore {
         let suite = "ComposeSessionStoreTests-\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suite) else {
@@ -26,8 +26,8 @@ struct ComposeSessionStoreTests {
 
     private enum TestFailure: Error { case couldNotCreateDefaults }
 
-    @Test("unknown context ID falls back to UserDefaults, not another session")
-    func unknownContextDoesNotBorrowFromOtherSession() throws {
+    @Test
+    func `unknown context ID falls back to UserDefaults, not another session`() throws {
         // Covers P0 #2 from the audit: a compose window with no matching
         // session must NOT inherit encrypt/sign state from a different window.
         let store = try makeStore(signDefault: false, encryptDefault: false)
@@ -36,24 +36,24 @@ struct ComposeSessionStoreTests {
         store.register(
             contextID: UUID(), sessionID: UUID(),
             sign: true, encrypt: true,
-            signer: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            signer: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         )
 
         // A different compose window queries state before its session registers.
         let (shouldSign, shouldEncrypt, signer) = store.state(forContextID: UUID())
-        #expect(shouldSign == false)       // from defaults, not session A
-        #expect(shouldEncrypt == false)    // from defaults, not session A
-        #expect(signer == nil)             // from defaults, not session A
+        #expect(shouldSign == false) // from defaults, not session A
+        #expect(shouldEncrypt == false) // from defaults, not session A
+        #expect(signer == nil) // from defaults, not session A
     }
 
-    @Test("known context returns that session's state")
-    func knownContextReturnsSessionState() throws {
+    @Test
+    func `known context returns that session's state`() throws {
         let store = try makeStore()
         let ctx = UUID()
         store.register(
             contextID: ctx, sessionID: UUID(),
             sign: true, encrypt: true,
-            signer: "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF"
+            signer: "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF",
         )
         let (sign, encrypt, signer) = store.state(forContextID: ctx)
         #expect(sign == true)
@@ -61,8 +61,8 @@ struct ComposeSessionStoreTests {
         #expect(signer == "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
     }
 
-    @Test("unregister removes session state")
-    func unregisterRemovesSession() throws {
+    @Test
+    func `unregister removes session state`() throws {
         let store = try makeStore(signDefault: true)
         let ctx = UUID()
         let session = UUID()
@@ -73,12 +73,12 @@ struct ComposeSessionStoreTests {
         #expect(sign == true)
     }
 
-    @Test("fallback honors UserDefaults values")
-    func fallbackReadsDefaults() throws {
+    @Test
+    func `fallback honors UserDefaults values`() throws {
         let store = try makeStore(
             signDefault: true,
             encryptDefault: true,
-            signerDefault: "FEEDFACEFEEDFACEFEEDFACEFEEDFACEFEEDFACE"
+            signerDefault: "FEEDFACEFEEDFACEFEEDFACEFEEDFACEFEEDFACE",
         )
         let (sign, encrypt, signer) = store.state(forContextID: UUID())
         #expect(sign == true)

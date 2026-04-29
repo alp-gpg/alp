@@ -1,7 +1,5 @@
 import SwiftUI
 
-// swiftlint:disable identifier_name
-
 /// Unified row type for the hierarchical Keys table.
 enum KeyRow: Identifiable, Hashable {
     case primary(GPGKeyInfo)
@@ -9,63 +7,61 @@ enum KeyRow: Identifiable, Hashable {
 
     var id: String {
         switch self {
-        case .primary(let k):            return "p-\(k.fingerprint)"
-        case .subkey(let s, let parent): return "s-\(parent)-\(s.fingerprint)"
+        case let .primary(k): "p-\(k.fingerprint)"
+        case let .subkey(s, parent): "s-\(parent)-\(s.fingerprint)"
         }
     }
 
     var displayName: String {
         switch self {
-        case .primary(let k): return k.displayName
-        case .subkey:         return ""
+        case let .primary(k): k.displayName
+        case .subkey: ""
         }
     }
 
     var shortFingerprint: String {
         switch self {
-        case .primary(let k):   return k.shortFingerprint
-        case .subkey(let s, _): return Self.formatShortFP(s.fingerprint)
+        case let .primary(k): k.shortFingerprint
+        case let .subkey(s, _): Self.formatShortFP(s.fingerprint)
         }
     }
 
     var expiryDate: Date? {
         switch self {
-        case .primary(let k):   return k.expiryDate
-        case .subkey(let s, _): return s.expiryDate
+        case let .primary(k): k.expiryDate
+        case let .subkey(s, _): s.expiryDate
         }
     }
 
     var isExpired: Bool {
         switch self {
-        case .primary(let k):   return k.isExpired
-        case .subkey(let s, _): return s.isExpired
+        case let .primary(k): k.isExpired
+        case let .subkey(s, _): s.isExpired
         }
     }
 
     var isRevoked: Bool {
         switch self {
-        case .primary:          return false
-        case .subkey(let s, _): return s.isRevoked
+        case .primary: false
+        case let .subkey(s, _): s.isRevoked
         }
     }
 
     var capabilityIcons: [String] {
         switch self {
-        case .primary(let k):   return Self.primaryIcons(from: k.capabilities)
-        case .subkey(let s, _): return s.capabilityIcons
+        case let .primary(k): Self.primaryIcons(from: k.capabilities)
+        case let .subkey(s, _): s.capabilityIcons
         }
     }
 
     var children: [KeyRow]? {
         switch self {
-        case .primary(let k) where !k.subkeys.isEmpty:
-            return k.subkeys.map { .subkey($0, parentFingerprint: k.fingerprint) }
+        case let .primary(k) where !k.subkeys.isEmpty:
+            k.subkeys.map { .subkey($0, parentFingerprint: k.fingerprint) }
         default:
-            return nil
+            nil
         }
     }
-
-    // swiftlint:enable identifier_name
 
     private static func primaryIcons(from capabilities: String) -> [String] {
         var icons: [String] = []
@@ -83,8 +79,8 @@ enum KeyRow: Identifiable, Hashable {
         return stride(from: 0, to: 16, by: 4)
             .map { offset in
                 let start = last16.index(last16.startIndex, offsetBy: offset)
-                let end   = last16.index(start, offsetBy: 4)
-                return String(last16[start..<end])
+                let end = last16.index(start, offsetBy: 4)
+                return String(last16[start ..< end])
             }
             .joined(separator: " ")
     }

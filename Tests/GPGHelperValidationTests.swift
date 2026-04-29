@@ -3,21 +3,21 @@ import Testing
 
 @Suite("GPGHelper input validation")
 struct GPGHelperValidationTests {
-    @Test("isValidFingerprint accepts 40-char hex")
-    func acceptsValidFingerprint() {
+    @Test
+    func `isValidFingerprint accepts 40-char hex`() {
         #expect(GPGHelper.isValidFingerprint("ABCDEF0123456789ABCDEF0123456789ABCDEF01"))
         #expect(GPGHelper.isValidFingerprint("abcdef0123456789abcdef0123456789abcdef01"))
     }
 
-    @Test("isValidFingerprint rejects wrong length")
-    func rejectsWrongLength() {
+    @Test
+    func `isValidFingerprint rejects wrong length`() {
         #expect(!GPGHelper.isValidFingerprint(""))
         #expect(!GPGHelper.isValidFingerprint("ABCDEF"))
         #expect(!GPGHelper.isValidFingerprint(String(repeating: "A", count: 41)))
     }
 
-    @Test("isValidFingerprint rejects non-hex characters")
-    func rejectsNonHex() {
+    @Test
+    func `isValidFingerprint rejects non-hex characters`() {
         // G is not a hex digit
         #expect(!GPGHelper.isValidFingerprint("GBCDEF0123456789ABCDEF0123456789ABCDEF01"))
         // Attempting to smuggle an argument via whitespace/flag
@@ -28,8 +28,8 @@ struct GPGHelperValidationTests {
 
 @Suite("GPGHelper micalg parsing")
 struct GPGHelperMicalgTests {
-    @Test("parses pgp-sha256 from SIG_CREATED")
-    func parsesSHA256() {
+    @Test
+    func `parses pgp-sha256 from SIG_CREATED`() {
         let status = """
         [GNUPG:] KEY_CONSIDERED ABCDEF 0
         [GNUPG:] SIG_CREATED D 1 8 00 1700000000 ABCDEF
@@ -38,20 +38,20 @@ struct GPGHelperMicalgTests {
         #expect(GPGHelper.parseMicalg(from: status) == "pgp-sha256")
     }
 
-    @Test("parses pgp-sha512 from SIG_CREATED")
-    func parsesSHA512() {
+    @Test
+    func `parses pgp-sha512 from SIG_CREATED`() {
         let status = "[GNUPG:] SIG_CREATED D 22 10 00 1700000000 DEADBEEF\n"
         #expect(GPGHelper.parseMicalg(from: status) == "pgp-sha512")
     }
 
-    @Test("returns nil when SIG_CREATED is absent")
-    func returnsNilWhenMissing() {
+    @Test
+    func `returns nil when SIG_CREATED is absent`() {
         #expect(GPGHelper.parseMicalg(from: "[GNUPG:] KEY_CONSIDERED ABCDEF 0\n") == nil)
         #expect(GPGHelper.parseMicalg(from: "") == nil)
     }
 
-    @Test("returns nil for unknown hash algorithm number")
-    func returnsNilForUnknown() {
+    @Test
+    func `returns nil for unknown hash algorithm number`() {
         // 99 is not a valid RFC 4880 hash algorithm number
         let status = "[GNUPG:] SIG_CREATED D 1 99 00 1700000000 ABCDEF\n"
         #expect(GPGHelper.parseMicalg(from: status) == nil)

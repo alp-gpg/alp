@@ -38,77 +38,75 @@ struct KeySettingsView: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    if showExpired && vm.expiredPublishedCount > 0 {
+                    if showExpired, vm.expiredPublishedCount > 0 {
                         ExpiredKeysBanner(
                             expiredPublishedCount: vm.expiredPublishedCount,
                             isRunning: vm.expiredRefresher.isRunning,
                             onCheckNow: { startBatchRefresh() },
-                            onCancel: { vm.expiredRefresher.cancel() }
+                            onCancel: { vm.expiredRefresher.cancel() },
                         )
                     }
-                Table(of: KeyRow.self) {
-                    TableColumn("Type") { row in
-                        HStack(spacing: 4) {
-                            KeyRowTypeLabel(row: row)
-                            rowStateBadge(for: row)
-                        }
-                        .contextMenu { contextMenu(for: row) }
-                    }
-                    .width(90)
-
-                    TableColumn("User ID") { row in
-                        Text(row.displayName)
-                            .lineLimit(1)
-                            .strikethrough(row.isRevoked || row.isExpired)
-                    }
-
-                    TableColumn("Capabilities") { row in
-                        HStack(spacing: 4) {
-                            ForEach(row.capabilityIcons, id: \.self) { sym in
-                                Image(systemName: sym)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    Table(of: KeyRow.self) {
+                        TableColumn("Type") { row in
+                            HStack(spacing: 4) {
+                                KeyRowTypeLabel(row: row)
+                                rowStateBadge(for: row)
                             }
+                            .contextMenu { contextMenu(for: row) }
                         }
-                    }
-                    .width(80)
+                        .width(90)
 
-                    TableColumn("Fingerprint") { row in
-                        Text(row.shortFingerprint)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                    .width(160)
-
-                    TableColumn("Expires") { row in
-                        ExpiryLabel(date: row.expiryDate)
-                    }
-                    .width(100)
-
-                    TableColumn("keys.openpgp.org") { row in
-                        if case .primary(let key) = row {
-                            KeyserverStatusLabel(status: vm.keyserverStatus[key.fingerprint])
-                        } else {
-                            EmptyView()
+                        TableColumn("User ID") { row in
+                            Text(row.displayName)
+                                .lineLimit(1)
+                                .strikethrough(row.isRevoked || row.isExpired)
                         }
-                    }
-                    .width(140)
-                } rows: {
-                    ForEach(primaryRows) { primaryRow in
-                        if let children = primaryRow.children {
-                            DisclosureTableRow(primaryRow) {
-                                ForEach(children) { child in
-                                    TableRow(child)
+
+                        TableColumn("Capabilities") { row in
+                            HStack(spacing: 4) {
+                                ForEach(row.capabilityIcons, id: \.self) { sym in
+                                    Image(systemName: sym)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                        } else {
-                            TableRow(primaryRow)
+                        }
+                        .width(80)
+
+                        TableColumn("Fingerprint") { row in
+                            Text(row.shortFingerprint)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        .width(160)
+
+                        TableColumn("Expires") { row in
+                            ExpiryLabel(date: row.expiryDate)
+                        }
+                        .width(100)
+
+                        TableColumn("keys.openpgp.org") { row in
+                            if case let .primary(key) = row {
+                                KeyserverStatusLabel(status: vm.keyserverStatus[key.fingerprint])
+                            }
+                        }
+                        .width(140)
+                    } rows: {
+                        ForEach(primaryRows) { primaryRow in
+                            if let children = primaryRow.children {
+                                DisclosureTableRow(primaryRow) {
+                                    ForEach(children) { child in
+                                        TableRow(child)
+                                    }
+                                }
+                            } else {
+                                TableRow(primaryRow)
+                            }
                         }
                     }
                 }
-                }
                 .onChange(of: showExpired) { _, newValue in
-                    if newValue && autoRefresh && vm.expiredPublishedCount > 0 {
+                    if newValue, autoRefresh, vm.expiredPublishedCount > 0 {
                         startBatchRefresh()
                     }
                 }
@@ -148,25 +146,25 @@ struct KeySettingsView: View {
     @ViewBuilder
     private func contextMenu(for row: KeyRow) -> some View {
         switch row {
-        case .primary(let key):
+        case let .primary(key):
             Button("Copy fingerprint") { copyToPasteboard(key.fingerprint) }
             Button("Refresh from keyserver") {
                 Task { await refreshSingle(fingerprint: key.fingerprint) }
             }
             .disabled(vm.keyserverStatus[key.fingerprint] != .found)
             Button("Reveal on keys.openpgp.org…") { openKeyserverPage(for: key.fingerprint) }
-        case .subkey(let sub, _):
+        case let .subkey(sub, _):
             Button("Copy fingerprint") { copyToPasteboard(sub.fingerprint) }
         }
     }
 
     @ViewBuilder
     private func rowStateBadge(for row: KeyRow) -> some View {
-        if case .primary(let key) = row {
+        if case let .primary(key) = row {
             switch vm.expiredRefresher.rowState[key.fingerprint] {
             case .fetching:
                 ProgressView().controlSize(.mini)
-            case .failed(let message):
+            case let .failed(message):
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)
                     .help(message)
@@ -188,7 +186,7 @@ struct KeySettingsView: View {
         components.percentEncodedPath = "/pks/lookup"
         components.queryItems = [
             .init(name: "op", value: "get"),
-            .init(name: "search", value: "0x" + fingerprint)
+            .init(name: "search", value: "0x" + fingerprint),
         ]
         guard let url = components.url else { return }
         NSWorkspace.shared.open(url)
@@ -245,9 +243,9 @@ private struct KeyRowTypeLabel: View {
     let row: KeyRow
     var body: some View {
         switch row {
-        case .primary(let key):
+        case let .primary(key):
             KeyTypeLabel(hasSecretKey: key.hasSecretKey, isExpired: key.isExpired)
-        case .subkey(let sub, _):
+        case let .subkey(sub, _):
             HStack(spacing: 4) {
                 Image(systemName: "key")
                     .foregroundStyle(.secondary)
@@ -278,7 +276,8 @@ private struct ExpiryLabel: View {
             Text(Self.formatter.string(from: date))
                 .font(.caption)
                 .foregroundStyle(expired ? .red : .secondary)
-                .accessibilityLabel(expired ? "Expired \(Self.formatter.string(from: date))" : "Expires \(Self.formatter.string(from: date))")
+                .accessibilityLabel(expired ? "Expired \(Self.formatter.string(from: date))" :
+                    "Expires \(Self.formatter.string(from: date))")
         } else {
             Text("Never")
                 .font(.caption)

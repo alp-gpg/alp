@@ -5,8 +5,8 @@ private let log = Logger(subsystem: "app.alp.Alp.helper", category: "XPC")
 
 final class HelperDelegate: NSObject, NSXPCListenerDelegate {
     func listener(
-        _ listener: NSXPCListener,
-        shouldAcceptNewConnection connection: NSXPCConnection
+        _: NSXPCListener,
+        shouldAcceptNewConnection connection: NSXPCConnection,
     ) -> Bool {
         // Only accept connections from processes signed by the same Team ID.
         // If this requirement fails the system terminates the connection before

@@ -21,8 +21,8 @@ struct XPCRoundtripTests {
         return key.fingerprint
     }
 
-    @Test("nonisolated encrypt bridge calls reply with data")
-    func encryptBridgeCallsReply() async throws {
+    @Test
+    func `nonisolated encrypt bridge calls reply with data`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let plaintext = Data("bridge test".utf8)
 
@@ -30,7 +30,7 @@ struct XPCRoundtripTests {
             helper.encrypt(
                 data: plaintext,
                 recipientFingerprints: [fp],
-                signingFingerprint: fp
+                signingFingerprint: fp,
             ) { data, error in
                 if let error { cont.resume(throwing: error) }
                 else if let data { cont.resume(returning: data) }
@@ -40,8 +40,8 @@ struct XPCRoundtripTests {
         #expect(!result.isEmpty)
     }
 
-    @Test("nonisolated listSecretKeys bridge returns JSON-encoded array")
-    func listSecretKeysBridgeReturnsJSON() async throws {
+    @Test
+    func `nonisolated listSecretKeys bridge returns JSON-encoded array`() async throws {
         let dataList: [Data] = try await withCheckedThrowingContinuation { cont in
             helper.listSecretKeys { dataList, error in
                 if let error { cont.resume(throwing: error) }
@@ -55,8 +55,8 @@ struct XPCRoundtripTests {
         }
     }
 
-    @Test("sign bridge returns signature and micalg")
-    func signBridgeReturnsSignatureAndMicalg() async throws {
+    @Test
+    func `sign bridge returns signature and micalg`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let body = Data("hello, micalg\r\n".utf8)
 
@@ -69,12 +69,12 @@ struct XPCRoundtripTests {
         }
         #expect(!signature.isEmpty)
         // micalg should be a recognized RFC 3156 name when gpg emits SIG_CREATED.
-        let known: Set<String> = ["pgp-sha1", "pgp-sha224", "pgp-sha256", "pgp-sha384", "pgp-sha512"]
+        let known: Set = ["pgp-sha1", "pgp-sha224", "pgp-sha256", "pgp-sha384", "pgp-sha512"]
         #expect(micalg.map { known.contains($0) } ?? false)
     }
 
-    @Test("decrypt bridge round-trips encrypted payload")
-    func decryptBridgeRoundTrips() async throws {
+    @Test
+    func `decrypt bridge round-trips encrypted payload`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let plaintext = Data("round-trip payload".utf8)
         let ciphertext = try await helper._encrypt(plaintext, [fp], nil)
@@ -89,27 +89,27 @@ struct XPCRoundtripTests {
         #expect(result.0 == plaintext)
     }
 
-    @Test("encrypt bridge rejects bad fingerprints")
-    func encryptBridgeRejectsBadFingerprints() async throws {
+    @Test
+    func `encrypt bridge rejects bad fingerprints`() async {
         let error: NSError? = await withCheckedContinuation { cont in
             helper.encrypt(
                 data: Data("x".utf8),
                 recipientFingerprints: ["NOT_A_FINGERPRINT"],
-                signingFingerprint: nil
+                signingFingerprint: nil,
             ) { _, error in cont.resume(returning: error) }
         }
         #expect(error != nil)
     }
 
-    @Test("_importKey throws on malformed payload")
-    func importKeyThrowsOnGarbage() async {
+    @Test
+    func `_importKey throws on malformed payload`() async {
         await #expect(throws: (any Error).self) {
             _ = try await self.helper._importKey(Data("not a key".utf8))
         }
     }
 
-    @Test("importKey bridge returns GPGImportResult")
-    func importKeyBridgeReturnsResult() async throws {
+    @Test
+    func `importKey bridge returns GPGImportResult`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         // Export an existing key so we have real armored data to re-import.
         let exported = try await helper._export(fp)

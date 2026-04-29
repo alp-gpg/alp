@@ -1,7 +1,7 @@
 import Foundation
 
 /// Subkey material attached to a primary key.
-struct GPGSubkey: Codable, Sendable, Identifiable, Hashable {
+struct GPGSubkey: Codable, Identifiable, Hashable {
     let fingerprint: String
     /// gpg capability flags, e.g. "e", "s", "sca".
     let capabilities: String
@@ -13,7 +13,9 @@ struct GPGSubkey: Codable, Sendable, Identifiable, Hashable {
     /// True when the subkey is revoked (`sub r:...` in colon output).
     let isRevoked: Bool
 
-    var id: String { fingerprint }
+    var id: String {
+        fingerprint
+    }
 
     var isExpired: Bool {
         guard let expiryDate else { return false }
@@ -32,7 +34,7 @@ struct GPGSubkey: Codable, Sendable, Identifiable, Hashable {
 }
 
 /// A GPG primary key summary, JSON-serialisable for transport over XPC.
-struct GPGKeyInfo: Codable, Sendable, Identifiable, Hashable {
+struct GPGKeyInfo: Codable, Identifiable, Hashable {
     let fingerprint: String
     let userIDs: [String]
     /// gpg capability flags for the primary key itself.
@@ -44,21 +46,25 @@ struct GPGKeyInfo: Codable, Sendable, Identifiable, Hashable {
     /// Subkeys attached to this primary. Empty when the key has none.
     var subkeys: [GPGSubkey]
 
-    var id: String { fingerprint }
+    var id: String {
+        fingerprint
+    }
 
     var isExpired: Bool {
         guard let expiryDate else { return false }
         return expiryDate < Date.now
     }
 
-    var displayName: String { userIDs.first ?? fingerprint }
+    var displayName: String {
+        userIDs.first ?? fingerprint
+    }
 
     /// Name-only portion of the primary UID, stripped of the email address.
     /// E.g. "Alice Example <alice@example.com>" → "Alice Example"
     var shortName: String {
         guard let uid = userIDs.first else { return String(fingerprint.prefix(8)) }
         if let range = uid.range(of: " <") {
-            return String(uid[uid.startIndex..<range.lowerBound])
+            return String(uid[uid.startIndex ..< range.lowerBound])
         }
         return uid
     }
@@ -69,8 +75,8 @@ struct GPGKeyInfo: Codable, Sendable, Identifiable, Hashable {
         guard last16.count == 16 else { return fingerprint }
         return stride(from: 0, to: 16, by: 4).map { i in
             let start = last16.index(last16.startIndex, offsetBy: i)
-            let end   = last16.index(start, offsetBy: 4)
-            return String(last16[start..<end])
+            let end = last16.index(start, offsetBy: 4)
+            return String(last16[start ..< end])
         }.joined(separator: " ")
     }
 
@@ -80,7 +86,7 @@ struct GPGKeyInfo: Codable, Sendable, Identifiable, Hashable {
         capabilities: String,
         hasSecretKey: Bool = false,
         expiryDate: Date? = nil,
-        subkeys: [GPGSubkey] = []
+        subkeys: [GPGSubkey] = [],
     ) {
         self.fingerprint = fingerprint
         self.userIDs = userIDs

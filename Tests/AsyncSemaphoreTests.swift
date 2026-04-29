@@ -3,8 +3,8 @@ import Testing
 
 @Suite("AsyncSemaphore")
 struct AsyncSemaphoreTests {
-    @Test("Permits up to N concurrent holders, then gates")
-    func concurrencyLimit() async {
+    @Test
+    func `Permits up to N concurrent holders, then gates`() async {
         let sem = AsyncSemaphore(value: 2)
         let counter = ActorCounter()
 
@@ -25,8 +25,8 @@ struct AsyncSemaphoreTests {
         #expect(peak >= 2, "Test didn't exercise contention — only \(peak) concurrent holders observed")
     }
 
-    @Test("wait suspends when permits are zero and resumes on external signal")
-    func suspendAndResume() async {
+    @Test
+    func `wait suspends when permits are zero and resumes on external signal`() async {
         let sem = AsyncSemaphore(value: 0)
 
         // Start a waiter that should suspend immediately.
@@ -53,5 +53,8 @@ private actor ActorCounter {
         current += 1
         if current > peak { peak = current }
     }
-    func dropAfter() { current -= 1 }
+
+    func dropAfter() {
+        current -= 1
+    }
 }

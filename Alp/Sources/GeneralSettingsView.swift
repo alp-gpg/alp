@@ -18,7 +18,7 @@ struct GeneralSettingsView: View {
                 Section {
                     Label(
                         "The GPG helper stopped responding. Keyserver lookups and GPG operations may fail.",
-                        systemImage: "exclamationmark.triangle.fill"
+                        systemImage: "exclamationmark.triangle.fill",
                     )
                     .foregroundStyle(.red)
                     .font(.callout)
@@ -32,7 +32,7 @@ struct GeneralSettingsView: View {
                 Section {
                     Label(
                         "Keyserver certificate pinning could not be verified. Key lookups are still encrypted (TLS) but the expected certificate has changed. Update Alp when a new version is available.",
-                        systemImage: "exclamationmark.shield"
+                        systemImage: "exclamationmark.shield",
                     )
                     .foregroundStyle(.orange)
                     .font(.callout)
@@ -59,7 +59,7 @@ struct GeneralSettingsView: View {
                     {
                         Label(
                             "Selected signing key is expired. Recipients may reject your signature.",
-                            systemImage: "exclamationmark.triangle.fill"
+                            systemImage: "exclamationmark.triangle.fill",
                         )
                         .foregroundStyle(.red)
                         .font(.callout)
@@ -79,9 +79,11 @@ struct GeneralSettingsView: View {
                 Toggle(isOn: $autoRefreshExpiredOnShow) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Automatically check keyserver when showing expired keys")
-                        Text("When enabled, Alp will fetch updates from keys.openpgp.org whenever you reveal expired keys. Uses a pinned TLS connection.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text(
+                            "When enabled, Alp will fetch updates from keys.openpgp.org whenever you reveal expired keys. Uses a pinned TLS connection.",
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -100,7 +102,7 @@ struct GeneralSettingsView: View {
             setupRow(
                 "Install Helper",
                 passed: vm.helperStatus == .enabled,
-                detail: helperDetail
+                detail: helperDetail,
             ) {
                 helperAction
             }
@@ -116,7 +118,7 @@ struct GeneralSettingsView: View {
                 setupRow(
                     "GPG Environment",
                     passed: vm.healthStatus?.allPassed == true,
-                    detail: gpgDetail
+                    detail: gpgDetail,
                 ) {
                     gpgAction
                 }
@@ -127,7 +129,7 @@ struct GeneralSettingsView: View {
                 setupRow(
                     "Enable Mail Extension",
                     passed: vm.extensionRecentlySeen,
-                    detail: vm.extensionRecentlySeen ? "Active" : "Not detected"
+                    detail: vm.extensionRecentlySeen ? "Active" : "Not detected",
                 ) {
                     if !vm.extensionRecentlySeen {
                         Button("Open Mail Extensions Settings") {
@@ -140,13 +142,15 @@ struct GeneralSettingsView: View {
             }
 
             // Step 4: Signing Key
-            if vm.helperStatus == .enabled && !vm.secretKeys.isEmpty {
+            if vm.helperStatus == .enabled, !vm.secretKeys.isEmpty {
                 setupRow(
                     "Choose Signing Key",
                     passed: vm.defaultSignerFingerprint != nil,
                     detail: vm.defaultSignerFingerprint != nil
-                        ? (vm.secretKeys.first { $0.fingerprint == vm.defaultSignerFingerprint }?.shortName ?? "Selected")
-                        : "Not selected"
+                        ?
+                        (vm.secretKeys.first { $0.fingerprint == vm.defaultSignerFingerprint }?
+                            .shortName ?? "Selected")
+                        : "Not selected",
                 ) {
                     if vm.defaultSignerFingerprint == nil {
                         Picker("Key", selection: $vm.defaultSignerFingerprint) {
@@ -215,11 +219,11 @@ struct GeneralSettingsView: View {
 
     // MARK: – Setup Row
 
-    private func setupRow<Action: View>(
+    private func setupRow(
         _ title: String,
         passed: Bool,
         detail: String,
-        @ViewBuilder action: () -> Action
+        @ViewBuilder action: () -> some View,
     ) -> some View {
         HStack {
             Image(systemName: passed ? "checkmark.circle.fill" : "circle")
@@ -247,7 +251,11 @@ struct GeneralSettingsView: View {
         checkRow("Version ≥ 2.2.14", passed: health.versionSufficient)
         checkRow("gpg-agent", passed: health.agentRunning)
         checkRow("pinentry", passed: health.pinentryConfigured, detail: health.pinentryPath)
-        checkRow("Secret keys", passed: health.hasSecretKeys, detail: health.hasSecretKeys ? "\(health.secretKeyCount) found" : nil)
+        checkRow(
+            "Secret keys",
+            passed: health.hasSecretKeys,
+            detail: health.hasSecretKeys ? "\(health.secretKeyCount) found" : nil,
+        )
         checkRow("Trust model (tofu+pgp)", passed: health.tofuSupported)
 
         if !health.issues.isEmpty {

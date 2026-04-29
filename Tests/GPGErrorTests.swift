@@ -17,7 +17,7 @@ struct GPGErrorTests {
         ]
         for error in cases {
             #expect(error.errorDescription != nil)
-            #expect(try !(#require(error.errorDescription?.isEmpty)))
+            #expect(try !#require(error.errorDescription?.isEmpty))
         }
     }
 

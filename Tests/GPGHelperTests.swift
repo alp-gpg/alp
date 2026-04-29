@@ -19,28 +19,28 @@ struct GPGHelperTests {
         return key.fingerprint
     }
 
-    @Test("GPG binary is found")
-    func gpgFound() async throws {
+    @Test
+    func `GPG binary is found`() async throws {
         let keys = try await helper._listSecretKeys()
         _ = keys
     }
 
-    @Test("List secret keys returns non-empty array when keys exist")
-    func listSecretKeys() async throws {
+    @Test
+    func `List secret keys returns non-empty array when keys exist`() async throws {
         let keys = try await helper._listSecretKeys()
         #expect(!keys.isEmpty, "Expected at least one secret key in the keyring")
     }
 
-    @Test("Public key lookup — self")
-    func publicKeyLookup() async throws {
+    @Test
+    func `Public key lookup — self`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let (found, resultFP) = try await helper._publicKeyExists(email: fp)
         #expect(found)
         #expect(resultFP != nil)
     }
 
-    @Test("Round-trip encrypt / decrypt")
-    func encryptDecrypt() async throws {
+    @Test
+    func `Round-trip encrypt / decrypt`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let plaintext = Data("Hello, Alp!".utf8)
         let cipher = try await helper._encrypt(plaintext, [fp], fp)
@@ -49,8 +49,8 @@ struct GPGHelperTests {
         #expect(signer != nil)
     }
 
-    @Test("Sign and verify (detached)")
-    func signVerify() async throws {
+    @Test
+    func `Sign and verify (detached)`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let data = Data("Signed message".utf8)
         let (signature, micalg) = try await helper._sign(data, signer: fp)

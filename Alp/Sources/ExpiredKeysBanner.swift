@@ -28,17 +28,19 @@ struct ExpiredKeysBanner: View {
                 }
                 Spacer()
                 Button("Check now", action: onCheckNow)
-                    .help("Sends each expired key's fingerprint to keys.openpgp.org over a certificate-pinned TLS connection.")
+                    .help(
+                        "Sends each expired key's fingerprint to keys.openpgp.org over a certificate-pinned TLS connection.",
+                    )
             }
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(.yellow.opacity(0.15))
+                .fill(.yellow.opacity(0.15)),
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(.orange.opacity(0.35), lineWidth: 1)
+                .strokeBorder(.orange.opacity(0.35), lineWidth: 1),
         )
         .padding(.horizontal)
         .padding(.top, 8)

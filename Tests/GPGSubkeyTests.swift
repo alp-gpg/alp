@@ -3,8 +3,8 @@ import Testing
 
 @Suite("GPGSubkey")
 struct GPGSubkeyTests {
-    @Test("isExpired is false when expiryDate is nil")
-    func neverExpires() {
+    @Test
+    func `isExpired is false when expiryDate is nil`() {
         let sub = GPGSubkey(
             fingerprint: "A".repeating(40),
             capabilities: "e",
@@ -15,8 +15,8 @@ struct GPGSubkeyTests {
         #expect(sub.isExpired == false)
     }
 
-    @Test("isExpired is true when expiryDate is in the past")
-    func pastExpiry() {
+    @Test
+    func `isExpired is true when expiryDate is in the past`() {
         let past = Date(timeIntervalSinceNow: -3600)
         let sub = GPGSubkey(
             fingerprint: "A".repeating(40),
@@ -28,8 +28,8 @@ struct GPGSubkeyTests {
         #expect(sub.isExpired == true)
     }
 
-    @Test("isExpired is false when expiryDate is in the future")
-    func futureExpiry() {
+    @Test
+    func `isExpired is false when expiryDate is in the future`() {
         let future = Date(timeIntervalSinceNow: 3600)
         let sub = GPGSubkey(
             fingerprint: "A".repeating(40),
@@ -41,8 +41,8 @@ struct GPGSubkeyTests {
         #expect(sub.isExpired == false)
     }
 
-    @Test("capabilityIcons maps sign/encrypt/auth")
-    func iconMapping() {
+    @Test
+    func `capabilityIcons maps sign/encrypt/auth`() {
         let sub = GPGSubkey(
             fingerprint: "A".repeating(40),
             capabilities: "sea",
@@ -55,8 +55,8 @@ struct GPGSubkeyTests {
         #expect(sub.capabilityIcons.contains("person.badge.key"))
     }
 
-    @Test("capabilityIcons is empty for unknown capabilities")
-    func unknownCaps() {
+    @Test
+    func `capabilityIcons is empty for unknown capabilities`() {
         let sub = GPGSubkey(
             fingerprint: "A".repeating(40),
             capabilities: "c",
@@ -67,8 +67,8 @@ struct GPGSubkeyTests {
         #expect(sub.capabilityIcons.isEmpty)
     }
 
-    @Test("id equals fingerprint for Identifiable conformance")
-    func identifiableId() {
+    @Test
+    func `id equals fingerprint for Identifiable conformance`() {
         let fp = "B".repeating(40)
         let sub = GPGSubkey(
             fingerprint: fp,
@@ -82,5 +82,7 @@ struct GPGSubkeyTests {
 }
 
 private extension String {
-    func repeating(_ count: Int) -> String { String(repeating: self, count: count) }
+    func repeating(_ count: Int) -> String {
+        String(repeating: self, count: count)
+    }
 }

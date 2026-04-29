@@ -4,7 +4,7 @@ import ServiceManagement
 
 @Observable @MainActor
 final class SettingsViewModel {
-    // Mirror writes into the app group so the sandboxed extension can read them.
+    /// Mirror writes into the app group so the sandboxed extension can read them.
     private static let groupDefaults = UserDefaults(suiteName: BuildConfig.appGroup)
 
     // MARK: – Setup
@@ -40,7 +40,7 @@ final class SettingsViewModel {
     /// Subset of allKeys that have a secret key — used by the signing key picker.
     var secretKeys: [GPGKeyInfo] = []
 
-    enum KeyserverStatus: Sendable { case checking, found, notFound, unreachable }
+    enum KeyserverStatus { case checking, found, notFound, unreachable }
     /// keys.openpgp.org lookup status keyed by fingerprint.
     var keyserverStatus: [String: KeyserverStatus] = [:]
 
@@ -58,9 +58,9 @@ final class SettingsViewModel {
     /// i.e. the ones Alp can plausibly refresh. Used to drive the banner in
     /// KeySettingsView.
     var expiredPublishedCount: Int {
-        allKeys.filter { key in
+        allKeys.count(where: { key in
             key.isExpired && keyserverStatus[key.fingerprint] == .found
-        }.count
+        })
     }
 
     /// Shared across the Keys settings view's banner + per-row actions.
@@ -75,12 +75,14 @@ final class SettingsViewModel {
             Self.groupDefaults?.set(defaultSignerFingerprint, forKey: "defaultSignerFingerprint")
         }
     }
+
     var signByDefault: Bool = UserDefaults.standard.object(forKey: "signByDefault") as? Bool ?? false {
         didSet {
             UserDefaults.standard.set(signByDefault, forKey: "signByDefault")
             Self.groupDefaults?.set(signByDefault, forKey: "signByDefault")
         }
     }
+
     var encryptByDefault: Bool = UserDefaults.standard.bool(forKey: "encryptByDefault") {
         didSet {
             UserDefaults.standard.set(encryptByDefault, forKey: "encryptByDefault")
@@ -142,15 +144,15 @@ final class SettingsViewModel {
 
     func load() async {
         #if DEBUG
-        // Don't assume helper is running — check if we can actually reach it.
-        // The user must click "Install Helper" to bootstrap via launchctl.
-        helperStatus = .notRegistered
+            // Don't assume helper is running — check if we can actually reach it.
+            // The user must click "Install Helper" to bootstrap via launchctl.
+            helperStatus = .notRegistered
         #else
-        helperStatus = helperService.status
+            helperStatus = helperService.status
         #endif
         NotificationCenter.default.addObserver(
             forName: KeyserverSession.pinningDegradedNotification,
-            object: nil, queue: nil
+            object: nil, queue: nil,
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.pinningDegraded = true
@@ -169,7 +171,7 @@ final class SettingsViewModel {
         do {
             let keys = try await HelperXPCClient.shared.listAllKeys()
             allKeys = keys
-            secretKeys = keys.filter { $0.hasSecretKey }
+            secretKeys = keys.filter(\.hasSecretKey)
             // Fire off keyserver checks concurrently — each updates keyserverStatus as it finishes.
             for key in keys {
                 Task { await self.checkKeyserver(fingerprint: key.fingerprint) }
@@ -185,9 +187,9 @@ final class SettingsViewModel {
         do {
             try HelperInstaller.install()
             #if DEBUG
-            helperStatus = .enabled
+                helperStatus = .enabled
             #else
-            helperStatus = helperService.status
+                helperStatus = helperService.status
             #endif
             Task {
                 try? await Task.sleep(for: .milliseconds(500))
@@ -204,9 +206,9 @@ final class SettingsViewModel {
         do {
             try HelperInstaller.uninstall()
             #if DEBUG
-            helperStatus = .notRegistered
+                helperStatus = .notRegistered
             #else
-            helperStatus = helperService.status
+                helperStatus = helperService.status
             #endif
             allKeys = []
             secretKeys = []

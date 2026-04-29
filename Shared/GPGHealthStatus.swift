@@ -2,7 +2,7 @@ import Foundation
 
 /// Result of a GPG environment health check. Each field represents
 /// a capability or configuration that Alp requires to function.
-struct GPGHealthStatus: Codable, Sendable {
+struct GPGHealthStatus: Codable {
     /// Path to the detected gpg binary, or nil if not found.
     var gpgPath: String?
     /// Detected GnuPG version string (e.g. "2.4.7").

@@ -11,14 +11,14 @@ extension ComposeSessionStore {
             sessionID: session.sessionID,
             sign: sign,
             encrypt: encrypt,
-            signer: signer
+            signer: signer,
         )
     }
 
     func unregister(session: MEComposeSession) {
         unregister(
             contextID: session.composeContext.contextID,
-            sessionID: session.sessionID
+            sessionID: session.sessionID,
         )
     }
 }

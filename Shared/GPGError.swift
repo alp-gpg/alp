@@ -1,6 +1,6 @@
 import Foundation
 
-enum GPGError: Error, Sendable {
+enum GPGError: Error {
     case gpgNotFound
     case processError(exitCode: Int32, stderr: String)
     case noSigningKey
@@ -71,7 +71,7 @@ extension GPGError {
         NSError(
             domain: "app.alp.Alp.GPGError",
             code: nsErrorCode,
-            userInfo: [NSLocalizedDescriptionKey: errorDescription ?? "Unknown error"]
+            userInfo: [NSLocalizedDescriptionKey: errorDescription ?? "Unknown error"],
         )
     }
 

@@ -8,7 +8,7 @@ struct KeysViewModelFilterTests {
         fp: String,
         expired: Bool = false,
         published: Bool = false,
-        store: SettingsViewModel
+        store: SettingsViewModel,
     ) -> GPGKeyInfo {
         let expiry: Date? = expired ? Date(timeIntervalSince1970: 1) : nil
         if published {
@@ -17,12 +17,12 @@ struct KeysViewModelFilterTests {
         return GPGKeyInfo(
             fingerprint: fp, userIDs: ["User <x@y>"],
             capabilities: "scESC",
-            hasSecretKey: false, expiryDate: expiry, subkeys: []
+            hasSecretKey: false, expiryDate: expiry, subkeys: [],
         )
     }
 
-    @Test("filteredKeys(showExpired: false) hides expired primaries")
-    func hidesExpired() {
+    @Test
+    func `filteredKeys(showExpired: false) hides expired primaries`() {
         let vm = SettingsViewModel()
         vm.allKeys = [
             makeKey(fp: String(repeating: "A", count: 40), expired: false, store: vm),
@@ -33,8 +33,8 @@ struct KeysViewModelFilterTests {
         #expect(visible.first?.fingerprint == String(repeating: "A", count: 40))
     }
 
-    @Test("filteredKeys(showExpired: true) returns everything")
-    func showsAll() {
+    @Test
+    func `filteredKeys(showExpired: true) returns everything`() {
         let vm = SettingsViewModel()
         vm.allKeys = [
             makeKey(fp: String(repeating: "A", count: 40), expired: false, store: vm),
@@ -43,8 +43,8 @@ struct KeysViewModelFilterTests {
         #expect(vm.filteredKeys(showExpired: true).count == 2)
     }
 
-    @Test("expiredPublishedCount counts only published expired primaries")
-    func publishedExpiredCount() {
+    @Test
+    func `expiredPublishedCount counts only published expired primaries`() {
         let vm = SettingsViewModel()
         vm.allKeys = [
             makeKey(fp: String(repeating: "A", count: 40), expired: true, published: true, store: vm),

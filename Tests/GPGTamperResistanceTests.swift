@@ -21,8 +21,8 @@ struct GPGTamperResistanceTests {
         return key.fingerprint
     }
 
-    @Test("tampered ciphertext fails to decrypt")
-    func tamperedCiphertextFailsToDecrypt() async throws {
+    @Test
+    func `tampered ciphertext fails to decrypt`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let plaintext = Data("tamper me".utf8)
         let ciphertext = try await helper._encrypt(plaintext, [fp], nil)
@@ -38,16 +38,16 @@ struct GPGTamperResistanceTests {
         }
     }
 
-    @Test("decrypting random bytes fails cleanly")
-    func decryptingRandomBytesFails() async throws {
-        let garbage = Data((0..<2048).map { _ in UInt8.random(in: 0...255) })
+    @Test
+    func `decrypting random bytes fails cleanly`() async throws {
+        let garbage = Data((0 ..< 2048).map { _ in UInt8.random(in: 0 ... 255) })
         await #expect(throws: (any Error).self) {
             _ = try await helper._decrypt(garbage)
         }
     }
 
-    @Test("verifying tampered detached signature returns invalid")
-    func verifyingTamperedSignatureReturnsInvalid() async throws {
+    @Test
+    func `verifying tampered detached signature returns invalid`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         let body = Data("sign-me body".utf8)
         let (signature, _) = try await helper._sign(body, signer: fp)
@@ -58,8 +58,8 @@ struct GPGTamperResistanceTests {
         #expect(valid == false)
     }
 
-    @Test("encrypt rejects obviously malformed fingerprints")
-    func encryptRejectsMalformedFingerprints() async throws {
+    @Test
+    func `encrypt rejects obviously malformed fingerprints`() async throws {
         let plaintext = Data("x".utf8)
         await #expect(throws: (any Error).self) {
             _ = try await helper._encrypt(plaintext, ["--homedir=/tmp/fake"], nil)

@@ -18,7 +18,7 @@ actor AsyncSemaphore {
 
     init(value: Int) {
         precondition(value >= 0, "AsyncSemaphore value must be non-negative")
-        self.permits = value
+        permits = value
     }
 
     func wait() async {

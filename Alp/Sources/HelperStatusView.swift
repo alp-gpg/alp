@@ -1,5 +1,5 @@
-import SwiftUI
 import ServiceManagement
+import SwiftUI
 
 struct HelperStatusView: View {
     @Bindable var vm: SettingsViewModel
@@ -31,9 +31,11 @@ struct HelperStatusView: View {
             }
 
             Section("About") {
-                Text("The Alp helper runs as a background daemon outside the sandbox so it can invoke the gpg binary. It only accepts connections from the Alp extension (same Team ID).")
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
+                Text(
+                    "The Alp helper runs as a background daemon outside the sandbox so it can invoke the gpg binary. It only accepts connections from the Alp extension (same Team ID).",
+                )
+                .foregroundStyle(.secondary)
+                .font(.callout)
             }
         }
         .formStyle(.grouped)

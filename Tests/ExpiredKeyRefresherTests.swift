@@ -11,6 +11,7 @@ struct ExpiredKeyRefresherTests {
             let fp = String(data: data, encoding: .utf8) ?? ""
             return [GPGKeyInfo(fingerprint: fp, userIDs: [], capabilities: "")]
         }
+
         func `import`(_ data: Data) async throws -> GPGImportResult {
             await peak.enter()
             defer { Task { await peak.leave() } }
@@ -21,7 +22,7 @@ struct ExpiredKeyRefresherTests {
                 newKey: false,
                 newUserIDs: false,
                 updatedSignatures: true,
-                newSubkeys: false
+                newSubkeys: false,
             )
         }
     }
@@ -39,16 +40,16 @@ struct ExpiredKeyRefresherTests {
                 fingerprint: fp,
                 userIDs: [],
                 capabilities: "",
-                expiryDate: Date(timeIntervalSince1970: 1)
+                expiryDate: Date(timeIntervalSince1970: 1),
             )
         }
     }
 
-    @Test("Parallelism is capped at 4")
-    func parallelismCap() async {
+    @Test
+    func `Parallelism is capped at 4`() async {
         let importer = SlowStubImporter()
         let service = KeyserverRefreshService(
-            fetcher: StubFetcher(), importer: importer
+            fetcher: StubFetcher(), importer: importer,
         )
         let refresher = ExpiredKeyRefresher(service: service, maxConcurrent: 4)
         let keys = makeKeys(count: 12)
@@ -57,12 +58,12 @@ struct ExpiredKeyRefresherTests {
         #expect(peak <= 4, "Peak concurrency \(peak) exceeded cap 4")
     }
 
-    @Test("Cancellation stops further imports")
-    func cancellation() async {
+    @Test
+    func `Cancellation stops further imports`() async {
         let importer = SlowStubImporter()
         importer.delayNanos = 200_000_000
         let service = KeyserverRefreshService(
-            fetcher: StubFetcher(), importer: importer
+            fetcher: StubFetcher(), importer: importer,
         )
         let refresher = ExpiredKeyRefresher(service: service, maxConcurrent: 2)
         let keys = makeKeys(count: 20)
@@ -70,19 +71,19 @@ struct ExpiredKeyRefresherTests {
         try? await Task.sleep(nanoseconds: 100_000_000)
         refresher.cancel()
         try? await Task.sleep(nanoseconds: 300_000_000)
-        let completed = refresher.rowState.values.filter { state in
+        let completed = refresher.rowState.values.count(where: { state in
             if case .idle = state { return false }
             if case .fetching = state { return false }
             return true
-        }.count
+        })
         #expect(completed < 20, "Expected cancellation to prevent finishing all 20 keys")
     }
 
-    @Test("Row states transition idle -> fetching -> updated")
-    func stateTransitions() async {
+    @Test
+    func `Row states transition idle -> fetching -> updated`() async {
         let importer = SlowStubImporter()
         let service = KeyserverRefreshService(
-            fetcher: StubFetcher(), importer: importer
+            fetcher: StubFetcher(), importer: importer,
         )
         let refresher = ExpiredKeyRefresher(service: service, maxConcurrent: 4)
         let keys = makeKeys(count: 3)
@@ -100,5 +101,8 @@ actor AtomicCounter {
         current += 1
         if current > peakValue { peakValue = current }
     }
-    func leave() { current -= 1 }
+
+    func leave() {
+        current -= 1
+    }
 }

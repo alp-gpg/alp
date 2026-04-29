@@ -1,7 +1,7 @@
 import Foundation
 
 /// Result of attempting to refresh a single key from keys.openpgp.org.
-enum KeyserverRefreshOutcome: Equatable, Sendable {
+enum KeyserverRefreshOutcome: Equatable {
     /// Upstream returned a newer self-signature or new subkey material;
     /// the local keyring has been updated.
     case updated
@@ -26,7 +26,7 @@ protocol KeyserverFetcher: Sendable {
     func fetch(fingerprint: String) async throws -> FetchedKey
 }
 
-enum FetchedKey: Sendable {
+enum FetchedKey {
     case notPublished
     case found(Data)
 }
@@ -46,7 +46,7 @@ struct LiveKeyserverFetcher: KeyserverFetcher {
         switch http.statusCode {
         case 200: return .found(data)
         case 404: return .notPublished
-        default:  throw URLError(.badServerResponse)
+        default: throw URLError(.badServerResponse)
         }
     }
 }
@@ -62,6 +62,7 @@ struct LiveKeyPreviewImporter: KeyPreviewImporter {
     func preview(_ data: Data) async throws -> [GPGKeyInfo] {
         try await HelperXPCClient.shared.previewKey(data)
     }
+
     func `import`(_ data: Data) async throws -> GPGImportResult {
         try await HelperXPCClient.shared.importKey(data)
     }
@@ -72,13 +73,13 @@ struct LiveKeyPreviewImporter: KeyPreviewImporter {
 /// The preview step is the security guarantee: certificate pinning prevents
 /// in-transit tampering, and fingerprint-matching catches the remaining case
 /// where anything upstream returns an unexpected key.
-struct KeyserverRefreshService: Sendable {
+struct KeyserverRefreshService {
     let fetcher: KeyserverFetcher
     let importer: KeyPreviewImporter
 
     init(
         fetcher: KeyserverFetcher = LiveKeyserverFetcher(),
-        importer: KeyPreviewImporter = LiveKeyPreviewImporter()
+        importer: KeyPreviewImporter = LiveKeyPreviewImporter(),
     ) {
         self.fetcher = fetcher
         self.importer = importer
@@ -89,12 +90,12 @@ struct KeyserverRefreshService: Sendable {
         switch fetched {
         case .notPublished:
             return .notPublished
-        case .found(let data):
+        case let .found(data):
             let previewed = try await importer.preview(data)
             guard previewed.first?.fingerprint == expected else {
                 throw KeyserverRefreshError.fingerprintMismatch(
                     requested: expected,
-                    got: previewed.first?.fingerprint
+                    got: previewed.first?.fingerprint,
                 )
             }
             let result = try await importer.import(data)

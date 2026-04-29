@@ -33,7 +33,7 @@ final class GPGXPCClient: @unchecked Sendable {
     func encrypt(
         _ data: Data,
         recipients: [String],
-        signer: String? = nil
+        signer: String? = nil,
     ) async throws -> Data {
         try await call { proxy, resume in
             proxy.encrypt(data: data, recipientFingerprints: recipients, signingFingerprint: signer) { result, error in
@@ -64,7 +64,9 @@ final class GPGXPCClient: @unchecked Sendable {
         }
     }
 
-    func verify(_ data: Data, signature: Data? = nil) async throws -> (valid: Bool, signer: String?, signerName: String?) {
+    func verify(_ data: Data,
+                signature: Data? = nil) async throws -> (valid: Bool, signer: String?, signerName: String?)
+    {
         try await call { proxy, resume in
             proxy.verify(data: data, signatureData: signature) { valid, signer, signerName, error in
                 if let error { resume(.failure(error)) }
@@ -135,15 +137,15 @@ final class GPGXPCClient: @unchecked Sendable {
     /// continuation is resumed after `callTimeout`. `resumedGuard` ensures that
     /// exactly one of reply / error / timeout wins the race.
     private func call<T: Sendable>(
-        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void
+        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
     ) async throws -> T {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, any Error>) in
             let resumedGuard = ResumeGuard()
             let resume: @Sendable (Result<T, any Error>) -> Void = { result in
                 guard resumedGuard.claim() else { return }
                 switch result {
-                case .success(let value): cont.resume(returning: value)
-                case .failure(let error): cont.resume(throwing: error)
+                case let .success(value): cont.resume(returning: value)
+                case let .failure(error): cont.resume(throwing: error)
                 }
             }
 

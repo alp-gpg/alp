@@ -3,8 +3,8 @@ import Testing
 
 @Suite("GPGImportResult parsing")
 struct GPGImportResultTests {
-    @Test("IMPORT_OK 0 → all flags false, fingerprint captured")
-    func notActuallyChanged() throws {
+    @Test
+    func `IMPORT_OK 0 → all flags false, fingerprint captured`() throws {
         let status = "[GNUPG:] IMPORT_OK 0 AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let result = try #require(GPGHelper.parseImportResult(from: status))
         #expect(result.fingerprint == "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555")
@@ -14,8 +14,8 @@ struct GPGImportResultTests {
         #expect(result.newSubkeys == false)
     }
 
-    @Test("IMPORT_OK 1 → newKey")
-    func entirelyNewKey() throws {
+    @Test
+    func `IMPORT_OK 1 → newKey`() throws {
         let fp = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let status = "[GNUPG:] IMPORT_OK 1 \(fp)"
         let result = try #require(GPGHelper.parseImportResult(from: status))
@@ -23,8 +23,8 @@ struct GPGImportResultTests {
         #expect(result.newUserIDs == false)
     }
 
-    @Test("IMPORT_OK 2 → newUserIDs")
-    func newUserIDs() throws {
+    @Test
+    func `IMPORT_OK 2 → newUserIDs`() throws {
         let fp = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let status = "[GNUPG:] IMPORT_OK 2 \(fp)"
         let result = try #require(GPGHelper.parseImportResult(from: status))
@@ -32,8 +32,8 @@ struct GPGImportResultTests {
         #expect(result.newKey == false)
     }
 
-    @Test("IMPORT_OK 4 → updatedSignatures")
-    func newSignatures() throws {
+    @Test
+    func `IMPORT_OK 4 → updatedSignatures`() throws {
         let fp = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let status = "[GNUPG:] IMPORT_OK 4 \(fp)"
         let result = try #require(GPGHelper.parseImportResult(from: status))
@@ -41,8 +41,8 @@ struct GPGImportResultTests {
         #expect(result.newSubkeys == false)
     }
 
-    @Test("IMPORT_OK 8 → newSubkeys")
-    func newSubkeys() throws {
+    @Test
+    func `IMPORT_OK 8 → newSubkeys`() throws {
         let fp = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let status = "[GNUPG:] IMPORT_OK 8 \(fp)"
         let result = try #require(GPGHelper.parseImportResult(from: status))
@@ -50,8 +50,8 @@ struct GPGImportResultTests {
         #expect(result.updatedSignatures == false)
     }
 
-    @Test("IMPORT_OK 12 → updatedSignatures + newSubkeys (combined flags)")
-    func combinedFlags() throws {
+    @Test
+    func `IMPORT_OK 12 → updatedSignatures + newSubkeys (combined flags)`() throws {
         let fp = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let status = "[GNUPG:] IMPORT_OK 12 \(fp)"
         let result = try #require(GPGHelper.parseImportResult(from: status))
@@ -61,14 +61,14 @@ struct GPGImportResultTests {
         #expect(result.newKey == false)
     }
 
-    @Test("Missing IMPORT_OK returns nil")
-    func missingLineReturnsNil() {
+    @Test
+    func `Missing IMPORT_OK returns nil`() {
         let status = "[GNUPG:] IMPORT_PROBLEM 0"
         #expect(GPGHelper.parseImportResult(from: status) == nil)
     }
 
-    @Test("Multiple IMPORT_OK lines — returns the first one")
-    func multipleLinesReturnsFirst() throws {
+    @Test
+    func `Multiple IMPORT_OK lines — returns the first one`() throws {
         let status = """
         [GNUPG:] IMPORT_OK 1 AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555
         [GNUPG:] IMPORT_OK 4 BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666
@@ -78,8 +78,8 @@ struct GPGImportResultTests {
         #expect(result.newKey == true)
     }
 
-    @Test("IMPORT_OK embedded in realistic status stream")
-    func embeddedInStatusStream() throws {
+    @Test
+    func `IMPORT_OK embedded in realistic status stream`() throws {
         let fp = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let status = """
         [GNUPG:] KEY_CONSIDERED \(fp) 0
@@ -91,8 +91,8 @@ struct GPGImportResultTests {
         #expect(result.fingerprint == fp)
     }
 
-    @Test("CRLF line endings are handled")
-    func crlfLineEndings() throws {
+    @Test
+    func `CRLF line endings are handled`() throws {
         let fp = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555"
         let status = "[GNUPG:] IMPORT_OK 1 \(fp)\r\n[GNUPG:] END\r\n"
         let result = try #require(GPGHelper.parseImportResult(from: status))

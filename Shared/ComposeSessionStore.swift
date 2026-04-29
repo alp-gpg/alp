@@ -39,7 +39,7 @@ final class ComposeSessionStore {
 
     func register(contextID: UUID, sessionID: UUID, sign: Bool, encrypt: Bool, signer: String?) {
         sessions[sessionID] = State(
-            shouldSign: sign, shouldEncrypt: encrypt, signerFingerprint: signer
+            shouldSign: sign, shouldEncrypt: encrypt, signerFingerprint: signer,
         )
         contextToSession[contextID] = sessionID
     }
@@ -59,7 +59,7 @@ final class ComposeSessionStore {
         return (
             state?.shouldSign ?? shouldSignFallback,
             state?.shouldEncrypt ?? shouldEncryptFallback,
-            state?.signerFingerprint ?? signerFingerprintFallback
+            state?.signerFingerprint ?? signerFingerprintFallback,
         )
     }
 
@@ -75,8 +75,16 @@ final class ComposeSessionStore {
         defaults?.string(forKey: "defaultSignerFingerprint")
     }
 
-    // Legacy accessors for encoding-status calls (no context available).
-    var shouldSignDefault: Bool { shouldSignFallback }
-    var shouldEncryptDefault: Bool { shouldEncryptFallback }
-    var signerFingerprintDefault: String? { signerFingerprintFallback }
+    /// Legacy accessors for encoding-status calls (no context available).
+    var shouldSignDefault: Bool {
+        shouldSignFallback
+    }
+
+    var shouldEncryptDefault: Bool {
+        shouldEncryptFallback
+    }
+
+    var signerFingerprintDefault: String? {
+        signerFingerprintFallback
+    }
 }

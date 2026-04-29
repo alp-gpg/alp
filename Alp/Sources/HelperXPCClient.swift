@@ -98,15 +98,15 @@ final class HelperXPCClient: @unchecked Sendable {
     /// Shared timeout + single-resume guard pattern. See `GPGXPCClient.call`
     /// for rationale — both clients implement the same contract.
     private func call<T: Sendable>(
-        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void
+        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
     ) async throws -> T {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, any Error>) in
             let resumedGuard = ResumeGuard()
             let resume: @Sendable (Result<T, any Error>) -> Void = { result in
                 guard resumedGuard.claim() else { return }
                 switch result {
-                case .success(let value): cont.resume(returning: value)
-                case .failure(let error): cont.resume(throwing: error)
+                case let .success(value): cont.resume(returning: value)
+                case let .failure(error): cont.resume(throwing: error)
                 }
             }
 

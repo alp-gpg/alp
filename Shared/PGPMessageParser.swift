@@ -3,7 +3,7 @@ import MailKit
 
 // MARK: – PGP message types
 
-enum PGPContent: Sendable {
+enum PGPContent {
     /// RFC 3156 multipart/encrypted
     case mime(ciphertext: Data)
     /// Inline PGP (-----BEGIN PGP MESSAGE-----)
@@ -16,7 +16,7 @@ enum PGPContent: Sendable {
 
 // MARK: – Parser
 
-struct PGPMessageParser: Sendable {
+struct PGPMessageParser {
     static let pgpMimeEncryptedType = "multipart/encrypted"
     static let pgpMimeProtocol = "application/pgp-encrypted"
     static let pgpMimeSignedType = "multipart/signed"
@@ -28,7 +28,7 @@ struct PGPMessageParser: Sendable {
     /// Parse raw RFC 822 message data and return detected PGP content, if any.
     func parse(_ messageData: Data) -> PGPContent? {
         guard let text = String(data: messageData, encoding: .utf8)
-                      ?? String(data: messageData, encoding: .isoLatin1)
+            ?? String(data: messageData, encoding: .isoLatin1)
         else { return nil }
 
         // Check for PGP/MIME encrypted
@@ -66,12 +66,12 @@ struct PGPMessageParser: Sendable {
 
     private func looksLikePGPMIMEEncrypted(_ text: String) -> Bool {
         text.localizedCaseInsensitiveContains(Self.pgpMimeEncryptedType) &&
-        text.localizedCaseInsensitiveContains(Self.pgpMimeProtocol)
+            text.localizedCaseInsensitiveContains(Self.pgpMimeProtocol)
     }
 
     private func looksLikePGPMIMESigned(_ text: String) -> Bool {
         text.localizedCaseInsensitiveContains(Self.pgpMimeSignedType) &&
-        text.localizedCaseInsensitiveContains(Self.pgpMimeSignatureProtocol)
+            text.localizedCaseInsensitiveContains(Self.pgpMimeSignatureProtocol)
     }
 
     /// Extract the second MIME body part (the actual ciphertext) from a
@@ -100,11 +100,10 @@ struct PGPMessageParser: Sendable {
         guard parts.count >= 3 else { return nil }
 
         func partBody(_ part: String) -> Data? {
-            let stripped: String
-            if let r = part.range(of: "\r\n\r\n") ?? part.range(of: "\n\n") {
-                stripped = String(part[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let stripped: String = if let r = part.range(of: "\r\n\r\n") ?? part.range(of: "\n\n") {
+                String(part[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
             } else {
-                stripped = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                part.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             return stripped.data(using: .utf8)
         }
@@ -130,14 +129,16 @@ struct PGPMessageParser: Sendable {
     private func extractInlinePGP(from text: String, marker: String) -> Data? {
         guard let start = text.range(of: marker) else { return nil }
         let endMarker = "-----END PGP MESSAGE-----"
-        guard let end = text.range(of: endMarker, range: start.lowerBound..<text.endIndex) else {
+        guard let end = text.range(of: endMarker, range: start.lowerBound ..< text.endIndex) else {
             return nil
         }
-        let pgpText = String(text[start.lowerBound..<end.upperBound])
+        let pgpText = String(text[start.lowerBound ..< end.upperBound])
         return pgpText.data(using: .utf8)
     }
 }
 
 private extension Data {
-    var nilIfEmpty: Data? { isEmpty ? nil : self }
+    var nilIfEmpty: Data? {
+        isEmpty ? nil : self
+    }
 }

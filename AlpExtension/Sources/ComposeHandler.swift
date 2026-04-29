@@ -4,11 +4,11 @@ import MailKit
 final class ComposeHandler: NSObject, MEComposeSessionHandler {
     private nonisolated(unsafe) var controllers: [UUID: ComposeViewController] = [:]
 
-    nonisolated override init() {
+    override nonisolated init() {
         super.init()
     }
 
-    func mailComposeSessionDidBegin(_ session: MEComposeSession) {
+    func mailComposeSessionDidBegin(_: MEComposeSession) {
         // Nothing to do — view controller is created on demand in viewController(for:)
     }
 

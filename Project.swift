@@ -17,7 +17,7 @@ let project = Project(
     name: "Alp",
     options: .options(
         defaultKnownRegions: ["en"],
-        developmentRegion: "en"
+        developmentRegion: "en",
     ),
     settings: .settings(base: baseSettings),
     targets: [
@@ -44,8 +44,10 @@ let project = Project(
                     """,
                     name: "Copy LaunchAgent plist",
                     inputPaths: ["$(SRCROOT)/AlpHelper/SupportingFiles/app.alp.Alp.helper.plist"],
-                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.alp.Alp.helper.plist"],
-                    basedOnDependencyAnalysis: false
+                    outputPaths: [
+                        "$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.alp.Alp.helper.plist",
+                    ],
+                    basedOnDependencyAnalysis: false,
                 ),
                 // Embed the AlpHelper command-line tool inside the app bundle so
                 // SMAppService can locate it via BundleProgram = Contents/MacOS/AlpHelper.
@@ -58,7 +60,7 @@ let project = Project(
                     name: "Embed AlpHelper",
                     inputPaths: ["$(BUILT_PRODUCTS_DIR)/AlpHelper"],
                     outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AlpHelper"],
-                    basedOnDependencyAnalysis: false
+                    basedOnDependencyAnalysis: false,
                 ),
             ],
             dependencies: [
@@ -78,16 +80,16 @@ let project = Project(
                         settings: [
                             // Disable sandbox so launchctl bootstrap works from DerivedData.
                             "CODE_SIGN_ENTITLEMENTS": "Alp/SupportingFiles/AlpDebug.entitlements",
-                        ]
+                        ],
                     ),
                     .release(
                         name: "Release",
                         settings: [
                             "CODE_SIGN_ENTITLEMENTS": "Alp/SupportingFiles/Alp.entitlements",
-                        ]
+                        ],
                     ),
-                ]
-            )
+                ],
+            ),
         ),
 
         // ── Mail Extension ─────────────────────────────────────────────
@@ -109,7 +111,7 @@ let project = Project(
                 "CODE_SIGN_STYLE": "Automatic",
                 "DEVELOPMENT_TEAM": "3G6WR6H4M5",
                 "ENABLE_HARDENED_RUNTIME": "YES",
-            ])
+            ]),
         ),
 
         // ── XPC Helper Daemon ──────────────────────────────────────────
@@ -132,7 +134,7 @@ let project = Project(
                 "ENABLE_HARDENED_RUNTIME": "YES",
                 "CREATE_INFOPLIST_SECTION_IN_BINARY": "YES",
                 "OTHER_CODE_SIGN_FLAGS": "--identifier app.alp.Alp.helper",
-            ])
+            ]),
         ),
 
         // ── Tests ──────────────────────────────────────────────────────
@@ -150,7 +152,7 @@ let project = Project(
                 .glob("Alp/Sources/**", excluding: ["Alp/Sources/AlpApp.swift"]),
                 .glob("Shared/**"),
             ],
-            dependencies: []
+            dependencies: [],
         ),
-    ]
+    ],
 )

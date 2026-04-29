@@ -2,7 +2,6 @@ import Foundation
 import ServiceManagement
 
 enum HelperInstaller {
-
     enum InstallError: LocalizedError {
         case helperBinaryNotFound(String)
         case launchctlFailed(String)
@@ -10,11 +9,11 @@ enum HelperInstaller {
 
         var errorDescription: String? {
             switch self {
-            case .helperBinaryNotFound(let path):
+            case let .helperBinaryNotFound(path):
                 "Helper binary not found at \(path)"
-            case .launchctlFailed(let stderr):
+            case let .launchctlFailed(stderr):
                 "launchctl failed: \(stderr)"
-            case .plistWriteFailed(let reason):
+            case let .plistWriteFailed(reason):
                 "Could not write debug plist: \(reason)"
             }
         }
@@ -24,95 +23,96 @@ enum HelperInstaller {
 
     static func install() throws {
         #if DEBUG
-        try installDebug()
+            try installDebug()
         #else
-        try SMAppService.agent(plistName: BuildConfig.helperPlistName).register()
+            try SMAppService.agent(plistName: BuildConfig.helperPlistName).register()
         #endif
     }
 
     static func uninstall() throws {
         #if DEBUG
-        uninstallDebug()
+            uninstallDebug()
         #else
-        try SMAppService.agent(plistName: BuildConfig.helperPlistName).unregister()
+            try SMAppService.agent(plistName: BuildConfig.helperPlistName).unregister()
         #endif
     }
 
     // MARK: – Debug
 
     #if DEBUG
-    private static let debugPlistURL: URL = {
-        FileManager.default.homeDirectoryForCurrentUser
+        private static let debugPlistURL: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents")
             .appendingPathComponent(BuildConfig.helperPlistName)
-    }()
 
-    private static func installDebug() throws {
-        // Use the standalone-built AlpHelper binary in the build products dir
-        // (next to Alp.app), NOT the copy embedded inside the app bundle.
-        // The embedded copy gets re-signed during app bundle signing which
-        // breaks its code signature for standalone launchd execution
-        // (OS_REASON_CODESIGNING).
-        let helperBinary = Bundle.main.bundleURL
-            .deletingLastPathComponent()
-            .appendingPathComponent("AlpHelper").path
+        private static func installDebug() throws {
+            // Use the standalone-built AlpHelper binary in the build products dir
+            // (next to Alp.app), NOT the copy embedded inside the app bundle.
+            // The embedded copy gets re-signed during app bundle signing which
+            // breaks its code signature for standalone launchd execution
+            // (OS_REASON_CODESIGNING).
+            let helperBinary = Bundle.main.bundleURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("AlpHelper").path
 
-        guard FileManager.default.isExecutableFile(atPath: helperBinary) else {
-            throw InstallError.helperBinaryNotFound(helperBinary)
+            guard FileManager.default.isExecutableFile(atPath: helperBinary) else {
+                throw InstallError.helperBinaryNotFound(helperBinary)
+            }
+
+            // Build plist with absolute Program path (not relative BundleProgram).
+            let plist: [String: Any] = [
+                "Label": BuildConfig.helperMachService,
+                "Program": helperBinary,
+                "MachServices": [BuildConfig.helperMachService: true],
+            ]
+
+            let dir = debugPlistURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+            let data = try PropertyListSerialization.data(
+                fromPropertyList: plist, format: .xml, options: 0,
+            )
+            do {
+                try data.write(to: debugPlistURL, options: .atomic)
+            } catch {
+                throw InstallError.plistWriteFailed(error.localizedDescription)
+            }
+
+            // Bootout any stale registration (ignore errors — may not exist).
+            let uid = getuid()
+            launchctl(["bootout", "gui/\(uid)/\(BuildConfig.helperMachService)"])
+
+            // Bootstrap the generated plist.
+            let (status, stderr) = launchctl(
+                ["bootstrap", "gui/\(uid)", debugPlistURL.path],
+            )
+            guard status == 0 else {
+                throw InstallError.launchctlFailed(stderr)
+            }
+            print("[Alp] DEBUG: bootstrapped helper at \(helperBinary)")
         }
 
-        // Build plist with absolute Program path (not relative BundleProgram).
-        let plist: [String: Any] = [
-            "Label": BuildConfig.helperMachService,
-            "Program": helperBinary,
-            "MachServices": [BuildConfig.helperMachService: true],
-        ]
-
-        let dir = debugPlistURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-
-        let data = try PropertyListSerialization.data(
-            fromPropertyList: plist, format: .xml, options: 0)
-        do {
-            try data.write(to: debugPlistURL, options: .atomic)
-        } catch {
-            throw InstallError.plistWriteFailed(error.localizedDescription)
+        private static func uninstallDebug() {
+            let uid = getuid()
+            launchctl(["bootout", "gui/\(uid)/\(BuildConfig.helperMachService)"])
+            try? FileManager.default.removeItem(at: debugPlistURL)
+            print("[Alp] DEBUG: removed helper registration")
         }
 
-        // Bootout any stale registration (ignore errors — may not exist).
-        let uid = getuid()
-        launchctl(["bootout", "gui/\(uid)/\(BuildConfig.helperMachService)"])
-
-        // Bootstrap the generated plist.
-        let (status, stderr) = launchctl(
-            ["bootstrap", "gui/\(uid)", debugPlistURL.path])
-        guard status == 0 else {
-            throw InstallError.launchctlFailed(stderr)
+        @discardableResult
+        private static func launchctl(_ arguments: [String]) -> (status: Int32, stderr: String) {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            proc.arguments = arguments
+            let errPipe = Pipe()
+            proc.standardError = errPipe
+            proc.standardOutput = nil
+            try? proc.run()
+            proc.waitUntilExit()
+            let stderr = String(
+                data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+                encoding: .utf8,
+            ) ?? ""
+            return (proc.terminationStatus, stderr)
         }
-        print("[Alp] DEBUG: bootstrapped helper at \(helperBinary)")
-    }
-
-    private static func uninstallDebug() {
-        let uid = getuid()
-        launchctl(["bootout", "gui/\(uid)/\(BuildConfig.helperMachService)"])
-        try? FileManager.default.removeItem(at: debugPlistURL)
-        print("[Alp] DEBUG: removed helper registration")
-    }
-
-    @discardableResult
-    private static func launchctl(_ arguments: [String]) -> (status: Int32, stderr: String) {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        proc.arguments = arguments
-        let errPipe = Pipe()
-        proc.standardError = errPipe
-        proc.standardOutput = nil
-        try? proc.run()
-        proc.waitUntilExit()
-        let stderr = String(
-            data: errPipe.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8) ?? ""
-        return (proc.terminationStatus, stderr)
-    }
     #endif
 }

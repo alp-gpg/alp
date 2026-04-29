@@ -20,11 +20,11 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     /// `--homedir /evil` through the --recipient / --local-user arguments.
     static func isValidFingerprint(_ value: String) -> Bool {
         guard value.count == 40 else { return false }
-        return value.allSatisfy { $0.isHexDigit }
+        return value.allSatisfy(\.isHexDigit)
     }
 
     override init() {
-        self.gpgPath = GPGHelper.detectGPGPath()
+        gpgPath = GPGHelper.detectGPGPath()
         super.init()
     }
 
@@ -47,11 +47,11 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     private static func detectGPGPath() -> String {
         let candidates = [
-            "/opt/homebrew/bin/gpg",              // Homebrew (Apple Silicon)
-            "/usr/local/bin/gpg",                 // Homebrew (Intel) / manual install
-            "/opt/local/bin/gpg",                 // MacPorts
+            "/opt/homebrew/bin/gpg", // Homebrew (Apple Silicon)
+            "/usr/local/bin/gpg", // Homebrew (Intel) / manual install
+            "/opt/local/bin/gpg", // MacPorts
             "/nix/var/nix/profiles/default/bin/gpg", // Nix
-            "/usr/local/MacGPG2/bin/gpg",         // GPG Suite (GPGTools)
+            "/usr/local/MacGPG2/bin/gpg", // GPG Suite (GPGTools)
         ]
         // No fallback to bare "gpg": Process.run with a relative path fails on
         // macOS, and isExecutableFile against "gpg" always returns false.
@@ -61,7 +61,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     // MARK: – Core runner
 
     /// Raw runner returning stdout, stderr, and exit code without throwing on non-zero exit.
-    private func runGPGRaw(_ args: [String], input: Data? = nil) async throws -> (stdout: Data, stderr: Data, exitCode: Int32) {
+    private func runGPGRaw(_ args: [String],
+                           input: Data? = nil) async throws -> (stdout: Data, stderr: Data, exitCode: Int32)
+    {
         guard !gpgPath.isEmpty, FileManager.default.isExecutableFile(atPath: gpgPath) else {
             throw GPGError.gpgNotFound
         }
@@ -113,7 +115,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     func _encrypt(
         _ data: Data,
         _ recipients: [String],
-        _ signer: String?
+        _ signer: String?,
     ) async throws -> Data {
         if let signer, !Self.isValidFingerprint(signer) {
             throw GPGError.encodingError("invalid signer fingerprint")
@@ -142,8 +144,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         let args = ["--yes", "--decrypt", "--status-fd", "2", "--output", "-"]
         // We need stderr for the status output (signer fingerprint), stdout for plaintext.
         // Run with a custom setup to capture both separately.
-        let plain = try await runGPGWithStatus(args, input: data)
-        return plain
+        return try await runGPGWithStatus(args, input: data)
     }
 
     /// Returns (signature, micalgHashName). micalg is derived from the SIG_CREATED
@@ -215,7 +216,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 newKey: reason & 1 != 0,
                 newUserIDs: reason & 2 != 0,
                 updatedSignatures: reason & 4 != 0,
-                newSubkeys: reason & 8 != 0
+                newSubkeys: reason & 8 != 0,
             )
         }
         return nil
@@ -233,7 +234,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             guard FileManager.default.createFile(
                 atPath: sigURL.path,
                 contents: signature,
-                attributes: [.posixPermissions: 0o600]
+                attributes: [.posixPermissions: 0o600],
             ) else {
                 throw GPGError.encodingError("could not write signature tempfile")
             }
@@ -241,7 +242,10 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 do {
                     try FileManager.default.removeItem(at: sigURL)
                 } catch {
-                    log.error("Failed to remove signature tempfile \(sigURL.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    log
+                        .error(
+                            "Failed to remove signature tempfile \(sigURL.path, privacy: .public): \(error.localizedDescription, privacy: .public)",
+                        )
                 }
             }
             let args = ["--batch", "--verify", "--status-fd", "2", sigURL.path, "-"]
@@ -270,9 +274,15 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         var keys = parseColonKeyListing(String(data: pubOut, encoding: .utf8) ?? "")
         // Cross-reference with secret keys to set hasSecretKey
         if let secOut = try? await runGPG(["--list-secret-keys", "--with-colons", "--with-fingerprint"]) {
-            let secFPs = Set(parseColonKeyListing(String(data: secOut, encoding: .utf8) ?? "").map { $0.fingerprint })
+            let secFPs = Set(parseColonKeyListing(String(data: secOut, encoding: .utf8) ?? "").map(\.fingerprint))
             keys = keys.map { k in
-                GPGKeyInfo(fingerprint: k.fingerprint, userIDs: k.userIDs, capabilities: k.capabilities, hasSecretKey: secFPs.contains(k.fingerprint), expiryDate: k.expiryDate)
+                GPGKeyInfo(
+                    fingerprint: k.fingerprint,
+                    userIDs: k.userIDs,
+                    capabilities: k.capabilities,
+                    hasSecretKey: secFPs.contains(k.fingerprint),
+                    expiryDate: k.expiryDate,
+                )
             }
         }
         return keys
@@ -337,10 +347,12 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
         // 2. Version
         if found, let versionData = try? await runGPGRaw(["--version"]).stdout,
-           let versionText = String(data: versionData, encoding: .utf8) {
+           let versionText = String(data: versionData, encoding: .utf8)
+        {
             // First line: "gpg (GnuPG) 2.4.7"
             if let firstLine = versionText.components(separatedBy: "\n").first,
-               let match = firstLine.range(of: #"\d+\.\d+(\.\d+)?"#, options: .regularExpression) {
+               let match = firstLine.range(of: #"\d+\.\d+(\.\d+)?"#, options: .regularExpression)
+            {
                 let ver = String(firstLine[match])
                 status.gpgVersion = ver
                 status.versionSufficient = compareVersion(ver, isAtLeast: "2.2.14")
@@ -391,7 +403,13 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // 6. TOFU trust model support
         if found {
             // gpg --with-colons --trust-model tofu+pgp --list-keys returns 0 if supported
-            let tofuResult = try? await runGPGRaw(["--batch", "--trust-model", "tofu+pgp", "--list-keys", "--with-colons"])
+            let tofuResult = try? await runGPGRaw([
+                "--batch",
+                "--trust-model",
+                "tofu+pgp",
+                "--list-keys",
+                "--with-colons",
+            ])
             status.tofuSupported = tofuResult?.exitCode == 0
         }
 
@@ -430,7 +448,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     /// Run gpg and capture stdout (plaintext) while parsing status-fd on stderr (signer info).
     private func runGPGWithStatus(
-        _ args: [String], input: Data? = nil
+        _ args: [String], input: Data? = nil,
     ) async throws -> (Data, String?, String?) {
         let (stdout, stderr, exitCode) = try await runGPGRaw(args, input: input)
         let stderrText = String(data: stderr, encoding: .utf8) ?? ""
@@ -458,7 +476,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 let name = parts[(idx + 2)...].joined(separator: " ")
                     .trimmingCharacters(in: .whitespaces)
                 if !name.isEmpty { displayName = name }
-                if fingerprint == nil { fingerprint = parts[idx + 1] }  // key ID fallback
+                if fingerprint == nil { fingerprint = parts[idx + 1] } // key ID fallback
             }
         }
         return (fingerprint, displayName)
@@ -473,9 +491,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         var primaryExpiry: Date?
         var subkeys: [GPGSubkey] = []
 
-        /// Staging area for the subkey we're currently filling in. We can't
-        /// build the final `GPGSubkey` until its `fpr` line arrives because
-        /// the subkey's full fingerprint appears on a subsequent record.
+        // Staging area for the subkey we're currently filling in. We can't
+        // build the final `GPGSubkey` until its `fpr` line arrives because
+        // the subkey's full fingerprint appears on a subsequent record.
         struct PendingSubkey {
             var fingerprint: String = ""
             var capabilities: String = ""
@@ -495,7 +513,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 capabilities: pending.capabilities,
                 expiryDate: pending.expiry,
                 algorithm: pending.algorithm,
-                isRevoked: pending.isRevoked
+                isRevoked: pending.isRevoked,
             ))
             pendingSubkey = nil
         }
@@ -508,7 +526,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 userIDs: primaryUIDs,
                 capabilities: primaryCapabilities,
                 expiryDate: primaryExpiry,
-                subkeys: subkeys
+                subkeys: subkeys,
             ))
             primaryFingerprint = nil
             primaryUIDs = []
@@ -519,7 +537,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
         for raw in text.components(separatedBy: "\n") {
             let fields = raw.trimmingCharacters(in: .init(charactersIn: "\r"))
-                            .components(separatedBy: ":")
+                .components(separatedBy: ":")
             guard let recordType = fields.first, !recordType.isEmpty else { continue }
 
             if recordType.hasPrefix("pub") || recordType.hasPrefix("sec") {
@@ -541,7 +559,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 pending.algorithm = Self.formatAlgorithm(
                     id: fields.count > 3 ? fields[3] : "",
                     bits: fields.count > 2 ? fields[2] : "",
-                    curve: fields.count > 16 ? fields[16] : ""
+                    curve: fields.count > 16 ? fields[16] : "",
                 )
                 pendingSubkey = pending
             } else if recordType == "fpr" {
@@ -569,7 +587,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         guard let algoId = Int(id) else { return nil }
         let name: String
         switch algoId {
-        case 1:  name = "RSA"
+        case 1: name = "RSA"
         case 16: name = "ElGamal"
         case 17: name = "DSA"
         case 18: name = "ECDH"
@@ -592,7 +610,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         data: Data,
         recipientFingerprints: [String],
         signingFingerprint: String?,
-        reply: @escaping @Sendable (Data?, NSError?) -> Void
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
     ) {
         guard data.count <= Self.maxPayloadSize else {
             reply(nil, GPGError.encodingError("payload too large").asNSError); return
@@ -614,7 +632,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     nonisolated func decrypt(
         data: Data,
-        reply: @escaping @Sendable (Data?, String?, String?, NSError?) -> Void
+        reply: @escaping @Sendable (Data?, String?, String?, NSError?) -> Void,
     ) {
         guard data.count <= Self.maxPayloadSize else {
             reply(nil, nil, nil, GPGError.encodingError("payload too large").asNSError); return
@@ -634,7 +652,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     nonisolated func sign(
         data: Data,
         signingFingerprint: String,
-        reply: @escaping @Sendable (Data?, String?, NSError?) -> Void
+        reply: @escaping @Sendable (Data?, String?, NSError?) -> Void,
     ) {
         guard data.count <= Self.maxPayloadSize else {
             reply(nil, nil, GPGError.encodingError("payload too large").asNSError); return
@@ -654,7 +672,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     nonisolated func verify(
         data: Data,
         signatureData: Data?,
-        reply: @escaping @Sendable (Bool, String?, String?, NSError?) -> Void
+        reply: @escaping @Sendable (Bool, String?, String?, NSError?) -> Void,
     ) {
         guard data.count <= Self.maxPayloadSize else {
             reply(false, nil, nil, GPGError.encodingError("payload too large").asNSError); return
@@ -701,7 +719,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     nonisolated func previewKey(
         armoredKey: Data,
-        reply: @escaping @Sendable ([Data]?, NSError?) -> Void
+        reply: @escaping @Sendable ([Data]?, NSError?) -> Void,
     ) {
         guard armoredKey.count <= Self.maxPayloadSize else {
             reply(nil, GPGError.encodingError("payload too large").asNSError); return
@@ -721,7 +739,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     nonisolated func importKey(
         armoredKey: Data,
-        reply: @escaping @Sendable (Data?, NSError?) -> Void
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
     ) {
         guard armoredKey.count <= Self.maxPayloadSize else {
             reply(nil, GPGError.encodingError("payload too large").asNSError); return
@@ -741,7 +759,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     nonisolated func publicKeyExists(
         email: String,
-        reply: @escaping @Sendable (Bool, String?, NSError?) -> Void
+        reply: @escaping @Sendable (Bool, String?, NSError?) -> Void,
     ) {
         guard email.count <= 254 else {
             reply(false, nil, GPGError.encodingError("email too long").asNSError); return
@@ -765,18 +783,18 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 let data = try JSONEncoder().encode(status)
                 reply(data, nil)
             } catch {
-                reply(nil, (error as NSError))
+                reply(nil, error as NSError)
             }
         }
     }
 }
 
 #if DEBUG
-extension GPGHelper {
-    /// Test-only hook into the colon listing parser. Kept inside `#if DEBUG`
-    /// so it does not ship in Release builds.
-    func testParseColonKeyListing(_ text: String) -> [GPGKeyInfo] {
-        parseColonKeyListing(text)
+    extension GPGHelper {
+        /// Test-only hook into the colon listing parser. Kept inside `#if DEBUG`
+        /// so it does not ship in Release builds.
+        func testParseColonKeyListing(_ text: String) -> [GPGKeyInfo] {
+            parseColonKeyListing(text)
+        }
     }
-}
 #endif

@@ -1,5 +1,5 @@
-import Observation
 import MailKit
+import Observation
 
 @Observable @MainActor
 final class ComposeViewModel {
@@ -10,7 +10,9 @@ final class ComposeViewModel {
     var availableSecretKeys: [GPGKeyInfo] = []
     var selectedSignerFingerprint: String?
 
-    var canSign: Bool { !availableSecretKeys.isEmpty }
+    var canSign: Bool {
+        !availableSecretKeys.isEmpty
+    }
 
     var selectedKey: GPGKeyInfo? {
         availableSecretKeys.first { $0.fingerprint == selectedSignerFingerprint }
@@ -23,8 +25,8 @@ final class ComposeViewModel {
         self.session = session
         let defaults = Self.sharedDefaults
         // Respect stored compose defaults; fall back to sign=false, encrypt=false.
-        self.shouldSign = defaults?.object(forKey: "signByDefault") as? Bool ?? false
-        self.shouldEncrypt = defaults?.bool(forKey: "encryptByDefault") ?? false
+        shouldSign = defaults?.object(forKey: "signByDefault") as? Bool ?? false
+        shouldEncrypt = defaults?.bool(forKey: "encryptByDefault") ?? false
     }
 
     func refresh() async {
@@ -47,7 +49,9 @@ final class ComposeViewModel {
         let allAddresses = message.toAddresses + message.ccAddresses + message.bccAddresses
         var missing: [String] = []
         for addr in allAddresses {
-            if let (found, _) = try? await GPGXPCClient.shared.publicKeyExists(email: addr.addressString ?? addr.rawString), !found {
+            if let (found, _) = try? await GPGXPCClient.shared
+                .publicKeyExists(email: addr.addressString ?? addr.rawString), !found
+            {
                 missing.append(addr.addressString ?? addr.rawString)
             }
         }
@@ -64,7 +68,7 @@ final class ComposeViewModel {
             session: session,
             sign: shouldSign,
             encrypt: shouldEncrypt,
-            signer: selectedSignerFingerprint
+            signer: selectedSignerFingerprint,
         )
     }
 }

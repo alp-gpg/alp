@@ -12,22 +12,30 @@ private let log = Logger(subsystem: "app.alp.Alp.extension", category: "Security
 final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     private nonisolated let parser = PGPMessageParser()
 
-    nonisolated override init() {
+    override nonisolated init() {
         super.init()
     }
 
     // MARK: – MEMessageSecurityHandler (optional UI)
 
-    nonisolated func extensionViewController(signers: [MEMessageSigner]) -> MEExtensionViewController? { nil }
-    nonisolated func extensionViewController(messageContext: Data) -> MEExtensionViewController? { nil }
-    nonisolated func primaryActionClicked(forMessageContext context: Data) async -> MEExtensionViewController? { nil }
+    nonisolated func extensionViewController(signers _: [MEMessageSigner]) -> MEExtensionViewController? {
+        nil
+    }
+
+    nonisolated func extensionViewController(messageContext _: Data) -> MEExtensionViewController? {
+        nil
+    }
+
+    nonisolated func primaryActionClicked(forMessageContext _: Data) async -> MEExtensionViewController? {
+        nil
+    }
 
     // MARK: – MEMessageDecoder
 
     nonisolated func decodedMessage(forMessageData data: Data) -> MEDecodedMessage? {
         let sema = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var decoded: MEDecodedMessage?
-        let parser = self.parser
+        let parser = parser
         Task.detached {
             decoded = await Self.decrypt(data: data, parser: parser)
             sema.signal()
@@ -47,8 +55,8 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 
     nonisolated func getEncodingStatus(
         for message: MEMessage,
-        composeContext: MEComposeContext,
-        completionHandler: @escaping (MEOutgoingMessageEncodingStatus) -> Void
+        composeContext _: MEComposeContext,
+        completionHandler: @escaping (MEOutgoingMessageEncodingStatus) -> Void,
     ) {
         // Extract values synchronously on the calling thread, then do async work.
         let allAddresses = message.allRecipientAddresses
@@ -79,7 +87,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                 canSign: true,
                 canEncrypt: missingEmails.isEmpty,
                 securityError: encryptionError,
-                addressesFailingEncryption: missingAddresses
+                addressesFailingEncryption: missingAddresses,
             ))
         }
     }
@@ -87,7 +95,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     nonisolated func encode(
         _ message: MEMessage,
         composeContext: MEComposeContext,
-        completionHandler: @escaping (MEMessageEncodingResult) -> Void
+        completionHandler: @escaping (MEMessageEncodingResult) -> Void,
     ) {
         // Extract all needed values synchronously before the async boundary.
         let rawData = message.rawData
@@ -107,19 +115,18 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     recipientEmails: recipientEmails,
                     shouldSign: shouldSign,
                     shouldEncrypt: shouldEncrypt,
-                    signerFingerprint: signerFP
+                    signerFingerprint: signerFP,
                 )
                 handler(MEMessageEncodingResult(
-                    encodedMessage: encoded, signingError: nil, encryptionError: nil
+                    encodedMessage: encoded, signingError: nil, encryptionError: nil,
                 ))
             } catch {
                 let nsError = Self.mailKitError(for: error, isEncoding: true)
-                let isSigningError: Bool
-                if case GPGError.noSigningKey = error { isSigningError = true } else { isSigningError = false }
+                let isSigningError = if case GPGError.noSigningKey = error { true } else { false }
                 handler(MEMessageEncodingResult(
                     encodedMessage: nil,
                     signingError: isSigningError ? nsError : nil,
-                    encryptionError: isSigningError ? nil : nsError
+                    encryptionError: isSigningError ? nil : nsError,
                 ))
             }
         }
@@ -134,40 +141,40 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         log.info("PGP content detected")
         do {
             switch pgp {
-            case .mime(let cipher), .inline(let cipher):
+            case let .mime(cipher), let .inline(cipher):
                 let (plain, signer, signerName) = try await GPGXPCClient.shared.decrypt(cipher)
                 log.info("Decrypted successfully")
                 return MEDecodedMessage(
                     data: plain,
                     securityInformation: MEMessageSecurityInformation(
                         signers: makeSigner(signer, displayName: signerName), isEncrypted: true,
-                        signingError: nil, encryptionError: nil
+                        signingError: nil, encryptionError: nil,
                     ),
-                    context: nil
+                    context: nil,
                 )
 
-            case .inlineSigned(let body):
+            case let .inlineSigned(body):
                 let (valid, signer, signerName) = try await GPGXPCClient.shared.verify(body)
                 return MEDecodedMessage(
                     data: data,
                     securityInformation: MEMessageSecurityInformation(
                         signers: makeSigner(signer, displayName: signerName), isEncrypted: false,
                         signingError: valid ? nil : mailKitError(code: 1, description: "Invalid signature"),
-                        encryptionError: nil
+                        encryptionError: nil,
                     ),
-                    context: nil
+                    context: nil,
                 )
 
-            case .mimeSignature(let body, let sig):
+            case let .mimeSignature(body, sig):
                 let (valid, signer, signerName) = try await GPGXPCClient.shared.verify(body, signature: sig)
                 return MEDecodedMessage(
                     data: data,
                     securityInformation: MEMessageSecurityInformation(
                         signers: makeSigner(signer, displayName: signerName), isEncrypted: false,
                         signingError: valid ? nil : mailKitError(code: 1, description: "Invalid signature"),
-                        encryptionError: nil
+                        encryptionError: nil,
                     ),
-                    context: nil
+                    context: nil,
                 )
             }
         } catch {
@@ -177,9 +184,9 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                 securityInformation: MEMessageSecurityInformation(
                     signers: [], isEncrypted: false,
                     signingError: nil,
-                    encryptionError: mailKitError(for: error, isEncoding: false)
+                    encryptionError: mailKitError(for: error, isEncoding: false),
                 ),
-                context: nil
+                context: nil,
             )
         }
     }
@@ -191,7 +198,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         recipientEmails: [String],
         shouldSign: Bool,
         shouldEncrypt: Bool,
-        signerFingerprint: String?
+        signerFingerprint: String?,
     ) async throws -> MEEncodedOutgoingMessage {
         guard let rawData else {
             throw GPGError.encodingError("MEMessage has no rawData")
@@ -207,10 +214,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             let ciphertext = try await GPGXPCClient.shared.encrypt(
                 rawData,
                 recipients: fingerprints,
-                signer: shouldSign ? signerFingerprint : nil
+                signer: shouldSign ? signerFingerprint : nil,
             )
             return MEEncodedOutgoingMessage(
-                rawData: pgpMIMEEncrypted(ciphertext), isSigned: shouldSign, isEncrypted: true
+                rawData: pgpMIMEEncrypted(ciphertext), isSigned: shouldSign, isEncrypted: true,
             )
         }
 
@@ -220,7 +227,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             let (signature, micalg) = try await GPGXPCClient.shared.sign(canonicalBody, signer: fp)
             return MEEncodedOutgoingMessage(
                 rawData: pgpMIMESigned(canonicalBody, signature: signature, micalg: micalg),
-                isSigned: true, isEncrypted: false
+                isSigned: true, isEncrypted: false,
             )
         }
 
@@ -249,7 +256,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             "Content-Description: OpenPGP encrypted message",
             "Content-Disposition: inline; filename=\"encrypted.asc\"",
             "",
-            "",  // trailing empty = extra CRLF before body
+            "", // trailing empty = extra CRLF before body
         ].joined(separator: "\r\n")
         var out = Data(header.utf8)
         out.append(ciphertext)
@@ -313,7 +320,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         return [MEMessageSigner(
             emailAddresses: [],
             signatureLabel: label,
-            context: fingerprint.data(using: .utf8)
+            context: fingerprint.data(using: .utf8),
         )]
     }
 
@@ -326,7 +333,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         NSError(
             domain: MEMessageSecurityErrorDomain,
             code: code,
-            userInfo: [NSLocalizedDescriptionKey: description]
+            userInfo: [NSLocalizedDescriptionKey: description],
         )
     }
 }

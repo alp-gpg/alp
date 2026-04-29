@@ -1,5 +1,5 @@
-import SwiftUI
 import MailKit
+import SwiftUI
 
 struct ComposeView: View {
     @Bindable var vm: ComposeViewModel
@@ -18,7 +18,7 @@ struct ComposeView: View {
             .accessibilityLabel("Sign message")
             .accessibilityValue(vm.shouldSign ? "On" : "Off")
 
-            if vm.shouldSign && vm.availableSecretKeys.count > 1 {
+            if vm.shouldSign, vm.availableSecretKeys.count > 1 {
                 keyPickerMenu
             }
 
@@ -35,7 +35,7 @@ struct ComposeView: View {
             .accessibilityLabel("Encrypt message")
             .accessibilityValue(vm.shouldEncrypt ? "On" : "Off")
 
-            if !vm.shouldSign && !vm.shouldEncrypt && vm.missingKeyEmails.isEmpty {
+            if !vm.shouldSign, !vm.shouldEncrypt, vm.missingKeyEmails.isEmpty {
                 Text("No GPG")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -76,7 +76,6 @@ struct ComposeView: View {
         return "Add recipients to enable encryption"
     }
 
-    @ViewBuilder
     private var keyPickerMenu: some View {
         Menu {
             ForEach(vm.availableSecretKeys) { key in
@@ -103,7 +102,6 @@ struct ComposeView: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
     }
-
 }
 
 // MARK: – Missing keys popover
@@ -147,7 +145,7 @@ private struct MissingKeysView: View {
             states[email] = .searching
             do {
                 let armoredKey = try await KeyserverClient.fetch(email: email)
-                let preview = (try? await GPGXPCClient.shared.previewKey(armoredKey)) ?? []
+                let preview = await (try? GPGXPCClient.shared.previewKey(armoredKey)) ?? []
                 states[email] = .found(armoredKey: armoredKey, preview: preview)
             } catch KeyserverClient.Error.notFound {
                 states[email] = .notFound
@@ -155,7 +153,7 @@ private struct MissingKeysView: View {
                 states[email] = .searchError(error.localizedDescription)
             }
 
-        case .import(let armoredKey):
+        case let .import(armoredKey):
             states[email] = .importing
             do {
                 _ = try await GPGXPCClient.shared.importKey(armoredKey)
@@ -214,7 +212,7 @@ private struct EmailRow: View {
             }
         case .searching, .importing:
             ProgressView().controlSize(.mini)
-        case .found(let key, _):
+        case let .found(key, _):
             HStack(spacing: 6) {
                 Button("Cancel") { Task { await perform(.reset) } }
                     .buttonStyle(.borderless).controlSize(.mini).font(.caption)
@@ -233,7 +231,7 @@ private struct EmailRow: View {
     @ViewBuilder
     private var detail: some View {
         switch state {
-        case .found(_, let preview):
+        case let .found(_, preview):
             if let key = preview.first {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(key.displayName)
@@ -246,9 +244,9 @@ private struct EmailRow: View {
         case .notFound:
             Text("No key found on keys.openpgp.org")
                 .font(.caption).foregroundStyle(.secondary)
-        case .searchError(let msg):
+        case let .searchError(msg):
             Text(msg).font(.caption).foregroundStyle(.red)
-        case .importError(let msg):
+        case let .importError(msg):
             Text(msg).font(.caption).foregroundStyle(.red)
         default:
             EmptyView()
@@ -311,7 +309,7 @@ private enum KeyserverClient {
         switch http.statusCode {
         case 200: return data
         case 404: throw Error.notFound
-        default:  throw Error.httpError(http.statusCode)
+        default: throw Error.httpError(http.statusCode)
         }
     }
 }

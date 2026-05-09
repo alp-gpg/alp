@@ -401,6 +401,76 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return fingerprint
     }
 
+    func _changePassphrase(_ fingerprint: String) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        // `passwd` triggers gpg-agent → pinentry for both the current and the
+        // new passphrases. `--command-fd` only carries the menu commands; the
+        // passphrases themselves never traverse the helper.
+        let commands = "passwd\nsave\n"
+        let args = [
+            "--command-fd", "0", "--status-fd", "2",
+            "--edit-key", fingerprint,
+        ]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
+    func _setExpiry(_ fingerprint: String, expiryDays: Int) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard (0 ... 36500).contains(expiryDays) else {
+            throw GPGError.encodingError("expiryDays must be 0..36500")
+        }
+        let expireArg = expiryDays == 0 ? "0" : "\(expiryDays)d"
+        let commands = "expire\n\(expireArg)\nsave\n"
+        let args = [
+            "--command-fd", "0", "--status-fd", "2",
+            "--edit-key", fingerprint,
+        ]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
+    func _revokePrimaryKey(
+        _ fingerprint: String,
+        reasonCode: Int,
+        description: String?,
+    ) async throws -> Data {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard (0 ... 3).contains(reasonCode) else {
+            throw GPGError.encodingError("reasonCode must be 0..3")
+        }
+        let trimmedDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedDescription, !trimmedDescription.isEmpty {
+            guard trimmedDescription.count <= 200, Self.isValidUserIDComponent(trimmedDescription) else {
+                throw GPGError.encodingError("invalid description")
+            }
+        }
+        // gpg --gen-revoke prompts via --command-fd:
+        //   y           → confirm "Create a revocation certificate for this key?"
+        //   <code>      → reason code (0..3)
+        //   <desc>      → description (optional single line)
+        //   <empty>     → terminate description
+        //   y           → confirm "Is this okay?"
+        let descLine = trimmedDescription ?? ""
+        let commands = "y\n\(reasonCode)\n\(descLine)\n\ny\n"
+        let args = [
+            "--armor", "--command-fd", "0", "--status-fd", "2",
+            "--gen-revoke", fingerprint,
+        ]
+        let cert = try await runGPG(args, input: Data(commands.utf8))
+
+        // Importing the freshly-generated cert flips the local key's revoke
+        // state. We return the armored cert so the UI can also offer to save
+        // it to disk for offline backup.
+        let importArgs = ["--batch", "--yes", "--import"]
+        _ = try await runGPG(importArgs, input: cert)
+        return cert
+    }
+
     static func isValidUserIDComponent(_ value: String) -> Bool {
         for scalar in value.unicodeScalars {
             if scalar.value < 0x20 || scalar.value == 0x7F { return false }
@@ -981,6 +1051,61 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                     expiryDays: expiryDays,
                 )
                 reply(fp, nil)
+            } catch let e as GPGError {
+                reply(nil, e.asNSError)
+            } catch {
+                reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func changePassphrase(
+        fingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._changePassphrase(fingerprint)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func setExpiry(
+        fingerprint: String,
+        expiryDays: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._setExpiry(fingerprint, expiryDays: expiryDays)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func revokePrimaryKey(
+        fingerprint: String,
+        reasonCode: Int,
+        description: String?,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                let cert = try await self._revokePrimaryKey(
+                    fingerprint,
+                    reasonCode: reasonCode,
+                    description: description,
+                )
+                reply(cert, nil)
             } catch let e as GPGError {
                 reply(nil, e.asNSError)
             } catch {

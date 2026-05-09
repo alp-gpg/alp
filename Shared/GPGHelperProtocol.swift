@@ -102,4 +102,37 @@ import Foundation
         expiryDays: Int,
         reply: @escaping @Sendable (String?, NSError?) -> Void,
     )
+
+    /// Change the passphrase on a secret key (`gpg --edit-key FP passwd save`).
+    /// gpg-agent prompts for the current and new passphrases via pinentry —
+    /// the helper feeds only menu commands, never the passphrase itself.
+    /// reply: (error?) — error is nil on success.
+    func changePassphrase(
+        fingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Set or extend the expiry of a primary key in days from now.
+    /// `expiryDays` of 0 means "never expires"; otherwise 1..36500.
+    /// Drives `gpg --edit-key FP expire <days> save`.
+    /// reply: (error?) — error is nil on success.
+    func setExpiry(
+        fingerprint: String,
+        expiryDays: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Generate a revocation certificate via `gpg --gen-revoke` and import it
+    /// immediately, marking the local key as revoked.
+    /// `reasonCode` follows RFC 4880 §5.2.3.23: 0=no reason, 1=compromised,
+    /// 2=superseded, 3=no longer used. `description` is optional, ≤ 200 chars,
+    /// single-line, no `<>()` or control characters.
+    /// reply: (armoredRevocationCert?, error?). The caller should offer to save
+    /// the returned cert to disk so the user retains an offline backup.
+    func revokePrimaryKey(
+        fingerprint: String,
+        reasonCode: Int,
+        description: String?,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    )
 }

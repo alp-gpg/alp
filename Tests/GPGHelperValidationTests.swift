@@ -109,6 +109,66 @@ struct GPGHelperLifecycleValidationTests {
     }
 }
 
+@Suite("GPGHelper edit-key validation")
+struct GPGHelperEditKeyValidationTests {
+    @Test
+    func `changePassphrase rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._changePassphrase("not-hex")
+        }
+    }
+
+    @Test
+    func `setExpiry rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._setExpiry("12345", expiryDays: 365)
+        }
+    }
+
+    @Test
+    func `setExpiry rejects out-of-range expiry`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._setExpiry(valid, expiryDays: -1)
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._setExpiry(valid, expiryDays: 36501)
+        }
+    }
+
+    @Test
+    func `revokePrimaryKey rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._revokePrimaryKey("nope", reasonCode: 0, description: nil)
+        }
+    }
+
+    @Test
+    func `revokePrimaryKey rejects out-of-range reason code`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._revokePrimaryKey(valid, reasonCode: -1, description: nil)
+        }
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._revokePrimaryKey(valid, reasonCode: 99, description: nil)
+        }
+    }
+
+    @Test
+    func `revokePrimaryKey rejects forbidden chars in description`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._revokePrimaryKey(valid, reasonCode: 1, description: "bad <script>")
+        }
+    }
+}
+
 @Suite("GPGHelper key-generation parser")
 struct GPGHelperKeyGenParserTests {
     @Test

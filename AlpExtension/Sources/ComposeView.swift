@@ -339,6 +339,28 @@ private enum KeyserverClient {
     }
 
     static func fetch(email: String) async throws -> Data {
+        // Try keys.openpgp.org first — pinned, well-known, indexed. Fall back
+        // to WKD when keys.openpgp.org reports notFound so domains using
+        // self-hosted Web Key Directories (corporate, proton, gnupg.org…)
+        // aren't dead-ends.
+        do {
+            return try await fetchOpenPGPDirectory(email: email)
+        } catch Error.notFound {
+            do {
+                return try await WKDClient.fetch(email: email)
+            } catch WKDClient.Error.notFound, WKDClient.Error.malformedEmail {
+                throw Error.notFound
+            } catch let WKDClient.Error.networkError(inner) {
+                throw Error.networkError(inner)
+            } catch let WKDClient.Error.httpError(code) {
+                throw Error.httpError(code)
+            } catch WKDClient.Error.responseTooLarge {
+                throw Error.httpError(0) // surfaced as "WKD response too large"
+            }
+        }
+    }
+
+    private static func fetchOpenPGPDirectory(email: String) async throws -> Data {
         // Build with URLComponents so scheme and host are fixed — a crafted
         // email cannot introduce a new host or additional path segments.
         guard let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {

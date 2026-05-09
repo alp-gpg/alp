@@ -15,11 +15,11 @@
 
 - [ ] **GPGTools-parity P0**
       Spec: `docs/superpowers/specs/2026-05-09-gpgtools-parity-design.md`
-  - [ ] Helper RPCs: `deletePublicKey`, `deleteSecretKey`, `exportPublicKey`, `exportSecretKey`
-  - [ ] Helper RPC: `generatePrimaryKey` (Ed25519 + Cv25519, 2y default expiry)
-  - [ ] Helper RPCs: `changePassphrase`, `setExpiry`, `revokePrimaryKey`
-  - [ ] Settings UI: per-row lifecycle actions + generate-key sheet
-  - [ ] WKD lookup fallback (advanced + direct method)
+  - [x] Helper RPCs: `deletePublicKey`, `deleteSecretKey`, `exportPublicKey`, `exportSecretKey`
+  - [x] Helper RPC: `generatePrimaryKey` (Ed25519 + Cv25519, 2y default expiry)
+  - [x] Helper RPCs: `changePassphrase`, `setExpiry`, `revokePrimaryKey`
+  - [x] Settings UI: per-row lifecycle actions + generate-key sheet
+  - [x] WKD lookup fallback (advanced + direct method)
   - [ ] First-run gpg install guidance in setup checklist
   - [ ] Pinentry-mac decision (bundle / brew / native)
   - [ ] Inline-PGP outgoing toggle for legacy recipients

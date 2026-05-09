@@ -23,7 +23,7 @@
 
 - [ ] **GPGTools-parity P1**
       Spec: `docs/superpowers/specs/2026-05-09-gpgtools-parity-p1-design.md`
-  - [ ] Keyserver upload RPC + UI (`uploadPublicKey` to keys.openpgp.org)
+  - [x] Keyserver upload + per-UID verification flow (Publish to keys.openpgp.org…)
   - [ ] `signKey` + `setOwnerTrust` RPCs + per-row Certify / Trust UI
   - [ ] Multi-keyserver fallback chain (proton.me, HKPS pool after WKD)
   - [ ] Smartcard / YubiKey read-only status panel

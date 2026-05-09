@@ -10,6 +10,7 @@ struct KeySettingsView: View {
     @State private var keyForSetExpiry: GPGKeyInfo?
     @State private var keyForRevoke: GPGKeyInfo?
     @State private var keyToDelete: KeyDeletionRequest?
+    @State private var keyForUpload: GPGKeyInfo?
     @State private var actionError: String?
 
     /// Pairs a key with the kind of delete the user requested so the confirm
@@ -181,6 +182,9 @@ struct KeySettingsView: View {
                 }
             }
         }
+        .sheet(item: $keyForUpload) { key in
+            PublishKeySheet(key: key)
+        }
         .alert(item: $keyToDelete) { request in
             Alert(
                 title: Text(request.secretOnly
@@ -237,6 +241,7 @@ struct KeySettingsView: View {
 
             if key.hasSecretKey {
                 Button("Generate Revocation Certificate…") { keyForRevoke = key }
+                Button("Publish to keys.openpgp.org…") { keyForUpload = key }
             }
 
             Divider()

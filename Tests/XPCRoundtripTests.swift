@@ -112,7 +112,7 @@ struct XPCRoundtripTests {
     func `importKey bridge returns GPGImportResult`() async throws {
         let fp = try await firstSecretKeyFingerprint()
         // Export an existing key so we have real armored data to re-import.
-        let exported = try await helper._export(fp)
+        let exported = try await helper._exportPublicKey(fp)
         let resultData: Data = try await withCheckedThrowingContinuation { cont in
             helper.importKey(armoredKey: exported) { data, error in
                 if let error { cont.resume(throwing: error) }

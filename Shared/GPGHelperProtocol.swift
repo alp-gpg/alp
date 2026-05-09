@@ -53,4 +53,35 @@ import Foundation
 
     /// Check GPG environment health. reply: JSON-encoded GPGHealthStatus or error
     func checkHealth(reply: @escaping @Sendable (Data?, NSError?) -> Void)
+
+    /// Export a public key as ASCII-armored data (`gpg --armor --export FP`).
+    /// reply: (armoredKey?, error?)
+    func exportPublicKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    )
+
+    /// Export a secret key as ASCII-armored data (`gpg --armor --export-secret-keys FP`).
+    /// gpg-agent will prompt for the passphrase via the user's pinentry.
+    /// reply: (armoredKey?, error?)
+    func exportSecretKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    )
+
+    /// Remove a public key (and any matching secret key) from the local keyring
+    /// (`gpg --batch --yes --delete-keys FP`). Caller must confirm in the UI.
+    /// reply: (error?) — error is nil on success.
+    func deletePublicKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Remove only the secret half of a key pair, leaving the public key in place
+    /// (`gpg --batch --yes --delete-secret-keys FP`). Caller must confirm in the UI.
+    /// reply: (error?) — error is nil on success.
+    func deleteSecretKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
 }

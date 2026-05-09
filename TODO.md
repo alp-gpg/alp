@@ -13,6 +13,20 @@
 - [ ] **Keys list hierarchy + expired key handling**
       Spec: `docs/superpowers/specs/2026-04-11-keys-list-hierarchy-design.md`
 
+- [ ] **GPGTools-parity P0**
+      Spec: `docs/superpowers/specs/2026-05-09-gpgtools-parity-design.md`
+  - [ ] Helper RPCs: `deletePublicKey`, `deleteSecretKey`, `exportPublicKey`, `exportSecretKey`
+  - [ ] Helper RPC: `generatePrimaryKey` (Ed25519 + Cv25519, 2y default expiry)
+  - [ ] Helper RPCs: `changePassphrase`, `setExpiry`, `revokePrimaryKey`
+  - [ ] Settings UI: per-row lifecycle actions + generate-key sheet
+  - [ ] WKD lookup fallback (advanced + direct method)
+  - [ ] First-run gpg install guidance in setup checklist
+  - [ ] Pinentry-mac decision (bundle / brew / native)
+  - [ ] Inline-PGP outgoing toggle for legacy recipients
+  - [ ] Per-account default signing key (`from -> fingerprint` map)
+  - [ ] Services menu target (Encrypt / Decrypt / Sign / Verify selection)
+  - [ ] Sparkle auto-update wiring (EdDSA-signed appcast)
+
 ## Future / Deferred
 
 Ideas captured while designing other work. Not scheduled — promote into a phase
@@ -24,9 +38,10 @@ when they become relevant. Each entry links to the spec it came from.
       per-subkey stats)
 - [ ] "Cleanup" action — prune revoked/expired subkeys from the local keyring
 - [ ] Per-subkey refresh from keyserver
-- [ ] WKD (Web Key Directory) lookup alongside HKP
 - [ ] Tor / anonymity routing for keyserver fetches
-- [ ] Revocation certificate management
+
+*(WKD lookup and revocation certificate management promoted into the
+GPGTools-parity P0 above.)*
 
 ### Unscheduled
 

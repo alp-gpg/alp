@@ -54,8 +54,8 @@ identifier_name:
 # parsers. The cohesive single-file layout is preferred over premature
 # extraction, so raise the thresholds rather than churn the structure.
 type_body_length:
-  warning: 700
-  error: 900
+  warning: 800
+  error: 1000
 file_length:
   warning: 1000
   error: 1500

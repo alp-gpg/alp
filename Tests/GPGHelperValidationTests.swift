@@ -26,6 +26,44 @@ struct GPGHelperValidationTests {
     }
 }
 
+@Suite("GPGHelper key lifecycle validation")
+struct GPGHelperLifecycleValidationTests {
+    @Test
+    func `exportPublicKey rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._exportPublicKey("--homedir /tmp/evil")
+        }
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._exportPublicKey("")
+        }
+    }
+
+    @Test
+    func `exportSecretKey rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._exportSecretKey("not-a-fingerprint")
+        }
+    }
+
+    @Test
+    func `deletePublicKey rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._deletePublicKey("12345")
+        }
+    }
+
+    @Test
+    func `deleteSecretKey rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._deleteSecretKey(String(repeating: "Z", count: 40))
+        }
+    }
+}
+
 @Suite("GPGHelper micalg parsing")
 struct GPGHelperMicalgTests {
     @Test

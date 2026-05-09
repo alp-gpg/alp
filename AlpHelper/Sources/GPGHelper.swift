@@ -311,16 +311,42 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return result
     }
 
-    /// Test-only helper — **not** exposed via GPGHelperProtocol. Exists solely
-    /// to let `XPCRoundtripTests` round-trip real armored key material through
-    /// the import bridge without hard-coding test fixtures. Safe against
-    /// argument injection via the `isValidFingerprint` check.
-    func _export(_ fingerprint: String) async throws -> Data {
+    func _exportPublicKey(_ fingerprint: String) async throws -> Data {
         guard Self.isValidFingerprint(fingerprint) else {
             throw GPGError.encodingError("invalid fingerprint")
         }
         let args = ["--batch", "--yes", "--armor", "--export", fingerprint]
         return try await runGPG(args)
+    }
+
+    func _exportSecretKey(_ fingerprint: String) async throws -> Data {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        // gpg-agent will trigger pinentry on the user's session for the
+        // passphrase. We do not need stdin input here.
+        let args = ["--armor", "--export-secret-keys", fingerprint]
+        return try await runGPG(args)
+    }
+
+    func _deletePublicKey(_ fingerprint: String) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        // gpg refuses --delete-keys on a key that still has a secret half;
+        // remove the secret first so the public delete cannot leave a half-pair
+        // dangling. _deleteSecretKey is a no-op when there is no secret key.
+        try? await _deleteSecretKey(fingerprint)
+        let args = ["--batch", "--yes", "--delete-keys", fingerprint]
+        _ = try await runGPG(args)
+    }
+
+    func _deleteSecretKey(_ fingerprint: String) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        let args = ["--batch", "--yes", "--delete-secret-keys", fingerprint]
+        _ = try await runGPG(args)
     }
 
     func _publicKeyExists(email: String) async throws -> (Bool, String?) {
@@ -784,6 +810,70 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(data, nil)
             } catch {
                 reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func exportPublicKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                let armored = try await self._exportPublicKey(fingerprint)
+                reply(armored, nil)
+            } catch let e as GPGError {
+                reply(nil, e.asNSError)
+            } catch {
+                reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func exportSecretKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                let armored = try await self._exportSecretKey(fingerprint)
+                reply(armored, nil)
+            } catch let e as GPGError {
+                reply(nil, e.asNSError)
+            } catch {
+                reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func deletePublicKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._deletePublicKey(fingerprint)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func deleteSecretKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._deleteSecretKey(fingerprint)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
             }
         }
     }

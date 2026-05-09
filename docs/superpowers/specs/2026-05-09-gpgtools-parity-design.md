@@ -68,13 +68,23 @@ still strip control characters).
     command in Terminal (preferred) or the gnupg.org download page. Document
     the bundling decision (next step) in this spec.
 
-11. **Pinentry-mac path** — investigate three options:
-    * **Bundle pinentry-mac** (BSD-licensed; small): reliable, lets us own
-      the passphrase UX and Keychain integration.
-    * **Instruct users to `brew install pinentry-mac`**: zero work; users
-      who skip it get the curses prompt in Terminal which is awful.
-    * **Build a first-class passphrase prompt** that talks to gpg-agent over
-      assuan: most work; best UX. Decide before key generation lands.
+11. **Pinentry-mac path** — **Decision (2026-05-09): rely on Homebrew's
+    `pinentry-mac`.** The first-run installer sheet already runs
+    `brew install gnupg pinentry-mac` so the common path lands users on a
+    working passphrase prompt. The health check surfaces missing pinentry
+    explicitly, and `GPGHealthStatus` accepts any GUI pinentry binary
+    (pinentry-mac, pinentry-gnome3, pinentry-qt) so users with custom setups
+    are not penalised.
+
+    Bundling pinentry-mac was rejected: it would force us to maintain
+    notarisation for an additional binary and the upstream license terms
+    (GPLv3) make distributing it inside our own DMG awkward. Building an
+    Assuan-speaking passphrase prompt was rejected: high effort for a
+    one-off polish that almost no other gpg client gets right.
+
+    Follow-up if this proves wrong in user testing: revisit the bundled-
+    pinentry option behind a feature gate before considering an Assuan
+    rewrite.
 
 ### Compose / send-side gaps
 

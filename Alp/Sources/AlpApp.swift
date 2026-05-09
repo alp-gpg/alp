@@ -1,17 +1,20 @@
+import AppKit
 import Sparkle
 import SwiftUI
 
 @main
 struct AlpApp: App {
+    /// Wires Services menu registration after NSApplication has been
+    /// created. Touching `NSApp` from `App.init()` crashes because the
+    /// implicitly-unwrapped global is still nil that early in launch.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     /// Sparkle drives auto-update for direct-DMG installs (brew users get
     /// updates from `brew upgrade`). The controller has to be a stored
     /// property so its lifetime spans the whole app session.
     private let updaterController: SPUStandardUpdaterController
 
     init() {
-        // Wire Services menu entries declared in Info.plist to ServicesProvider.
-        ServicesProvider.shared.register()
-
         // `startingUpdater: true` schedules background checks per the cadence
         // the user picked in the Sparkle preferences pane (or our default).
         // Sparkle reads SUFeedURL and SUPublicEDKey from Info.plist directly.
@@ -39,5 +42,13 @@ struct AlpApp: App {
                 }
             }
         }
+    }
+}
+
+/// AppKit lifecycle hooks that need a real NSApplication. Anything wired
+/// here runs after the run loop is up and `NSApp` is non-nil.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_: Notification) {
+        ServicesProvider.shared.register()
     }
 }

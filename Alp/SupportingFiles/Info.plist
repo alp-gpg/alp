@@ -24,7 +24,7 @@
     <key>SUFeedURL</key>
     <string>https://alp-gpg.github.io/alp/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string></string>
+    <string>x1JEeu9YAmQj4qXAdlxw0Y9KiizUVwJQzUcAVmajMuQ=</string>
     <!--
         Default off so a fresh install does not phone home for update checks
         without user consent — Alp is a privacy-focused tool. Users opt in

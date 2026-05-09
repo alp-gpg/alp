@@ -7,9 +7,9 @@
       `APPLE_ID_PASSWORD`, `APPLE_TEAM_ID`)
 - [ ] Create `alp-gpg/homebrew-tap` repo with cask formula derived from
       `scripts/alp.rb.template`
-- [ ] **Run Sparkle `generate_keys` once** and paste the public key into
-      `Alp/SupportingFiles/Info.plist` as `SUPublicEDKey`. See
-      [`BUILDING.md`](BUILDING.md#releasing-one-time-sparkle-key-setup).
+- [x] Run Sparkle `generate_keys` once and embed the public key in
+      `Alp/SupportingFiles/Info.plist` (`SUPublicEDKey`). Private key lives
+      in the login Keychain — back it up via Keychain Access export.
 - [ ] Enable GitHub Pages on `alp-gpg/alp` from the `docs/` folder so the
       Sparkle appcast is served at <https://alp-gpg.github.io/alp/appcast.xml>.
 

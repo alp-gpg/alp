@@ -23,7 +23,7 @@
   - [x] First-run gpg install guidance in setup checklist
   - [ ] Pinentry-mac decision (bundle / brew / native)
   - [ ] Inline-PGP outgoing toggle for legacy recipients
-  - [ ] Per-account default signing key (`from -> fingerprint` map)
+  - [x] Per-account default signing key (`from -> fingerprint` map)
   - [ ] Services menu target (Encrypt / Decrypt / Sign / Verify selection)
   - [ ] Sparkle auto-update wiring (EdDSA-signed appcast)
 

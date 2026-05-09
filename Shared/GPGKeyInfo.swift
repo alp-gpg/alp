@@ -59,6 +59,18 @@ struct GPGKeyInfo: Codable, Identifiable, Hashable {
         userIDs.first ?? fingerprint
     }
 
+    /// Lowercased addresses extracted from each UID's angle-bracketed
+    /// `<email@host>` segment. UIDs without a bracketed address are skipped.
+    var emails: [String] {
+        userIDs.compactMap { uid in
+            guard let lt = uid.firstIndex(of: "<"),
+                  let gt = uid.lastIndex(of: ">"),
+                  lt < gt else { return nil }
+            let address = uid[uid.index(after: lt) ..< gt]
+            return String(address).lowercased()
+        }
+    }
+
     /// Name-only portion of the primary UID, stripped of the email address.
     /// E.g. "Alice Example <alice@example.com>" → "Alice Example"
     var shortName: String {

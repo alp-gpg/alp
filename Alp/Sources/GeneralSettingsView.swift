@@ -3,6 +3,8 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @Bindable var vm: SettingsViewModel
 
+    @State private var showingGPGInstaller = false
+
     var body: some View {
         Form {
             if !vm.setupComplete {
@@ -114,6 +116,9 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("General")
+        .sheet(isPresented: $showingGPGInstaller) {
+            GPGInstallerSheet { Task { await vm.refreshHealth() } }
+        }
     }
 
     // MARK: – Keys
@@ -258,7 +263,11 @@ struct GeneralSettingsView: View {
 
     @ViewBuilder
     private var gpgAction: some View {
-        if vm.healthStatus?.allPassed != true {
+        if vm.healthStatus?.gpgPath == nil, vm.helperStatus == .enabled, !vm.isCheckingHealth {
+            // gpg is not installed at all — offer concrete install paths
+            // instead of the generic "Recheck" button which leads nowhere.
+            Button("Install GnuPG…") { showingGPGInstaller = true }
+        } else if vm.healthStatus?.allPassed != true {
             Button("Recheck") {
                 Task { await vm.refreshHealth() }
             }

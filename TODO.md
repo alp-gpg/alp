@@ -20,7 +20,7 @@
   - [x] Helper RPCs: `changePassphrase`, `setExpiry`, `revokePrimaryKey`
   - [x] Settings UI: per-row lifecycle actions + generate-key sheet
   - [x] WKD lookup fallback (advanced + direct method)
-  - [ ] First-run gpg install guidance in setup checklist
+  - [x] First-run gpg install guidance in setup checklist
   - [ ] Pinentry-mac decision (bundle / brew / native)
   - [ ] Inline-PGP outgoing toggle for legacy recipients
   - [ ] Per-account default signing key (`from -> fingerprint` map)

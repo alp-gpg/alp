@@ -7,6 +7,11 @@
       `APPLE_ID_PASSWORD`, `APPLE_TEAM_ID`)
 - [ ] Create `alp-gpg/homebrew-tap` repo with cask formula derived from
       `scripts/alp.rb.template`
+- [ ] **Run Sparkle `generate_keys` once** and paste the public key into
+      `Alp/SupportingFiles/Info.plist` as `SUPublicEDKey`. See
+      [`BUILDING.md`](BUILDING.md#releasing-one-time-sparkle-key-setup).
+- [ ] Enable GitHub Pages on `rhaist/alp` from the `docs/` folder so the
+      Sparkle appcast is served at <https://rhaist.github.io/alp/appcast.xml>.
 
 ## In Progress
 
@@ -25,7 +30,7 @@
   - [x] Inline-PGP outgoing toggle for legacy recipients
   - [x] Per-account default signing key (`from -> fingerprint` map)
   - [x] Services menu (Decrypt / Verify / Sign selection — encrypt deferred)
-  - [ ] Sparkle auto-update wiring (EdDSA-signed appcast)
+  - [x] Sparkle auto-update wiring (EdDSA-signed appcast)
 
 ## Future / Deferred
 

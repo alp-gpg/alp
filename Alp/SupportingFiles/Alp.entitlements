@@ -10,5 +10,19 @@
     <array>
         <string>group.app.alp.Alp</string>
     </array>
+    <!--
+        Sparkle 2 ships its installer + downloader as XPC services. Sandboxed
+        apps need a mach-lookup exception so the in-process Sparkle framework
+        can talk to them. Names match Sparkle's sandboxing docs exactly; the
+        $(TeamIdentifierPrefix) prefix scopes them to our Team ID.
+    -->
+    <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+    <array>
+        <string>$(TeamIdentifierPrefix)org.sparkle-project.InstallerLauncher</string>
+        <string>$(TeamIdentifierPrefix)org.sparkle-project.Downloader</string>
+    </array>
+    <!-- Sparkle writes the staged update to a user-selected location. -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
 </dict>
 </plist>

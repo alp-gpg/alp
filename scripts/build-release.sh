@@ -75,4 +75,21 @@ create-dmg \
 # Sign DMG
 codesign --force --sign "${DEVELOPER_ID_APPLICATION}" "$DMG_PATH"
 
+# Sparkle signature for the appcast. `sign_update` reads the EdDSA private
+# key from the login Keychain (created once via `generate_keys`). Output is
+# `sparkle:edSignature="..." length=...` ready to drop into appcast.xml.
+SIGN_UPDATE="$(xcrun --find sign_update 2>/dev/null || true)"
+if [[ -z "${SIGN_UPDATE}" ]]; then
+    SIGN_UPDATE="$(command -v sign_update || true)"
+fi
+if [[ -n "${SIGN_UPDATE}" ]]; then
+    echo "==> Generating Sparkle signature..."
+    SPARKLE_LINE="$("$SIGN_UPDATE" "$DMG_PATH")"
+    echo "$SPARKLE_LINE" | tee "build/Alp-${VERSION}.sparkle.txt"
+    echo "==> Paste the line above into docs/appcast.xml as the <enclosure> attributes."
+else
+    echo "Warning: sign_update not found on PATH — appcast signature step skipped." >&2
+    echo "         Install Sparkle CLI tools or run sign_update manually on $DMG_PATH." >&2
+fi
+
 echo "==> Done: $DMG_PATH"

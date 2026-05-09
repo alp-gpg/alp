@@ -21,6 +21,14 @@
         <key>NSAllowsArbitraryLoads</key>
         <false/>
     </dict>
+    <key>SUFeedURL</key>
+    <string>https://rhaist.github.io/alp/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string></string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUEnableInstallerLauncherService</key>
+    <true/>
     <key>NSServices</key>
     <array>
         <dict>

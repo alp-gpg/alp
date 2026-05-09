@@ -19,6 +19,14 @@ let project = Project(
         defaultKnownRegions: ["en"],
         developmentRegion: "en",
     ),
+    packages: [
+        // Sparkle 2 powers auto-update for direct-DMG installs. brew users
+        // upgrade via `brew upgrade --cask`; Sparkle covers everyone else.
+        .remote(
+            url: "https://github.com/sparkle-project/Sparkle",
+            requirement: .upToNextMajor(from: "2.6.0"),
+        ),
+    ],
     settings: .settings(base: baseSettings),
     targets: [
         // ── Main App ───────────────────────────────────────────────────
@@ -66,6 +74,7 @@ let project = Project(
             dependencies: [
                 .target(name: "AlpExtension"),
                 .target(name: "AlpHelper"),
+                .package(product: "Sparkle"),
             ],
             settings: .settings(
                 base: [

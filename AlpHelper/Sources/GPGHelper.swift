@@ -170,6 +170,18 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return (stdout, micalg)
     }
 
+    func _clearsign(_ data: Data, signer: String) async throws -> Data {
+        guard Self.isValidFingerprint(signer) else {
+            throw GPGError.encodingError("invalid signer fingerprint")
+        }
+        let args = [
+            "--batch", "--yes", "--armor",
+            "--clearsign", "--local-user", signer,
+            "--output", "-",
+        ]
+        return try await runGPG(args, input: data)
+    }
+
     /// Parses the RFC 4880 hash algorithm number from gpg's SIG_CREATED status line
     /// and maps it to the RFC 3156 micalg name. Format:
     ///   [GNUPG:] SIG_CREATED <type> <pubkey_algo> <hash_algo> <class> <timestamp> <keyfpr>
@@ -848,6 +860,26 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(nil, nil, e.asNSError)
             } catch {
                 reply(nil, nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func clearsign(
+        data: Data,
+        signingFingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    ) {
+        guard data.count <= Self.maxPayloadSize else {
+            reply(nil, GPGError.encodingError("payload too large").asNSError); return
+        }
+        Task {
+            do {
+                let signed = try await self._clearsign(data, signer: signingFingerprint)
+                reply(signed, nil)
+            } catch let e as GPGError {
+                reply(nil, e.asNSError)
+            } catch {
+                reply(nil, error as NSError)
             }
         }
     }

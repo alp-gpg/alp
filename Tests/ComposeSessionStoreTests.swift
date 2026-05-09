@@ -40,10 +40,11 @@ struct ComposeSessionStoreTests {
         )
 
         // A different compose window queries state before its session registers.
-        let (shouldSign, shouldEncrypt, signer) = store.state(forContextID: UUID())
+        let (shouldSign, shouldEncrypt, signer, inline) = store.state(forContextID: UUID())
         #expect(shouldSign == false) // from defaults, not session A
         #expect(shouldEncrypt == false) // from defaults, not session A
         #expect(signer == nil) // from defaults, not session A
+        #expect(inline == false) // inline is per-message; never inherited
     }
 
     @Test
@@ -55,10 +56,24 @@ struct ComposeSessionStoreTests {
             sign: true, encrypt: true,
             signer: "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF",
         )
-        let (sign, encrypt, signer) = store.state(forContextID: ctx)
+        let (sign, encrypt, signer, _) = store.state(forContextID: ctx)
         #expect(sign == true)
         #expect(encrypt == true)
         #expect(signer == "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
+    }
+
+    @Test
+    func `inline-PGP flag round-trips`() throws {
+        let store = try makeStore()
+        let ctx = UUID()
+        store.register(
+            contextID: ctx, sessionID: UUID(),
+            sign: true, encrypt: false,
+            signer: "FEEDFACEFEEDFACEFEEDFACEFEEDFACEFEEDFACE",
+            useInlinePGP: true,
+        )
+        let (_, _, _, inline) = store.state(forContextID: ctx)
+        #expect(inline == true)
     }
 
     @Test
@@ -69,7 +84,7 @@ struct ComposeSessionStoreTests {
         store.register(contextID: ctx, sessionID: session, sign: false, encrypt: false, signer: nil)
         store.unregister(contextID: ctx, sessionID: session)
         // After unregister, query falls back to the default (sign=true).
-        let (sign, _, _) = store.state(forContextID: ctx)
+        let (sign, _, _, _) = store.state(forContextID: ctx)
         #expect(sign == true)
     }
 
@@ -80,7 +95,7 @@ struct ComposeSessionStoreTests {
             encryptDefault: true,
             signerDefault: "FEEDFACEFEEDFACEFEEDFACEFEEDFACEFEEDFACE",
         )
-        let (sign, encrypt, signer) = store.state(forContextID: UUID())
+        let (sign, encrypt, signer, _) = store.state(forContextID: UUID())
         #expect(sign == true)
         #expect(encrypt == true)
         #expect(signer == "FEEDFACEFEEDFACEFEEDFACEFEEDFACEFEEDFACE")

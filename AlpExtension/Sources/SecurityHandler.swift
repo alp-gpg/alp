@@ -105,7 +105,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 
         Task.detached {
             // Look up the correct session state by context ID.
-            let (shouldSign, shouldEncrypt, signerFP) = await MainActor.run {
+            let (shouldSign, shouldEncrypt, signerFP, useInlinePGP) = await MainActor.run {
                 ComposeSessionStore.shared.state(forContextID: contextID)
             }
 
@@ -116,6 +116,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     shouldSign: shouldSign,
                     shouldEncrypt: shouldEncrypt,
                     signerFingerprint: signerFP,
+                    useInlinePGP: useInlinePGP,
                 )
                 handler(MEMessageEncodingResult(
                     encodedMessage: encoded, signingError: nil, encryptionError: nil,
@@ -199,10 +200,17 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         shouldSign: Bool,
         shouldEncrypt: Bool,
         signerFingerprint: String?,
+        useInlinePGP: Bool = false,
     ) async throws -> MEEncodedOutgoingMessage {
         guard let rawData else {
             throw GPGError.encodingError("MEMessage has no rawData")
         }
+
+        // Inline mode is only viable for single-part text bodies because
+        // armored ciphertext or a clearsigned block has to land in a plain
+        // text/plain part — multipart messages with attachments fall back to
+        // PGP/MIME silently rather than refuse to send.
+        let inlineCandidate = useInlinePGP ? OutgoingMIMEParser.split(rawData) : nil
 
         if shouldEncrypt {
             var fingerprints: [String] = []
@@ -210,6 +218,17 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                 let (found, fp) = try await GPGXPCClient.shared.publicKeyExists(email: email)
                 guard found, let fp else { throw GPGError.missingKeys([email]) }
                 fingerprints.append(fp)
+            }
+            if let parsed = inlineCandidate {
+                let ciphertext = try await GPGXPCClient.shared.encrypt(
+                    parsed.body,
+                    recipients: fingerprints,
+                    signer: shouldSign ? signerFingerprint : nil,
+                )
+                return MEEncodedOutgoingMessage(
+                    rawData: inlinePGPMessage(headers: parsed.headers, body: ciphertext),
+                    isSigned: shouldSign, isEncrypted: true,
+                )
             }
             let ciphertext = try await GPGXPCClient.shared.encrypt(
                 rawData,
@@ -223,6 +242,16 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 
         if shouldSign {
             guard let fp = signerFingerprint else { throw GPGError.noSigningKey }
+            if let parsed = inlineCandidate {
+                // Clearsigning preserves the body as readable text wrapped in
+                // -----BEGIN PGP SIGNED MESSAGE----- markers; recipients on
+                // legacy clients can read the body even without PGP support.
+                let clearsigned = try await GPGXPCClient.shared.clearsign(parsed.body, signer: fp)
+                return MEEncodedOutgoingMessage(
+                    rawData: inlinePGPMessage(headers: parsed.headers, body: clearsigned),
+                    isSigned: true, isEncrypted: false,
+                )
+            }
             let canonicalBody = canonicalizeForSigning(rawData)
             let (signature, micalg) = try await GPGXPCClient.shared.sign(canonicalBody, signer: fp)
             return MEEncodedOutgoingMessage(
@@ -232,6 +261,18 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         }
 
         return MEEncodedOutgoingMessage(rawData: rawData, isSigned: false, isEncrypted: false)
+    }
+
+    /// Replaces the body of an outgoing RFC 822 message with `body`, rewriting
+    /// the Content-Type and Content-Transfer-Encoding headers to text/plain.
+    /// Original headers like Subject, From, To, Date, Message-ID survive.
+    private nonisolated static func inlinePGPMessage(headers: Data, body: Data) -> Data {
+        let rewritten = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers)
+        var out = Data()
+        out.append(rewritten)
+        out.appendUTF8("\r\n\r\n")
+        out.append(body)
+        return out
     }
 
     // MARK: – PGP/MIME builders

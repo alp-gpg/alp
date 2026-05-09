@@ -60,6 +60,20 @@ struct ComposeView: View {
                 }
             }
 
+            if vm.shouldEncrypt || vm.shouldSign {
+                Toggle(isOn: $vm.useInlinePGP) {
+                    Text("Inline")
+                        .font(.caption)
+                }
+                .toggleStyle(.button)
+                .controlSize(.mini)
+                .help(
+                    "Send as inline ASCII-armor (RFC 4880) for legacy recipients. Falls back to PGP/MIME for messages with attachments.",
+                )
+                .accessibilityLabel("Inline PGP")
+                .accessibilityValue(vm.useInlinePGP ? "On" : "Off")
+            }
+
             if vm.shouldEncrypt {
                 Button {
                     showingPrivacyTips.toggle()
@@ -82,6 +96,7 @@ struct ComposeView: View {
         .onChange(of: vm.shouldSign) { _, _ in vm.syncStateToStore() }
         .onChange(of: vm.shouldEncrypt) { _, _ in vm.syncStateToStore() }
         .onChange(of: vm.selectedSignerFingerprint) { _, _ in vm.syncStateToStore() }
+        .onChange(of: vm.useInlinePGP) { _, _ in vm.syncStateToStore() }
     }
 
     private var encryptTooltip: String {

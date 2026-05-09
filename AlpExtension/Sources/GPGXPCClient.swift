@@ -64,6 +64,16 @@ final class GPGXPCClient: @unchecked Sendable {
         }
     }
 
+    func clearsign(_ data: Data, signer: String) async throws -> Data {
+        try await call { proxy, resume in
+            proxy.clearsign(data: data, signingFingerprint: signer) { result, error in
+                if let error { resume(.failure(error)) }
+                else if let result { resume(.success(result)) }
+                else { resume(.failure(GPGError.encodingError("nil clearsigned output"))) }
+            }
+        }
+    }
+
     func verify(_ data: Data,
                 signature: Data? = nil) async throws -> (valid: Bool, signer: String?, signerName: String?)
     {

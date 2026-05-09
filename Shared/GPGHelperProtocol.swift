@@ -25,6 +25,17 @@ import Foundation
         reply: @escaping @Sendable (Data?, String?, NSError?) -> Void,
     )
 
+    /// Inline ASCII-armored signature wrapping the body in
+    /// `-----BEGIN PGP SIGNED MESSAGE-----` markers (`gpg --clearsign`).
+    /// Use for inline-PGP outgoing messages where recipients expect to read
+    /// the body as readable text.
+    /// reply: (clearsignedData?, error?)
+    func clearsign(
+        data: Data,
+        signingFingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    )
+
     /// reply: (valid, signerFingerprint?, signerDisplayName?, error?)
     func verify(
         data: Data,

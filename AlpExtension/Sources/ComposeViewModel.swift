@@ -9,6 +9,9 @@ final class ComposeViewModel {
     var missingKeyEmails: [String] = []
     var availableSecretKeys: [GPGKeyInfo] = []
     var selectedSignerFingerprint: String?
+    /// Per-message override: send as inline ASCII-armored PGP (RFC 4880)
+    /// instead of PGP/MIME. Off by default; on for legacy recipients.
+    var useInlinePGP: Bool = false
 
     var canSign: Bool {
         !availableSecretKeys.isEmpty
@@ -120,6 +123,7 @@ final class ComposeViewModel {
             sign: shouldSign,
             encrypt: shouldEncrypt,
             signer: selectedSignerFingerprint,
+            useInlinePGP: useInlinePGP,
         )
         // Persist per-account signer so the next compose window from the
         // same address picks the same key without the user re-selecting.

@@ -22,7 +22,7 @@
   - [x] WKD lookup fallback (advanced + direct method)
   - [x] First-run gpg install guidance in setup checklist
   - [x] Pinentry-mac decision (bundle / brew / native) — **brew**, see spec
-  - [ ] Inline-PGP outgoing toggle for legacy recipients
+  - [x] Inline-PGP outgoing toggle for legacy recipients
   - [x] Per-account default signing key (`from -> fingerprint` map)
   - [ ] Services menu target (Encrypt / Decrypt / Sign / Verify selection)
   - [ ] Sparkle auto-update wiring (EdDSA-signed appcast)

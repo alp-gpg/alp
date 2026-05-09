@@ -18,6 +18,10 @@ final class ComposeSessionStore {
         var shouldSign: Bool
         var shouldEncrypt: Bool
         var signerFingerprint: String?
+        /// True when the user picked inline ASCII-armor (RFC 4880) instead
+        /// of PGP/MIME (RFC 3156) for this message. Required by recipients on
+        /// older clients that can't decode multipart/encrypted bodies.
+        var useInlinePGP: Bool = false
     }
 
     private var sessions: [UUID: State] = [:]
@@ -37,9 +41,19 @@ final class ComposeSessionStore {
         UserDefaults(suiteName: BuildConfig.appGroup)
     }
 
-    func register(contextID: UUID, sessionID: UUID, sign: Bool, encrypt: Bool, signer: String?) {
+    func register(
+        contextID: UUID,
+        sessionID: UUID,
+        sign: Bool,
+        encrypt: Bool,
+        signer: String?,
+        useInlinePGP: Bool = false,
+    ) {
         sessions[sessionID] = State(
-            shouldSign: sign, shouldEncrypt: encrypt, signerFingerprint: signer,
+            shouldSign: sign,
+            shouldEncrypt: encrypt,
+            signerFingerprint: signer,
+            useInlinePGP: useInlinePGP,
         )
         contextToSession[contextID] = sessionID
     }
@@ -54,12 +68,15 @@ final class ComposeSessionStore {
     /// On miss the return value is read from UserDefaults, never from another
     /// session's state — borrowing from a different window would apply user A's
     /// encryption preference to user B's outgoing message.
-    func state(forContextID contextID: UUID) -> (shouldSign: Bool, shouldEncrypt: Bool, signerFingerprint: String?) {
+    func state(
+        forContextID contextID: UUID,
+    ) -> (shouldSign: Bool, shouldEncrypt: Bool, signerFingerprint: String?, useInlinePGP: Bool) {
         let state = contextToSession[contextID].flatMap { sessions[$0] }
         return (
             state?.shouldSign ?? shouldSignFallback,
             state?.shouldEncrypt ?? shouldEncryptFallback,
             state?.signerFingerprint ?? signerFingerprintFallback,
+            state?.useInlinePGP ?? false,
         )
     }
 

@@ -197,6 +197,16 @@ import Foundation
         reply: @escaping @Sendable (NSError?) -> Void,
     )
 
+    /// Bulk-delete subkeys in one `--edit-key` session so gpg-agent only
+    /// prompts for the passphrase once. Indices are 1-based to match
+    /// gpg's `key <n>` command. Empty input is a no-op.
+    /// reply: (error?) — error is nil on success.
+    func deleteSubkeys(
+        fingerprint: String,
+        subkeyIndices: [NSNumber],
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
     /// Append a new User ID to an existing primary key
     /// (`gpg --edit-key FP adduid save`). gpg-agent prompts for the
     /// passphrase via pinentry. Validation rules match `generatePrimaryKey`.

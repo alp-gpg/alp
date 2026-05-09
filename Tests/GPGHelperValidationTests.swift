@@ -245,6 +245,26 @@ struct GPGHelperEditKeyValidationTests {
     }
 
     @Test
+    func `deleteSubkeys rejects bad fingerprint or out-of-range index`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._deleteSubkeys("nope", subkeyIndices: [1, 2])
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._deleteSubkeys(valid, subkeyIndices: [1, 99])
+        }
+    }
+
+    @Test
+    func `deleteSubkeys is a no-op for empty input`() async throws {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        // Should not call gpg, should not throw.
+        try await helper._deleteSubkeys(valid, subkeyIndices: [])
+    }
+
+    @Test
     func `addUserID rejects malformed fingerprint`() async {
         let helper = GPGHelper()
         await #expect(throws: GPGError.self) {

@@ -492,6 +492,31 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         _ = try await runGPG(args, input: Data(commands.utf8))
     }
 
+    func _deleteSubkeys(
+        _ fingerprint: String,
+        subkeyIndices: [Int],
+    ) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard !subkeyIndices.isEmpty else { return }
+        for index in subkeyIndices {
+            guard index >= 1, index <= 50 else {
+                throw GPGError.encodingError("subkey indices must be 1..50")
+            }
+        }
+        // gpg --edit-key: each `key <n>` selects an additional subkey;
+        // delkey then removes every selected subkey in one go. y confirms,
+        // save persists. Single pinentry prompt for the whole batch.
+        let selectLines = subkeyIndices.map { "key \($0)" }.joined(separator: "\n")
+        let commands = "\(selectLines)\ndelkey\ny\nsave\n"
+        let args = [
+            "--command-fd", "0", "--status-fd", "2",
+            "--edit-key", fingerprint,
+        ]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
     func _addUserID(
         fingerprint: String,
         name: String,
@@ -1445,6 +1470,24 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         Task {
             do {
                 try await self._deleteSubkey(fingerprint, subkeyIndex: subkeyIndex)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func deleteSubkeys(
+        fingerprint: String,
+        subkeyIndices: [NSNumber],
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                let ints = subkeyIndices.map(\.intValue)
+                try await self._deleteSubkeys(fingerprint, subkeyIndices: ints)
                 reply(nil)
             } catch let e as GPGError {
                 reply(e.asNSError)

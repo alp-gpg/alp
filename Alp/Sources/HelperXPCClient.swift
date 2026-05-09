@@ -245,6 +245,21 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    func deleteSubkeys(
+        fingerprint: String,
+        subkeyIndices: [Int],
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.deleteSubkeys(
+                fingerprint: fingerprint,
+                subkeyIndices: subkeyIndices.map { NSNumber(value: $0) },
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     func addUserID(
         fingerprint: String,
         name: String,

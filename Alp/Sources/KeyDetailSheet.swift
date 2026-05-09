@@ -14,11 +14,16 @@ struct KeyDetailSheet: View {
     let onRevokeSubkey: (_ subkeyIndex: Int) async -> Void
     /// Called when the user picks "Delete" on a subkey row. Same indexing.
     let onDeleteSubkey: (_ subkeyIndex: Int) async -> Void
+    /// Called by the bulk "Clean up dead subkeys" action; the array is the
+    /// 1-based indices to drop. The host runs them in one helper call so
+    /// gpg-agent only prompts once.
+    let onCleanupSubkeys: (_ subkeyIndices: [Int]) async -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var uidIndexPendingRevoke: Int?
     @State private var subkeyPendingRevoke: Int?
     @State private var subkeyPendingDelete: Int?
+    @State private var showingCleanupAlert = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -155,10 +160,29 @@ struct KeyDetailSheet: View {
         }
     }
 
+    /// 1-based indices for subkeys that are revoked or expired — the
+    /// "dead" set the cleanup action targets.
+    private var deadSubkeyIndices: [Int] {
+        key.subkeys.enumerated().compactMap { offset, sub in
+            (sub.isRevoked || sub.isExpired) ? offset + 1 : nil
+        }
+    }
+
     private var subkeysSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Subkeys")
-                .font(.headline)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Subkeys")
+                    .font(.headline)
+                Spacer()
+                if key.hasSecretKey, !deadSubkeyIndices.isEmpty {
+                    Button("Clean up \(deadSubkeyIndices.count) dead", role: .destructive) {
+                        showingCleanupAlert = true
+                    }
+                    .controlSize(.small)
+                    .buttonStyle(.bordered)
+                    .help("Remove revoked or expired subkeys from the local keyring")
+                }
+            }
             ForEach(Array(key.subkeys.enumerated()), id: \.offset) { offset, sub in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -226,6 +250,17 @@ struct KeyDetailSheet: View {
         } message: {
             Text(
                 "Removes the subkey from the local keyring without producing a revocation. Other people who have already imported the key will still see it as valid. Prefer Revoke for compromised material.",
+            )
+        }
+        .alert("Clean up dead subkeys?", isPresented: $showingCleanupAlert) {
+            Button("Remove", role: .destructive) {
+                let indices = deadSubkeyIndices
+                Task { await onCleanupSubkeys(indices) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Removes the \(deadSubkeyIndices.count) revoked or expired subkey(s) from the local keyring in a single operation. The primary key and any active subkeys stay untouched. This is local-only; people who have already imported this key keep their copy of the dead subkeys.",
             )
         }
     }

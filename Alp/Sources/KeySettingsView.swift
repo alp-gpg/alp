@@ -228,6 +228,15 @@ struct KeySettingsView: View {
                         await vm.refreshKeys()
                     }
                 },
+                onCleanupSubkeys: { indices in
+                    await runHelperAction("Clean up subkeys") {
+                        try await HelperXPCClient.shared.deleteSubkeys(
+                            fingerprint: key.fingerprint,
+                            subkeyIndices: indices,
+                        )
+                        await vm.refreshKeys()
+                    }
+                },
             )
         }
         .sheet(item: $keyForAddUID) { key in

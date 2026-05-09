@@ -12,6 +12,7 @@ struct KeySettingsView: View {
     @State private var keyToDelete: KeyDeletionRequest?
     @State private var keyForUpload: GPGKeyInfo?
     @State private var keyForCertify: GPGKeyInfo?
+    @State private var keyForDetail: GPGKeyInfo?
     @State private var actionError: String?
 
     /// Pairs a key with the kind of delete the user requested so the confirm
@@ -195,6 +196,9 @@ struct KeySettingsView: View {
         .sheet(item: $keyForUpload) { key in
             PublishKeySheet(key: key)
         }
+        .sheet(item: $keyForDetail) { key in
+            KeyDetailSheet(key: key)
+        }
         .sheet(item: $keyForCertify) { key in
             CertifyKeySheet(key: key, signers: vm.secretKeys) { signerFP, exportable in
                 await runHelperAction("Certify key") {
@@ -245,6 +249,7 @@ struct KeySettingsView: View {
     private func contextMenu(for row: KeyRow) -> some View {
         switch row {
         case let .primary(key):
+            Button("Show Details…") { keyForDetail = key }
             Button("Copy fingerprint") { copyToPasteboard(key.fingerprint) }
             Button("Refresh from keyserver") {
                 Task { await refreshSingle(fingerprint: key.fingerprint) }

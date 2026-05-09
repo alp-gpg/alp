@@ -814,6 +814,8 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         var primaryCapabilities = ""
         var primaryExpiry: Date?
         var primaryOwnerTrust: String?
+        var primaryCreated: Date?
+        var primaryAlgorithm: String?
         var subkeys: [GPGSubkey] = []
 
         // Staging area for the subkey we're currently filling in. We can't
@@ -853,12 +855,16 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 expiryDate: primaryExpiry,
                 subkeys: subkeys,
                 ownerTrustCode: primaryOwnerTrust,
+                creationDate: primaryCreated,
+                algorithm: primaryAlgorithm,
             ))
             primaryFingerprint = nil
             primaryUIDs = []
             primaryCapabilities = ""
             primaryExpiry = nil
             primaryOwnerTrust = nil
+            primaryCreated = nil
+            primaryAlgorithm = nil
             subkeys = []
         }
 
@@ -881,6 +887,18 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 } else {
                     primaryOwnerTrust = nil
                 }
+                // Field 6 (creation timestamp) and the bits/algo/curve
+                // triple feed the inspector view's metadata block.
+                if fields.count > 5, let ts = TimeInterval(fields[5]), ts > 0 {
+                    primaryCreated = Date(timeIntervalSince1970: ts)
+                } else {
+                    primaryCreated = nil
+                }
+                primaryAlgorithm = Self.formatAlgorithm(
+                    id: fields.count > 3 ? fields[3] : "",
+                    bits: fields.count > 2 ? fields[2] : "",
+                    curve: fields.count > 16 ? fields[16] : "",
+                )
             } else if recordType.hasPrefix("sub") || recordType.hasPrefix("ssb") {
                 flushSubkey()
                 var pending = PendingSubkey()

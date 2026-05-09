@@ -49,6 +49,10 @@ struct GPGKeyInfo: Codable, Identifiable, Hashable {
     /// field 9 (one of `-`, `n`, `m`, `f`, `u`). nil when absent or not yet
     /// parsed. Use `OwnerTrust(rawValue:)` for a typed view.
     var ownerTrustCode: String?
+    /// Primary-key creation timestamp.
+    var creationDate: Date?
+    /// Primary-key algorithm description, mirroring `GPGSubkey.algorithm`.
+    var algorithm: String?
 
     var id: String {
         fingerprint
@@ -104,6 +108,8 @@ struct GPGKeyInfo: Codable, Identifiable, Hashable {
         expiryDate: Date? = nil,
         subkeys: [GPGSubkey] = [],
         ownerTrustCode: String? = nil,
+        creationDate: Date? = nil,
+        algorithm: String? = nil,
     ) {
         self.fingerprint = fingerprint
         self.userIDs = userIDs
@@ -112,6 +118,8 @@ struct GPGKeyInfo: Codable, Identifiable, Hashable {
         self.expiryDate = expiryDate
         self.subkeys = subkeys
         self.ownerTrustCode = ownerTrustCode
+        self.creationDate = creationDate
+        self.algorithm = algorithm
     }
 }
 

@@ -6,8 +6,12 @@ import SwiftUI
 /// the Keys table row itself any wider.
 struct KeyDetailSheet: View {
     let key: GPGKeyInfo
+    /// Called when the user picks "Revoke" on a UID. The argument is the
+    /// 1-based UID index gpg expects on its `uid <n>` edit-key command.
+    let onRevokeUID: (_ uidIndex: Int) async -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var uidIndexPendingRevoke: Int?
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -89,15 +93,58 @@ struct KeyDetailSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("User IDs")
                 .font(.headline)
-            ForEach(key.userIDs, id: \.self) { uid in
+            ForEach(Array(key.userIDs.enumerated()), id: \.offset) { offset, uid in
                 HStack(alignment: .top) {
                     Image(systemName: "person.text.rectangle")
                         .foregroundStyle(.secondary)
                     Text(uid)
                         .textSelection(.enabled)
                         .font(.callout)
+                    Spacer()
+                    if key.hasSecretKey, key.userIDs.count > 1 {
+                        Menu {
+                            Button("Revoke this UID…", role: .destructive) {
+                                // gpg uses 1-based UID indices.
+                                uidIndexPendingRevoke = offset + 1
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .help("UID actions")
+                    }
                 }
             }
+            if key.hasSecretKey, key.userIDs.count <= 1 {
+                Text("A key needs at least two UIDs before any can be revoked.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .alert(
+            "Revoke this UID?",
+            isPresented: Binding(
+                get: { uidIndexPendingRevoke != nil },
+                set: { if !$0 { uidIndexPendingRevoke = nil } },
+            ),
+        ) {
+            Button("Revoke", role: .destructive) {
+                if let idx = uidIndexPendingRevoke {
+                    Task {
+                        await onRevokeUID(idx)
+                        uidIndexPendingRevoke = nil
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                uidIndexPendingRevoke = nil
+            }
+        } message: {
+            Text(
+                "Revoking marks this User ID as no longer valid. The other UIDs on the key stay active. This cannot be undone.",
+            )
         }
     }
 

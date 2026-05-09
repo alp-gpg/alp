@@ -162,6 +162,28 @@ import Foundation
         reply: @escaping @Sendable (NSError?) -> Void,
     )
 
+    /// Append a new User ID to an existing primary key
+    /// (`gpg --edit-key FP adduid save`). gpg-agent prompts for the
+    /// passphrase via pinentry. Validation rules match `generatePrimaryKey`.
+    /// reply: (error?) — error is nil on success.
+    func addUserID(
+        fingerprint: String,
+        name: String,
+        email: String,
+        comment: String?,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Revoke an existing UID by its 1-based index
+    /// (`gpg --edit-key FP uid <n> revuid save`). Used to retire a stale
+    /// email without nuking the whole key.
+    /// reply: (error?) — error is nil on success.
+    func revokeUserID(
+        fingerprint: String,
+        uidIndex: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
     /// Generate a revocation certificate via `gpg --gen-revoke` and import it
     /// immediately, marking the local key as revoked.
     /// `reasonCode` follows RFC 4880 §5.2.3.23: 0=no reason, 1=compromised,

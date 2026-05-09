@@ -189,6 +189,58 @@ struct GPGHelperEditKeyValidationTests {
     }
 
     @Test
+    func `addUserID rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._addUserID(
+                fingerprint: "nope", name: "Alice", email: "a@b.co", comment: nil,
+            )
+        }
+    }
+
+    @Test
+    func `addUserID rejects forbidden chars in name`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._addUserID(
+                fingerprint: valid, name: "Alice <evil>", email: "a@b.co", comment: nil,
+            )
+        }
+    }
+
+    @Test
+    func `addUserID rejects malformed email`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._addUserID(
+                fingerprint: valid, name: "Alice", email: "no-at-sign", comment: nil,
+            )
+        }
+    }
+
+    @Test
+    func `revokeUserID rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._revokeUserID("nope", uidIndex: 1)
+        }
+    }
+
+    @Test
+    func `revokeUserID rejects out-of-range index`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._revokeUserID(valid, uidIndex: 0)
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._revokeUserID(valid, uidIndex: 51)
+        }
+    }
+
+    @Test
     func `setOwnerTrust rejects out-of-range level`() async {
         let helper = GPGHelper()
         let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"

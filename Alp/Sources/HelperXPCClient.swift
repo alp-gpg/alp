@@ -196,6 +196,34 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    func addUserID(
+        fingerprint: String,
+        name: String,
+        email: String,
+        comment: String?,
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.addUserID(
+                fingerprint: fingerprint,
+                name: name,
+                email: email,
+                comment: comment,
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func revokeUserID(fingerprint: String, uidIndex: Int) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.revokeUserID(fingerprint: fingerprint, uidIndex: uidIndex) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     func signKey(
         fingerprint: String,
         signer: String,

@@ -413,6 +413,59 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return fingerprint
     }
 
+    func _addUserID(
+        fingerprint: String,
+        name: String,
+        email: String,
+        comment: String?,
+    ) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1 ... 100).contains(trimmedName.count),
+              Self.isValidUserIDComponent(trimmedName)
+        else {
+            throw GPGError.encodingError("invalid name")
+        }
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidEmail(trimmedEmail) else {
+            throw GPGError.encodingError("invalid email")
+        }
+        let trimmedComment = comment?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedComment.isEmpty {
+            guard trimmedComment.count <= 100, Self.isValidUserIDComponent(trimmedComment) else {
+                throw GPGError.encodingError("invalid comment")
+            }
+        }
+        // adduid menu: name → email → comment → O (okay) → save.
+        let commands = "adduid\n\(trimmedName)\n\(trimmedEmail)\n\(trimmedComment)\nO\nsave\n"
+        let args = [
+            "--command-fd", "0", "--status-fd", "2",
+            "--edit-key", fingerprint,
+        ]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
+    func _revokeUserID(_ fingerprint: String, uidIndex: Int) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard uidIndex >= 1, uidIndex <= 50 else {
+            throw GPGError.encodingError("uidIndex must be a positive number ≤ 50")
+        }
+        // uid <n> selects, revuid revokes, y confirms, 4 = "User ID is no
+        // longer valid" reason code, empty description, y final confirm,
+        // save persists. The reason number tracks RFC 4880 §5.2.3.23 too —
+        // 4 maps to "user id no longer valid" in gpg's revuid prompt.
+        let commands = "uid \(uidIndex)\nrevuid\ny\n4\n\ny\nsave\n"
+        let args = [
+            "--command-fd", "0", "--status-fd", "2",
+            "--edit-key", fingerprint,
+        ]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
     func _signKey(
         fingerprint: String,
         signer: String,
@@ -1257,6 +1310,47 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(nil, e.asNSError)
             } catch {
                 reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func addUserID(
+        fingerprint: String,
+        name: String,
+        email: String,
+        comment: String?,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._addUserID(
+                    fingerprint: fingerprint,
+                    name: name,
+                    email: email,
+                    comment: comment,
+                )
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func revokeUserID(
+        fingerprint: String,
+        uidIndex: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._revokeUserID(fingerprint, uidIndex: uidIndex)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
             }
         }
     }

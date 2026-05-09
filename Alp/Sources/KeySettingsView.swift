@@ -13,6 +13,7 @@ struct KeySettingsView: View {
     @State private var keyForUpload: GPGKeyInfo?
     @State private var keyForCertify: GPGKeyInfo?
     @State private var keyForDetail: GPGKeyInfo?
+    @State private var keyForAddUID: GPGKeyInfo?
     @State private var actionError: String?
 
     /// Pairs a key with the kind of delete the user requested so the confirm
@@ -197,7 +198,19 @@ struct KeySettingsView: View {
             PublishKeySheet(key: key)
         }
         .sheet(item: $keyForDetail) { key in
-            KeyDetailSheet(key: key)
+            KeyDetailSheet(key: key) { uidIndex in
+                await runHelperAction("Revoke UID") {
+                    try await HelperXPCClient.shared.revokeUserID(
+                        fingerprint: key.fingerprint, uidIndex: uidIndex,
+                    )
+                    await vm.refreshKeys()
+                }
+            }
+        }
+        .sheet(item: $keyForAddUID) { key in
+            AddUserIDSheet(key: key) {
+                await vm.refreshKeys()
+            }
         }
         .sheet(item: $keyForCertify) { key in
             CertifyKeySheet(key: key, signers: vm.secretKeys) { signerFP, exportable in
@@ -285,6 +298,7 @@ struct KeySettingsView: View {
             }
 
             if key.hasSecretKey {
+                Button("Add User ID…") { keyForAddUID = key }
                 Button("Generate Revocation Certificate…") { keyForRevoke = key }
                 Button("Publish to keys.openpgp.org…") { keyForUpload = key }
             }

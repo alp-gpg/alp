@@ -7,6 +7,7 @@ struct KeySettingsView: View {
     @AppStorage("autoRefreshExpiredOnShow") private var autoRefresh = false
 
     @State private var searchQuery: String = ""
+    @State private var selection: KeyRow.ID?
     @State private var showingGenerateSheet = false
     @State private var keyForSetExpiry: GPGKeyInfo?
     @State private var keyForRevoke: GPGKeyInfo?
@@ -37,6 +38,20 @@ struct KeySettingsView: View {
             return lhs.displayName.localizedCompare(rhs.displayName) == .orderedAscending
         }
         return sorted.map { .primary($0) }
+    }
+
+    /// Resolves a Table selection id back to its KeyRow. Walks both
+    /// primary rows and their children so subkey selections work too.
+    private func row(for id: KeyRow.ID) -> KeyRow? {
+        for row in primaryRows {
+            if row.id == id { return row }
+            if let children = row.children {
+                for child in children where child.id == id {
+                    return child
+                }
+            }
+        }
+        return nil
     }
 
     /// Case-insensitive substring match against display name, every UID
@@ -80,13 +95,12 @@ struct KeySettingsView: View {
                             onCancel: { vm.expiredRefresher.cancel() },
                         )
                     }
-                    Table(of: KeyRow.self) {
+                    Table(of: KeyRow.self, selection: $selection) {
                         TableColumn("Type") { row in
                             HStack(spacing: 4) {
                                 KeyRowTypeLabel(row: row)
                                 rowStateBadge(for: row)
                             }
-                            .contextMenu { contextMenu(for: row) }
                         }
                         .width(90)
 
@@ -145,6 +159,15 @@ struct KeySettingsView: View {
                             } else {
                                 TableRow(primaryRow)
                             }
+                        }
+                    }
+                    .contextMenu(forSelectionType: KeyRow.ID.self) { ids in
+                        if let id = ids.first, let r = row(for: id) {
+                            contextMenu(for: r)
+                        }
+                    } primaryAction: { ids in
+                        if let id = ids.first, let r = row(for: id) {
+                            primaryAction(for: r)
                         }
                     }
                 }
@@ -307,6 +330,20 @@ struct KeySettingsView: View {
             key.isExpired && vm.keyserverStatus[key.fingerprint] == .found
         }
         vm.expiredRefresher.start(keys: candidates)
+    }
+
+    /// Triggered by double-click or Enter on a selected row. Opens the
+    /// detail inspector for primaries; for subkeys, opens the parent's
+    /// inspector — the parent is where every subkey-level action lives.
+    private func primaryAction(for row: KeyRow) {
+        switch row {
+        case let .primary(key):
+            keyForDetail = key
+        case let .subkey(_, parentFingerprint):
+            if let parent = vm.allKeys.first(where: { $0.fingerprint == parentFingerprint }) {
+                keyForDetail = parent
+            }
+        }
     }
 
     @ViewBuilder

@@ -24,7 +24,7 @@
   - [x] Pinentry-mac decision (bundle / brew / native) — **brew**, see spec
   - [x] Inline-PGP outgoing toggle for legacy recipients
   - [x] Per-account default signing key (`from -> fingerprint` map)
-  - [ ] Services menu target (Encrypt / Decrypt / Sign / Verify selection)
+  - [x] Services menu (Decrypt / Verify / Sign selection — encrypt deferred)
   - [ ] Sparkle auto-update wiring (EdDSA-signed appcast)
 
 ## Future / Deferred

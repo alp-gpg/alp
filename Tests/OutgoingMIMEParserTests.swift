@@ -45,7 +45,8 @@ struct OutgoingMIMEParserRewriteTests {
     @Test
     func `replaces Content-Type and adds Content-Transfer-Encoding`() {
         let headers = Data(
-            "Subject: Hi\r\nFrom: a@b.co\r\nContent-Type: text/html; charset=us-ascii\r\nContent-Transfer-Encoding: quoted-printable".utf8,
+            "Subject: Hi\r\nFrom: a@b.co\r\nContent-Type: text/html; charset=us-ascii\r\nContent-Transfer-Encoding: quoted-printable"
+                .utf8,
         )
         let out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers)
         let text = String(data: out, encoding: .utf8) ?? ""

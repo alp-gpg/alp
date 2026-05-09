@@ -26,7 +26,7 @@
   - [x] Keyserver upload + per-UID verification flow (Publish to keys.openpgp.org…)
   - [x] `signKey` + `setOwnerTrust` RPCs + per-row Certify / Trust UI
   - [x] Multi-keyserver fallback chain (proton.me, HKPS pool after WKD)
-  - [ ] Smartcard / YubiKey read-only status panel
+  - [x] Smartcard / YubiKey read-only status panel
   - [ ] Photo IDs surfaced in the Keys table
   - [ ] Localization pass with seed `de` + `fr` entries
 

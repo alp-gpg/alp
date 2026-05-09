@@ -65,6 +65,11 @@ import Foundation
     /// Check GPG environment health. reply: JSON-encoded GPGHealthStatus or error
     func checkHealth(reply: @escaping @Sendable (Data?, NSError?) -> Void)
 
+    /// Run `gpg --card-status --with-colons` and return a parsed
+    /// `GPGCardStatus`. The reply data is nil when no card is present;
+    /// the error path is reserved for genuine helper failures.
+    func cardStatus(reply: @escaping @Sendable (Data?, NSError?) -> Void)
+
     /// Export a public key as ASCII-armored data (`gpg --armor --export FP`).
     /// reply: (armoredKey?, error?)
     func exportPublicKey(

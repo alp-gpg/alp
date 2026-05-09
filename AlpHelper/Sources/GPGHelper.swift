@@ -570,6 +570,97 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     // MARK: – Health check
 
+    /// Returns nil when no card is present rather than throwing — the UI
+    /// uses presence as a hide/show signal, so a "no card" outcome is
+    /// expected and not an error condition.
+    func _cardStatus() async -> GPGCardStatus? {
+        let args = ["--card-status", "--with-colons"]
+        guard let result = try? await runGPGRaw(args), result.exitCode == 0 else {
+            return nil
+        }
+        guard let text = String(data: result.stdout, encoding: .utf8) else { return nil }
+        let parsed = Self.parseCardStatusColons(text)
+        return parsed.isPresent ? parsed : nil
+    }
+
+    /// Parses the colon-prefixed output of `gpg --card-status --with-colons`.
+    /// Public on the type so tests can exercise it without invoking gpg.
+    static func parseCardStatusColons(_ text: String) -> GPGCardStatus {
+        var manufacturer: String?
+        var serial: String?
+        var cardholder: String?
+        var version: String?
+        var pinRetries: [Int] = []
+        var fingerprints: [String] = ["", "", ""]
+        var algorithms: [String] = ["", "", ""]
+
+        for rawLine in text.components(separatedBy: "\n") {
+            let parts = rawLine.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+            guard let key = parts.first else { continue }
+            switch key {
+            case "vendor":
+                // vendor:<id>:<name>:
+                if parts.count >= 3, !parts[2].isEmpty { manufacturer = parts[2] }
+            case "serial":
+                if parts.count >= 2, !parts[1].isEmpty { serial = parts[1] }
+            case "name":
+                if parts.count >= 2, !parts[1].isEmpty {
+                    cardholder = parts[1].replacingOccurrences(of: "<<", with: " ")
+                }
+            case "version":
+                // 0303 → "3.3"
+                if parts.count >= 2, !parts[1].isEmpty {
+                    version = formatCardVersion(parts[1])
+                }
+            case "pinretry":
+                // pinretry:<user>:<reset>:<admin>:::
+                pinRetries = parts.dropFirst().compactMap { Int($0) }
+            case "fpr":
+                // fpr:<sig>:<dec>:<auth>:::
+                let raw = Array(parts.dropFirst().prefix(3))
+                for (i, fp) in raw.enumerated() where i < 3 {
+                    fingerprints[i] = fp
+                }
+            case "keyattr":
+                // keyattr:<slot>:<algoId>:<bits-or-curve>:...
+                if parts.count >= 4, let slot = Int(parts[1]), (1 ... 3).contains(slot) {
+                    algorithms[slot - 1] = formatKeyAttr(algoId: parts[2], curveOrBits: parts[3])
+                }
+            default:
+                continue
+            }
+        }
+
+        return GPGCardStatus(
+            manufacturer: manufacturer,
+            serial: serial,
+            cardholderName: cardholder,
+            version: version,
+            pinRetriesLeft: pinRetries,
+            keyFingerprints: fingerprints,
+            keyAlgorithms: algorithms,
+        )
+    }
+
+    private static func formatCardVersion(_ raw: String) -> String {
+        // gpg pads to 4 hex chars: "0303" → "3.3", "0304" → "3.4".
+        let padded = raw.count == 4 ? raw : raw.padding(toLength: 4, withPad: "0", startingAt: 0)
+        let major = Int(padded.prefix(2)) ?? 0
+        let minor = Int(padded.suffix(2)) ?? 0
+        return "\(major).\(minor)"
+    }
+
+    private static func formatKeyAttr(algoId: String, curveOrBits: String) -> String {
+        // RFC 4880 algorithm IDs the card status surface ever produces.
+        switch Int(algoId) {
+        case 1: curveOrBits.isEmpty ? "RSA" : "RSA \(curveOrBits)"
+        case 18, 19, 22:
+            curveOrBits.capitalized.isEmpty ? "ECC" : curveOrBits.capitalized
+        default:
+            curveOrBits
+        }
+    }
+
     func _checkHealth() async -> GPGHealthStatus {
         var status = GPGHealthStatus()
 
@@ -1035,6 +1126,20 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             do {
                 let data = try JSONEncoder().encode(status)
                 reply(data, nil)
+            } catch {
+                reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func cardStatus(reply: @escaping @Sendable (Data?, NSError?) -> Void) {
+        Task {
+            guard let status = await self._cardStatus() else {
+                reply(nil, nil) // no card present — not an error
+                return
+            }
+            do {
+                try reply(JSONEncoder().encode(status), nil)
             } catch {
                 reply(nil, error as NSError)
             }

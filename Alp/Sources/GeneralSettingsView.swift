@@ -75,6 +75,10 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if let card = vm.cardStatus, card.isPresent {
+                smartcardSection(card)
+            }
+
             Section("Privacy Limitations") {
                 Label {
                     VStack(alignment: .leading, spacing: 4) {
@@ -163,6 +167,58 @@ struct GeneralSettingsView: View {
     }
 
     @AppStorage("autoRefreshExpiredOnShow") private var autoRefreshExpiredOnShow = false
+
+    /// Read-only smartcard summary, hidden when no card is present. The
+    /// values come straight from the helper's card-status RPC.
+    private func smartcardSection(_ card: GPGCardStatus) -> some View {
+        Section("Smartcard") {
+            if let manufacturer = card.manufacturer {
+                LabeledContent("Manufacturer") { Text(manufacturer) }
+            }
+            if let serial = card.serial {
+                LabeledContent("Serial") {
+                    Text(serial)
+                        .font(.body.monospaced())
+                        .textSelection(.enabled)
+                }
+            }
+            if let cardholder = card.cardholderName {
+                LabeledContent("Cardholder") { Text(cardholder) }
+            }
+            if let version = card.version {
+                LabeledContent("OpenPGP version") { Text(version) }
+            }
+            if !card.pinRetriesLeft.isEmpty {
+                LabeledContent("PIN attempts left") {
+                    Text(card.pinRetriesLeft.map(String.init).joined(separator: " / "))
+                        .font(.body.monospaced())
+                        .help("user PIN / reset code / admin PIN")
+                }
+            }
+            ForEach(Array(zip(["Sign", "Encrypt", "Auth"], card.keyFingerprints).enumerated()), id: \.0) { idx, pair in
+                let (slot, fp) = pair
+                let algorithm = idx < card.keyAlgorithms.count ? card.keyAlgorithms[idx] : ""
+                if !fp.isEmpty {
+                    LabeledContent("\(slot) key") {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(fp)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                            if !algorithm.isEmpty {
+                                Text(algorithm)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            Button("Refresh") {
+                Task { await vm.refreshCardStatus() }
+            }
+            .controlSize(.small)
+        }
+    }
 
     @AppStorage(KeyserverSession.strictPinningDefaultsKey, store: UserDefaults(suiteName: BuildConfig.appGroup))
     private var strictKeyserverPinning = false

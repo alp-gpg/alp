@@ -98,6 +98,21 @@ final class SettingsViewModel {
     var helperUnresponsive = false
     private var healthCheckTask: Task<Void, Never>?
 
+    // MARK: – Smartcard
+
+    /// Most recent smartcard read; nil when no card is inserted or the
+    /// helper hasn't been queried yet. The General settings view hides
+    /// the Smartcard section based on this value.
+    var cardStatus: GPGCardStatus?
+
+    func refreshCardStatus() async {
+        do {
+            cardStatus = try await HelperXPCClient.shared.cardStatus()
+        } catch {
+            cardStatus = nil
+        }
+    }
+
     func refreshHealth() async {
         isCheckingHealth = true
         defer { isCheckingHealth = false }
@@ -161,6 +176,7 @@ final class SettingsViewModel {
         if helperStatus == .enabled {
             await refreshKeys()
             await refreshHealth()
+            await refreshCardStatus()
         }
     }
 

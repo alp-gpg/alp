@@ -49,6 +49,26 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    /// Returns nil when no smartcard is present. Errors propagate as
+    /// thrown errors only for genuine helper failures.
+    func cardStatus() async throws -> GPGCardStatus? {
+        try await call { proxy, resume in
+            proxy.cardStatus { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data {
+                    do {
+                        let status = try JSONDecoder().decode(GPGCardStatus.self, from: data)
+                        resume(.success(Optional(status)))
+                    } catch {
+                        resume(.failure(error))
+                    }
+                } else {
+                    resume(.success(nil))
+                }
+            }
+        }
+    }
+
     func checkHealth() async throws -> GPGHealthStatus {
         try await call { proxy, resume in
             proxy.checkHealth { data, error in

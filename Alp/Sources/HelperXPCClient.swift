@@ -31,15 +31,6 @@ final class HelperXPCClient: @unchecked Sendable {
         return conn
     }
 
-    func listSecretKeys() async throws -> [GPGKeyInfo] {
-        try await call { proxy, resume in
-            proxy.listSecretKeys { dataList, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(Self.decodeKeys(dataList))) }
-            }
-        }
-    }
-
     func listAllKeys() async throws -> [GPGKeyInfo] {
         try await call { proxy, resume in
             proxy.listAllKeys { dataList, error in
@@ -332,40 +323,12 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
-    func encrypt(
-        _ data: Data,
-        recipients: [String],
-        signer: String? = nil,
-    ) async throws -> Data {
-        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
-            proxy.encrypt(
-                data: data,
-                recipientFingerprints: recipients,
-                signingFingerprint: signer,
-            ) { result, error in
-                if let error { resume(.failure(error)) }
-                else if let result { resume(.success(result)) }
-                else { resume(.failure(GPGError.encodingError("nil ciphertext"))) }
-            }
-        }
-    }
-
     func decrypt(_ data: Data) async throws -> (plaintext: Data, signer: String?, signerName: String?) {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.decrypt(data: data) { plain, signer, signerName, error in
                 if let error { resume(.failure(error)) }
                 else if let plain { resume(.success((plain, signer, signerName))) }
                 else { resume(.failure(GPGError.decryptionFailed("nil plaintext"))) }
-            }
-        }
-    }
-
-    func sign(_ data: Data, signer: String) async throws -> (signature: Data, micalg: String) {
-        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
-            proxy.sign(data: data, signingFingerprint: signer) { sig, micalg, error in
-                if let error { resume(.failure(error)) }
-                else if let sig { resume(.success((sig, micalg ?? "pgp-sha256"))) }
-                else { resume(.failure(GPGError.encodingError("nil signature"))) }
             }
         }
     }

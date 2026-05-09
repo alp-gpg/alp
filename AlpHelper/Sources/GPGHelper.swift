@@ -349,6 +349,93 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         _ = try await runGPG(args)
     }
 
+    func _generatePrimaryKey(
+        name: String,
+        email: String,
+        comment: String?,
+        expiryDays: Int,
+    ) async throws -> String {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1 ... 100).contains(trimmedName.count),
+              Self.isValidUserIDComponent(trimmedName)
+        else {
+            throw GPGError.encodingError("name must be 1..100 chars without <>() or control characters")
+        }
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidEmail(trimmedEmail) else {
+            throw GPGError.encodingError("invalid email")
+        }
+        let trimmedComment = comment?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedComment, !trimmedComment.isEmpty {
+            guard trimmedComment.count <= 100, Self.isValidUserIDComponent(trimmedComment) else {
+                throw GPGError.encodingError("comment must be ≤ 100 chars without <>() or control characters")
+            }
+        }
+        guard (0 ... 36500).contains(expiryDays) else {
+            throw GPGError.encodingError("expiryDays must be 0..36500")
+        }
+
+        let userID = if let trimmedComment, !trimmedComment.isEmpty {
+            "\(trimmedName) (\(trimmedComment)) <\(trimmedEmail)>"
+        } else {
+            "\(trimmedName) <\(trimmedEmail)>"
+        }
+        let expire = expiryDays == 0 ? "0" : "\(expiryDays)d"
+
+        // `--quick-gen-key` with both algo args = "default" produces an Ed25519
+        // sign primary plus a Cv25519 encrypt subkey on gpg ≥ 2.4. Older 2.2/2.3
+        // builds default to RSA — version is checked elsewhere by the health
+        // check. gpg-agent handles passphrase pinentry; we only read status.
+        let args = [
+            "--batch", "--status-fd", "2",
+            "--quick-gen-key", userID, "default", "default", expire,
+        ]
+        let (_, stderr, exitCode) = try await runGPGRaw(args)
+        let stderrText = String(data: stderr, encoding: .utf8) ?? ""
+        guard exitCode == 0 else {
+            throw GPGError.processError(exitCode: exitCode, stderr: stderrText)
+        }
+        guard let fingerprint = Self.parseKeyCreatedFingerprint(from: stderrText) else {
+            throw GPGError.processError(exitCode: 0, stderr: "no KEY_CREATED line in: \(stderrText)")
+        }
+        return fingerprint
+    }
+
+    static func isValidUserIDComponent(_ value: String) -> Bool {
+        for scalar in value.unicodeScalars {
+            if scalar.value < 0x20 || scalar.value == 0x7F { return false }
+            if scalar == "<" || scalar == ">" || scalar == "(" || scalar == ")" {
+                return false
+            }
+        }
+        return true
+    }
+
+    static func isValidEmail(_ value: String) -> Bool {
+        guard (5 ... 254).contains(value.count) else { return false }
+        guard value.firstMatch(of: #/^[^\s<>()@]+@[^\s<>()@]+\.[^\s<>()@]+$/#) != nil else {
+            return false
+        }
+        return true
+    }
+
+    /// Parses the new key's fingerprint from gpg's `KEY_CREATED` status line.
+    /// Format: `[GNUPG:] KEY_CREATED <type> <fingerprint> [handle]`.
+    /// Type is `B` (both primary+sub), `P` (primary only), or `S` (sub).
+    static func parseKeyCreatedFingerprint(from statusText: String) -> String? {
+        for rawLine in statusText.components(separatedBy: "\n") {
+            let parts = rawLine.split(whereSeparator: \.isWhitespace).map(String.init)
+            guard let idx = parts.firstIndex(of: "KEY_CREATED"),
+                  parts.count > idx + 2
+            else { continue }
+            let fingerprint = parts[idx + 2]
+            if fingerprint.count == 40, fingerprint.allSatisfy(\.isHexDigit) {
+                return fingerprint
+            }
+        }
+        return nil
+    }
+
     func _publicKeyExists(email: String) async throws -> (Bool, String?) {
         let args = ["--list-keys", "--with-colons", "--", email]
         do {
@@ -874,6 +961,30 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(e.asNSError)
             } catch {
                 reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func generatePrimaryKey(
+        name: String,
+        email: String,
+        comment: String?,
+        expiryDays: Int,
+        reply: @escaping @Sendable (String?, NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                let fp = try await self._generatePrimaryKey(
+                    name: name,
+                    email: email,
+                    comment: comment,
+                    expiryDays: expiryDays,
+                )
+                reply(fp, nil)
+            } catch let e as GPGError {
+                reply(nil, e.asNSError)
+            } catch {
+                reply(nil, error as NSError)
             }
         }
     }

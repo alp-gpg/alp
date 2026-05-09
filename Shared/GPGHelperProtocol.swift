@@ -84,4 +84,22 @@ import Foundation
         fingerprint: String,
         reply: @escaping @Sendable (NSError?) -> Void,
     )
+
+    /// Generate a new Ed25519 sign + Cv25519 encrypt primary/subkey pair using
+    /// `gpg --quick-gen-key`. gpg-agent will prompt for the passphrase via the
+    /// user's configured pinentry; the helper does not collect or proxy it.
+    ///
+    /// - name: real name (≤ 100 chars, no `<>()` or control characters).
+    /// - email: RFC 5322-ish address (5..254 chars).
+    /// - comment: optional UID comment (same constraints as name).
+    /// - expiryDays: 0 for "never", otherwise 1..36500.
+    ///
+    /// reply: (newFingerprint?, error?)
+    func generatePrimaryKey(
+        name: String,
+        email: String,
+        comment: String?,
+        expiryDays: Int,
+        reply: @escaping @Sendable (String?, NSError?) -> Void,
+    )
 }

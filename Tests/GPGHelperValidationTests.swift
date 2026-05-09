@@ -62,6 +62,90 @@ struct GPGHelperLifecycleValidationTests {
             try await helper._deleteSecretKey(String(repeating: "Z", count: 40))
         }
     }
+
+    @Test
+    func `generatePrimaryKey rejects empty name`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._generatePrimaryKey(
+                name: "   ", email: "x@example.com", comment: nil, expiryDays: 730,
+            )
+        }
+    }
+
+    @Test
+    func `generatePrimaryKey rejects forbidden characters in name`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._generatePrimaryKey(
+                name: "Alice <evil>", email: "a@example.com", comment: nil, expiryDays: 365,
+            )
+        }
+    }
+
+    @Test
+    func `generatePrimaryKey rejects malformed email`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._generatePrimaryKey(
+                name: "Alice", email: "not-an-email", comment: nil, expiryDays: 365,
+            )
+        }
+    }
+
+    @Test
+    func `generatePrimaryKey rejects out-of-range expiry`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._generatePrimaryKey(
+                name: "Alice", email: "a@example.com", comment: nil, expiryDays: -1,
+            )
+        }
+        await #expect(throws: GPGError.self) {
+            _ = try await helper._generatePrimaryKey(
+                name: "Alice", email: "a@example.com", comment: nil, expiryDays: 36501,
+            )
+        }
+    }
+}
+
+@Suite("GPGHelper key-generation parser")
+struct GPGHelperKeyGenParserTests {
+    @Test
+    func `parseKeyCreatedFingerprint extracts fingerprint from B line`() {
+        let status = "[GNUPG:] KEY_CONSIDERED 0\n[GNUPG:] KEY_CREATED B ABCDEF0123456789ABCDEF0123456789ABCDEF01\n"
+        #expect(
+            GPGHelper.parseKeyCreatedFingerprint(from: status)
+                == "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
+        )
+    }
+
+    @Test
+    func `parseKeyCreatedFingerprint returns nil when KEY_CREATED is absent`() {
+        #expect(GPGHelper.parseKeyCreatedFingerprint(from: "[GNUPG:] KEY_CONSIDERED 0\n") == nil)
+        #expect(GPGHelper.parseKeyCreatedFingerprint(from: "") == nil)
+    }
+
+    @Test
+    func `parseKeyCreatedFingerprint rejects non-fingerprint payload`() {
+        // gpg output where the third token isn't a 40-char hex fingerprint
+        let status = "[GNUPG:] KEY_CREATED B not-a-fingerprint\n"
+        #expect(GPGHelper.parseKeyCreatedFingerprint(from: status) == nil)
+    }
+
+    @Test
+    func `isValidEmail accepts simple addresses`() {
+        #expect(GPGHelper.isValidEmail("a@b.co"))
+        #expect(GPGHelper.isValidEmail("user.name+tag@example.com"))
+    }
+
+    @Test
+    func `isValidEmail rejects malformed addresses`() {
+        #expect(!GPGHelper.isValidEmail(""))
+        #expect(!GPGHelper.isValidEmail("no-at-sign"))
+        #expect(!GPGHelper.isValidEmail("a@b"))
+        #expect(!GPGHelper.isValidEmail("alice <a@b.co>"))
+    }
 }
 
 @Suite("GPGHelper micalg parsing")

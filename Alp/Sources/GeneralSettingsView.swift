@@ -54,6 +54,27 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Updates") {
+                Toggle(isOn: $automaticUpdateChecks) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Automatically check for updates")
+                            Image(systemName: "shield.lefthalf.filled")
+                                .foregroundStyle(.green)
+                                .help("Recommended for security")
+                        }
+                        Text(
+                            "Strongly recommended. Off by default because a security tool should not phone home without consent. Turning this on lets Alp pull cert-pin rotations and helper bug fixes from alp-gpg.github.io as soon as they ship.",
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                Text("Manual check: Alp menu → Check for Updates…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Privacy Limitations") {
                 Label {
                     VStack(alignment: .leading, spacing: 4) {
@@ -145,6 +166,11 @@ struct GeneralSettingsView: View {
 
     @AppStorage(KeyserverSession.strictPinningDefaultsKey, store: UserDefaults(suiteName: BuildConfig.appGroup))
     private var strictKeyserverPinning = false
+
+    /// Sparkle reads `SUEnableAutomaticChecks` from standard UserDefaults at
+    /// runtime; the Info.plist value seeds the default. Writing here is what
+    /// the next launch's `SPUUpdater` picks up.
+    @AppStorage("SUEnableAutomaticChecks") private var automaticUpdateChecks = false
 
     // MARK: – Setup Checklist
 

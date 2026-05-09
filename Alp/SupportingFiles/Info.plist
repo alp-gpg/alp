@@ -25,8 +25,17 @@
     <string>https://alp-gpg.github.io/alp/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string></string>
+    <!--
+        Default off so a fresh install does not phone home for update checks
+        without user consent — Alp is a privacy-focused tool. Users opt in
+        via the "Updates" section in General settings. We strongly recommend
+        flipping this on so security fixes (cert-pin rotations, helper
+        bugfixes) reach users quickly.
+    -->
     <key>SUEnableAutomaticChecks</key>
-    <true/>
+    <false/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
     <key>SUEnableInstallerLauncherService</key>
     <true/>
     <key>NSServices</key>

@@ -40,16 +40,18 @@ struct KeySettingsView: View {
     }
 
     /// Case-insensitive substring match against display name, every UID
-    /// email, and the full fingerprint. Empty query returns every key.
-    /// `nonisolated` so unit tests can call it without hopping the main
-    /// actor; SwiftUI `View` is implicitly `@MainActor` otherwise.
+    /// email, the primary fingerprint, and any subkey fingerprint. Empty
+    /// query returns every key. `nonisolated` so unit tests can call it
+    /// without hopping the main actor; SwiftUI `View` is implicitly
+    /// `@MainActor` otherwise.
     nonisolated static func matching(query: String, in keys: [GPGKeyInfo]) -> [GPGKeyInfo] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmed.isEmpty else { return keys }
         return keys.filter { key in
             if key.fingerprint.lowercased().contains(trimmed) { return true }
             if key.displayName.lowercased().contains(trimmed) { return true }
-            return key.emails.contains { $0.contains(trimmed) }
+            if key.emails.contains(where: { $0.contains(trimmed) }) { return true }
+            return key.subkeys.contains { $0.fingerprint.lowercased().contains(trimmed) }
         }
     }
 
@@ -62,16 +64,11 @@ struct KeySettingsView: View {
                 ContentUnavailableView {
                     Label("No Keys Found", systemImage: "key.slash")
                 } description: {
-                    Text("No GPG keys were found.")
+                    Text("Generate a new Ed25519 + Cv25519 pair, or import an existing armored key file.")
                 } actions: {
+                    Button("Generate Key…") { showingGenerateSheet = true }
+                        .buttonStyle(.borderedProminent)
                     Button("Import Key File…") { importKeyFromFile() }
-                    Text("or generate one in Terminal:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("gpg --full-generate-key")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
                 }
             } else {
                 VStack(spacing: 0) {
@@ -368,8 +365,11 @@ struct KeySettingsView: View {
             Button("Delete Key…", role: .destructive) {
                 keyToDelete = .init(key: key, secretOnly: false)
             }
-        case let .subkey(sub, _):
+        case let .subkey(sub, parentFingerprint):
             Button("Copy fingerprint") { copyToPasteboard(sub.fingerprint) }
+            if let parent = vm.allKeys.first(where: { $0.fingerprint == parentFingerprint }) {
+                Button("Show Details on Primary…") { keyForDetail = parent }
+            }
         }
     }
 
@@ -408,12 +408,9 @@ struct KeySettingsView: View {
     }
 
     private func refreshSingle(fingerprint: String) async {
-        let service = KeyserverRefreshService()
-        do {
-            _ = try await service.refresh(fingerprint: fingerprint)
+        await runHelperAction("Refresh from keyserver") {
+            _ = try await KeyserverRefreshService().refresh(fingerprint: fingerprint)
             await vm.refreshKeys()
-        } catch {
-            vm.helperError = error.localizedDescription
         }
     }
 
@@ -425,12 +422,10 @@ struct KeySettingsView: View {
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task {
-            do {
+            await runHelperAction("Import key") {
                 let data = try Data(contentsOf: url)
                 _ = try await HelperXPCClient.shared.importKey(data)
                 await vm.refreshKeys()
-            } catch {
-                vm.helperError = error.localizedDescription
             }
         }
     }

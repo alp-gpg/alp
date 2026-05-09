@@ -58,4 +58,24 @@ struct KeysSearchFilterTests {
         let result = KeySettingsView.matching(query: "nope", in: [alice, bob])
         #expect(result.isEmpty)
     }
+
+    @Test
+    func `matches against subkey fingerprint`() {
+        let withSubkey = GPGKeyInfo(
+            fingerprint: "1111222233334444555566667777888899990000",
+            userIDs: ["Carol <c@example.org>"],
+            capabilities: "scESC",
+            subkeys: [
+                GPGSubkey(
+                    fingerprint: "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555",
+                    capabilities: "e",
+                    expiryDate: nil,
+                    algorithm: "Cv25519",
+                    isRevoked: false,
+                ),
+            ],
+        )
+        let result = KeySettingsView.matching(query: "aaaa1111", in: [alice, bob, withSubkey])
+        #expect(result == [withSubkey])
+    }
 }

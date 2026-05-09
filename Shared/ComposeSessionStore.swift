@@ -91,17 +91,4 @@ final class ComposeSessionStore {
     private var signerFingerprintFallback: String? {
         defaults?.string(forKey: "defaultSignerFingerprint")
     }
-
-    /// Legacy accessors for encoding-status calls (no context available).
-    var shouldSignDefault: Bool {
-        shouldSignFallback
-    }
-
-    var shouldEncryptDefault: Bool {
-        shouldEncryptFallback
-    }
-
-    var signerFingerprintDefault: String? {
-        signerFingerprintFallback
-    }
 }

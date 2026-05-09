@@ -410,8 +410,7 @@ struct KeySettingsView: View {
         Task {
             do {
                 let data = try Data(contentsOf: url)
-                let result = try await HelperXPCClient.shared.importKey(data)
-                vm.lastImportSummary = result.userFacingSummary
+                _ = try await HelperXPCClient.shared.importKey(data)
                 await vm.refreshKeys()
             } catch {
                 vm.helperError = error.localizedDescription

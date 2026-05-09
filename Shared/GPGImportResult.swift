@@ -10,13 +10,3 @@ struct GPGImportResult: Codable {
     let updatedSignatures: Bool
     let newSubkeys: Bool
 }
-
-extension GPGImportResult {
-    /// Human-readable summary of the import outcome. Used for transient UI
-    /// feedback after a successful import.
-    var userFacingSummary: String {
-        if newKey { return "Imported new key" }
-        if updatedSignatures || newSubkeys || newUserIDs { return "Updated existing key" }
-        return "Key already up to date"
-    }
-}

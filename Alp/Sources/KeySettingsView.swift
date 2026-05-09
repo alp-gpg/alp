@@ -6,6 +6,22 @@ struct KeySettingsView: View {
     @AppStorage("showExpiredKeys") private var showExpired = false
     @AppStorage("autoRefreshExpiredOnShow") private var autoRefresh = false
 
+    @State private var showingGenerateSheet = false
+    @State private var keyForSetExpiry: GPGKeyInfo?
+    @State private var keyForRevoke: GPGKeyInfo?
+    @State private var keyToDelete: KeyDeletionRequest?
+    @State private var actionError: String?
+
+    /// Pairs a key with the kind of delete the user requested so the confirm
+    /// alert and the RPC dispatch agree.
+    fileprivate struct KeyDeletionRequest: Identifiable {
+        let key: GPGKeyInfo
+        let secretOnly: Bool
+        var id: String {
+            "\(key.fingerprint)-\(secretOnly)"
+        }
+    }
+
     /// Primary rows built from filtered keys, sorted with pub+sec first.
     private var primaryRows: [KeyRow] {
         let filtered = vm.filteredKeys(showExpired: showExpired)
@@ -114,6 +130,12 @@ struct KeySettingsView: View {
         }
         .toolbar {
             ToolbarItem {
+                Button("Generate Key…", systemImage: "key.horizontal") {
+                    showingGenerateSheet = true
+                }
+                .help("Generate a new Ed25519 + Cv25519 key pair")
+            }
+            ToolbarItem {
                 Button("Import Key…", systemImage: "square.and.arrow.down") {
                     importKeyFromFile()
                 }
@@ -133,7 +155,57 @@ struct KeySettingsView: View {
                 .help(showExpired ? "Hide expired keys" : "Show expired keys")
             }
         }
+        .sheet(isPresented: $showingGenerateSheet) {
+            GenerateKeySheet(vm: vm)
+        }
+        .sheet(item: $keyForSetExpiry) { key in
+            SetExpirySheet(key: key) { days in
+                await runHelperAction("Set expiry") {
+                    try await HelperXPCClient.shared.setExpiry(
+                        fingerprint: key.fingerprint, expiryDays: days,
+                    )
+                    await vm.refreshKeys()
+                }
+            }
+        }
+        .sheet(item: $keyForRevoke) { key in
+            RevokeKeySheet(key: key) { reasonCode, description in
+                await runHelperAction("Revoke key") {
+                    let cert = try await HelperXPCClient.shared.revokePrimaryKey(
+                        fingerprint: key.fingerprint,
+                        reasonCode: reasonCode,
+                        description: description,
+                    )
+                    await saveExportedKey(cert, suggested: "\(key.fingerprint)-revoke.asc")
+                    await vm.refreshKeys()
+                }
+            }
+        }
+        .alert(item: $keyToDelete) { request in
+            Alert(
+                title: Text(request.secretOnly
+                    ? "Delete Secret Key Only?"
+                    : "Delete Key?"),
+                message: Text(request.secretOnly
+                    ? "Removes the secret half of \(request.key.displayName). The public key stays in the keyring. This cannot be undone."
+                    :
+                    "Removes both the secret and public halves of \(request.key.displayName) from the local keyring. This cannot be undone."),
+                primaryButton: .destructive(Text("Delete")) {
+                    Task { await deleteKey(request) }
+                },
+                secondaryButton: .cancel(),
+            )
+        }
+        .alert("Operation failed", isPresented: actionErrorBinding) {
+            Button("OK", role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
         .navigationTitle("Keys")
+    }
+
+    private var actionErrorBinding: Binding<Bool> {
+        Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
     }
 
     private func startBatchRefresh() {
@@ -153,6 +225,30 @@ struct KeySettingsView: View {
             }
             .disabled(vm.keyserverStatus[key.fingerprint] != .found)
             Button("Reveal on keys.openpgp.org…") { openKeyserverPage(for: key.fingerprint) }
+
+            Divider()
+
+            Button("Export Public Key…") { exportPublicKey(for: key) }
+            if key.hasSecretKey {
+                Button("Export Secret Key…") { exportSecretKey(for: key) }
+                Button("Change Passphrase…") { changePassphrase(for: key) }
+            }
+            Button("Set Expiry…") { keyForSetExpiry = key }
+
+            if key.hasSecretKey {
+                Button("Generate Revocation Certificate…") { keyForRevoke = key }
+            }
+
+            Divider()
+
+            if key.hasSecretKey {
+                Button("Delete Secret Key Only…", role: .destructive) {
+                    keyToDelete = .init(key: key, secretOnly: true)
+                }
+            }
+            Button("Delete Key…", role: .destructive) {
+                keyToDelete = .init(key: key, secretOnly: false)
+            }
         case let .subkey(sub, _):
             Button("Copy fingerprint") { copyToPasteboard(sub.fingerprint) }
         }
@@ -219,6 +315,239 @@ struct KeySettingsView: View {
                 vm.helperError = error.localizedDescription
             }
         }
+    }
+
+    // MARK: – Lifecycle action helpers
+
+    private func exportPublicKey(for key: GPGKeyInfo) {
+        Task {
+            await runHelperAction("Export public key") {
+                let armored = try await HelperXPCClient.shared.exportPublicKey(
+                    fingerprint: key.fingerprint,
+                )
+                await saveExportedKey(armored, suggested: "\(key.fingerprint)-public.asc")
+            }
+        }
+    }
+
+    private func exportSecretKey(for key: GPGKeyInfo) {
+        Task {
+            await runHelperAction("Export secret key") {
+                let armored = try await HelperXPCClient.shared.exportSecretKey(
+                    fingerprint: key.fingerprint,
+                )
+                await saveExportedKey(armored, suggested: "\(key.fingerprint)-secret.asc")
+            }
+        }
+    }
+
+    private func changePassphrase(for key: GPGKeyInfo) {
+        Task {
+            await runHelperAction("Change passphrase") {
+                try await HelperXPCClient.shared.changePassphrase(fingerprint: key.fingerprint)
+            }
+        }
+    }
+
+    private func deleteKey(_ request: KeyDeletionRequest) async {
+        await runHelperAction(request.secretOnly ? "Delete secret key" : "Delete key") {
+            if request.secretOnly {
+                try await HelperXPCClient.shared.deleteSecretKey(fingerprint: request.key.fingerprint)
+            } else {
+                try await HelperXPCClient.shared.deletePublicKey(fingerprint: request.key.fingerprint)
+            }
+            await vm.refreshKeys()
+        }
+    }
+
+    /// Wraps any helper RPC with a uniform error surface so a failed call
+    /// shows the system alert instead of silently swallowing the throw.
+    private func runHelperAction(_ label: String, _ work: @escaping () async throws -> Void) async {
+        do {
+            try await work()
+        } catch {
+            actionError = "\(label) failed: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func saveExportedKey(_ armored: Data, suggested filename: String) async {
+        let panel = NSSavePanel()
+        panel.title = "Save Exported Key"
+        panel.nameFieldStringValue = filename
+        panel.allowedContentTypes = [UTType(filenameExtension: "asc")].compactMap(\.self)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try armored.write(to: url, options: [.atomic])
+        } catch {
+            actionError = "Could not write exported key: \(error.localizedDescription)"
+        }
+    }
+}
+
+// MARK: – Set Expiry Sheet
+
+private struct SetExpirySheet: View {
+    let key: GPGKeyInfo
+    let onConfirm: (Int) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selection: ExpiryOption = .twoYears
+    @State private var isWorking = false
+
+    private enum ExpiryOption: String, CaseIterable, Identifiable {
+        case oneYear, twoYears, fourYears, never
+        var id: String {
+            rawValue
+        }
+
+        var title: String {
+            switch self {
+            case .oneYear: "1 year from now"
+            case .twoYears: "2 years from now"
+            case .fourYears: "4 years from now"
+            case .never: "Never"
+            }
+        }
+
+        var days: Int {
+            switch self {
+            case .oneYear: 365
+            case .twoYears: 730
+            case .fourYears: 1460
+            case .never: 0
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Set Expiry")
+                .font(.title2.weight(.semibold))
+            Text(key.displayName)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Picker("New expiry", selection: $selection) {
+                ForEach(ExpiryOption.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            .disabled(isWorking)
+
+            Text("gpg-agent will prompt for the passphrase via pinentry.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                if isWorking {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(isWorking)
+                Button("Update Expiry") {
+                    Task {
+                        isWorking = true
+                        defer { isWorking = false }
+                        await onConfirm(selection.days)
+                        dismiss()
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(isWorking)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 420, idealWidth: 460)
+    }
+}
+
+// MARK: – Revoke Key Sheet
+
+private struct RevokeKeySheet: View {
+    let key: GPGKeyInfo
+    let onConfirm: (Int, String?) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var reason: RevocationReason = .superseded
+    @State private var description: String = ""
+    @State private var isWorking = false
+
+    private enum RevocationReason: Int, CaseIterable, Identifiable {
+        case noReason = 0
+        case compromised = 1
+        case superseded = 2
+        case noLongerUsed = 3
+
+        var id: Int {
+            rawValue
+        }
+
+        var title: String {
+            switch self {
+            case .noReason: "No reason specified"
+            case .compromised: "Key has been compromised"
+            case .superseded: "Key is superseded"
+            case .noLongerUsed: "Key is no longer used"
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Generate Revocation Certificate")
+                .font(.title2.weight(.semibold))
+            Text(key.displayName)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Picker("Reason", selection: $reason) {
+                ForEach(RevocationReason.allCases) { r in
+                    Text(r.title).tag(r)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(isWorking)
+
+            TextField("Description (optional)", text: $description, axis: .vertical)
+                .lineLimit(3, reservesSpace: true)
+                .disabled(isWorking)
+
+            Text(
+                "Revoking marks this key as no longer valid for signing or encryption. The certificate will also be saved to disk for offline backup. This cannot be undone.",
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack {
+                if isWorking { ProgressView().controlSize(.small) }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(isWorking)
+                Button("Revoke") {
+                    Task {
+                        isWorking = true
+                        defer { isWorking = false }
+                        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+                        await onConfirm(reason.rawValue, trimmed.isEmpty ? nil : trimmed)
+                        dismiss()
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(isWorking)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 460, idealWidth: 500)
     }
 }
 

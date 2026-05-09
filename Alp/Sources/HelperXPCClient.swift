@@ -10,6 +10,11 @@ final class HelperXPCClient: @unchecked Sendable {
     /// Upper bound on any single helper call; see `GPGXPCClient.callTimeout`.
     static let callTimeout: TimeInterval = 60
 
+    /// Longer bound for calls that route through pinentry — the user may take
+    /// several minutes to type a passphrase. 5 minutes is enough for any
+    /// realistic prompt without leaking forever on a wedged pinentry.
+    static let interactiveCallTimeout: TimeInterval = 300
+
     private var connection: NSXPCConnection
     private let lock = NSLock()
     private var connectionInvalidated = false
@@ -93,11 +98,108 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    func exportPublicKey(fingerprint: String) async throws -> Data {
+        try await call { proxy, resume in
+            proxy.exportPublicKey(fingerprint: fingerprint) { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data { resume(.success(data)) }
+                else { resume(.failure(GPGError.xpcUnavailable)) }
+            }
+        }
+    }
+
+    /// Long timeout because gpg-agent will prompt for the passphrase via
+    /// pinentry. The user might leave the prompt open for a while.
+    func exportSecretKey(fingerprint: String) async throws -> Data {
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.exportSecretKey(fingerprint: fingerprint) { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data { resume(.success(data)) }
+                else { resume(.failure(GPGError.xpcUnavailable)) }
+            }
+        }
+    }
+
+    func deletePublicKey(fingerprint: String) async throws {
+        let _: Bool = try await call { proxy, resume in
+            proxy.deletePublicKey(fingerprint: fingerprint) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func deleteSecretKey(fingerprint: String) async throws {
+        let _: Bool = try await call { proxy, resume in
+            proxy.deleteSecretKey(fingerprint: fingerprint) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func generatePrimaryKey(
+        name: String,
+        email: String,
+        comment: String?,
+        expiryDays: Int,
+    ) async throws -> String {
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.generatePrimaryKey(
+                name: name,
+                email: email,
+                comment: comment,
+                expiryDays: expiryDays,
+            ) { fp, error in
+                if let error { resume(.failure(error)) }
+                else if let fp { resume(.success(fp)) }
+                else { resume(.failure(GPGError.xpcUnavailable)) }
+            }
+        }
+    }
+
+    func changePassphrase(fingerprint: String) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.changePassphrase(fingerprint: fingerprint) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func setExpiry(fingerprint: String, expiryDays: Int) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.setExpiry(fingerprint: fingerprint, expiryDays: expiryDays) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func revokePrimaryKey(
+        fingerprint: String,
+        reasonCode: Int,
+        description: String?,
+    ) async throws -> Data {
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.revokePrimaryKey(
+                fingerprint: fingerprint,
+                reasonCode: reasonCode,
+                description: description,
+            ) { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data { resume(.success(data)) }
+                else { resume(.failure(GPGError.xpcUnavailable)) }
+            }
+        }
+    }
+
     // MARK: – Private
 
     /// Shared timeout + single-resume guard pattern. See `GPGXPCClient.call`
     /// for rationale — both clients implement the same contract.
     private func call<T: Sendable>(
+        timeout: TimeInterval = HelperXPCClient.callTimeout,
         _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
     ) async throws -> T {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, any Error>) in
@@ -111,7 +213,7 @@ final class HelperXPCClient: @unchecked Sendable {
             }
 
             let timer = DispatchSource.makeTimerSource()
-            timer.schedule(deadline: .now() + Self.callTimeout)
+            timer.schedule(deadline: .now() + timeout)
             timer.setEventHandler {
                 resume(.failure(GPGError.xpcUnavailable))
                 timer.cancel()

@@ -27,10 +27,11 @@
   - [x] `signKey` + `setOwnerTrust` RPCs + per-row Certify / Trust UI
   - [x] Multi-keyserver fallback chain (proton.me, HKPS pool after WKD)
   - [x] Smartcard / YubiKey read-only status panel
-  - [ ] Photo IDs surfaced in the Keys table — deferred to P2 (needs
-        OpenPGP packet parser; see spec)
   - [x] Localization pass — wrap LocalizedError descriptions in
         `String(localized:)` so the xcstrings catalog covers them
+  - **Dropped**: Photo IDs — UAT packets imply visual identity
+        verification, which is the wrong mental model for a security
+        tool. Fingerprint comparison is the actual primitive.
 
 ## Future / Deferred
 

@@ -91,17 +91,17 @@ Surface read-only metadata.
   Read-only — adding card management UI (PIN change, key transfer) is
   deferred.
 
-### 5. Photo IDs in Keys table — **deferred to P2**
+### 5. Photo IDs in Keys table — **dropped**
 
-UAT packets are an underused but pleasant feature: a 64×64 portrait
-embedded in the public key. Surface the thumbnail next to the UID column.
+UAT packets fell out of practice. They're 64×64 JPEGs with no trust
+binding to the holder, modern OpenPGP tooling (ProtonMail Bridge,
+Mailvelope, Thunderbird) doesn't surface them, and rendering a face
+implies visual identity verification — exactly the wrong mental model
+for a security tool whose job is to teach users that fingerprint
+comparison is the verification primitive.
 
-The cleanest path requires a small OpenPGP packet parser (RFC 4880 §4.2 +
-§5.12 user-attribute sub-packet type 1 for image attributes). gpg's
-`--list-packets` text output describes UATs but does not expose the raw
-JPEG bytes inline, and the alternative `--photo-viewer "cat %i"` hack
-forks a shell per key. Defer to a focused round where we can ship the
-parser with proper tests against captured key fixtures.
+Cost (custom OpenPGP packet parser plus a fixture corpus) didn't
+justify the surface area for ~1% of keys.
 
 ### 6. Localization pass
 

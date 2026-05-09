@@ -162,6 +162,41 @@ import Foundation
         reply: @escaping @Sendable (NSError?) -> Void,
     )
 
+    /// Add a new subkey to an existing primary key via
+    /// `gpg --quick-add-key FP <algo> <usage> <expire>`. `algoTag` selects
+    /// the curve + role: "ed25519/sign", "cv25519/encr", "ed25519/auth".
+    /// reply: (error?) — error is nil on success.
+    func addSubkey(
+        fingerprint: String,
+        algoTag: String,
+        expiryDays: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Revoke a single subkey while leaving the primary and other subkeys
+    /// alone (`gpg --edit-key FP key <n> revkey save`). `subkeyIndex` is
+    /// 1-based — 1 means the first subkey in listing order.
+    /// `reasonCode` follows RFC 4880 §5.2.3.23: 0=no reason, 1=superseded,
+    /// 2=compromised, 3=no longer used.
+    /// reply: (error?) — error is nil on success.
+    func revokeSubkey(
+        fingerprint: String,
+        subkeyIndex: Int,
+        reasonCode: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Permanently delete a subkey (`gpg --edit-key FP key <n> delkey save`).
+    /// Use `revokeSubkey` instead unless the goal is genuine cleanup —
+    /// deletion strips the subkey from the local keyring without producing
+    /// a revocation that other people can see. 1-based index.
+    /// reply: (error?) — error is nil on success.
+    func deleteSubkey(
+        fingerprint: String,
+        subkeyIndex: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
     /// Append a new User ID to an existing primary key
     /// (`gpg --edit-key FP adduid save`). gpg-agent prompts for the
     /// passphrase via pinentry. Validation rules match `generatePrimaryKey`.

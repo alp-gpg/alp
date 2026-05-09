@@ -189,6 +189,62 @@ struct GPGHelperEditKeyValidationTests {
     }
 
     @Test
+    func `addSubkey rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._addSubkey(fingerprint: "nope", algoTag: "ed25519/sign", expiryDays: 730)
+        }
+    }
+
+    @Test
+    func `addSubkey rejects unknown algorithm tag`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._addSubkey(fingerprint: valid, algoTag: "rsa4096/sign", expiryDays: 730)
+        }
+    }
+
+    @Test
+    func `addSubkey rejects out-of-range expiry`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._addSubkey(fingerprint: valid, algoTag: "cv25519/encr", expiryDays: -1)
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._addSubkey(fingerprint: valid, algoTag: "cv25519/encr", expiryDays: 36501)
+        }
+    }
+
+    @Test
+    func `revokeSubkey rejects bad fingerprint and bounds`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._revokeSubkey("nope", subkeyIndex: 1, reasonCode: 0)
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._revokeSubkey(valid, subkeyIndex: 0, reasonCode: 0)
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._revokeSubkey(valid, subkeyIndex: 1, reasonCode: 99)
+        }
+    }
+
+    @Test
+    func `deleteSubkey rejects bad fingerprint and bounds`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._deleteSubkey("nope", subkeyIndex: 1)
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._deleteSubkey(valid, subkeyIndex: 51)
+        }
+    }
+
+    @Test
     func `addUserID rejects malformed fingerprint`() async {
         let helper = GPGHelper()
         await #expect(throws: GPGError.self) {

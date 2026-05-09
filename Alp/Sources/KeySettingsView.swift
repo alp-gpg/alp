@@ -14,6 +14,7 @@ struct KeySettingsView: View {
     @State private var keyForCertify: GPGKeyInfo?
     @State private var keyForDetail: GPGKeyInfo?
     @State private var keyForAddUID: GPGKeyInfo?
+    @State private var keyForAddSubkey: GPGKeyInfo?
     @State private var actionError: String?
 
     /// Pairs a key with the kind of delete the user requested so the confirm
@@ -198,17 +199,44 @@ struct KeySettingsView: View {
             PublishKeySheet(key: key)
         }
         .sheet(item: $keyForDetail) { key in
-            KeyDetailSheet(key: key) { uidIndex in
-                await runHelperAction("Revoke UID") {
-                    try await HelperXPCClient.shared.revokeUserID(
-                        fingerprint: key.fingerprint, uidIndex: uidIndex,
-                    )
-                    await vm.refreshKeys()
-                }
-            }
+            KeyDetailSheet(
+                key: key,
+                onRevokeUID: { uidIndex in
+                    await runHelperAction("Revoke UID") {
+                        try await HelperXPCClient.shared.revokeUserID(
+                            fingerprint: key.fingerprint, uidIndex: uidIndex,
+                        )
+                        await vm.refreshKeys()
+                    }
+                },
+                onRevokeSubkey: { subkeyIndex in
+                    await runHelperAction("Revoke subkey") {
+                        try await HelperXPCClient.shared.revokeSubkey(
+                            fingerprint: key.fingerprint,
+                            subkeyIndex: subkeyIndex,
+                            reasonCode: 1, // 1 = key superseded; safest default
+                        )
+                        await vm.refreshKeys()
+                    }
+                },
+                onDeleteSubkey: { subkeyIndex in
+                    await runHelperAction("Delete subkey") {
+                        try await HelperXPCClient.shared.deleteSubkey(
+                            fingerprint: key.fingerprint,
+                            subkeyIndex: subkeyIndex,
+                        )
+                        await vm.refreshKeys()
+                    }
+                },
+            )
         }
         .sheet(item: $keyForAddUID) { key in
             AddUserIDSheet(key: key) {
+                await vm.refreshKeys()
+            }
+        }
+        .sheet(item: $keyForAddSubkey) { key in
+            AddSubkeySheet(key: key) {
                 await vm.refreshKeys()
             }
         }
@@ -299,6 +327,7 @@ struct KeySettingsView: View {
 
             if key.hasSecretKey {
                 Button("Add User ID…") { keyForAddUID = key }
+                Button("Add Subkey…") { keyForAddSubkey = key }
                 Button("Generate Revocation Certificate…") { keyForRevoke = key }
                 Button("Publish to keys.openpgp.org…") { keyForUpload = key }
             }

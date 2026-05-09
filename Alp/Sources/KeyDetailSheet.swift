@@ -9,9 +9,16 @@ struct KeyDetailSheet: View {
     /// Called when the user picks "Revoke" on a UID. The argument is the
     /// 1-based UID index gpg expects on its `uid <n>` edit-key command.
     let onRevokeUID: (_ uidIndex: Int) async -> Void
+    /// Called when the user picks "Revoke" on a subkey row. Argument is
+    /// the 1-based subkey index gpg expects on `key <n>`.
+    let onRevokeSubkey: (_ subkeyIndex: Int) async -> Void
+    /// Called when the user picks "Delete" on a subkey row. Same indexing.
+    let onDeleteSubkey: (_ subkeyIndex: Int) async -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var uidIndexPendingRevoke: Int?
+    @State private var subkeyPendingRevoke: Int?
+    @State private var subkeyPendingDelete: Int?
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -152,7 +159,7 @@ struct KeyDetailSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Subkeys")
                 .font(.headline)
-            ForEach(key.subkeys) { sub in
+            ForEach(Array(key.subkeys.enumerated()), id: \.offset) { offset, sub in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Image(systemName: "key")
@@ -165,6 +172,10 @@ struct KeyDetailSheet: View {
                             Text("revoked")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.red)
+                        }
+                        Spacer()
+                        if key.hasSecretKey {
+                            subkeyMenu(subkeyIndex: offset + 1, isRevoked: sub.isRevoked)
                         }
                     }
                     HStack(spacing: 16) {
@@ -181,6 +192,61 @@ struct KeyDetailSheet: View {
                 .padding(.vertical, 4)
             }
         }
+        .alert(
+            "Revoke this subkey?",
+            isPresented: Binding(
+                get: { subkeyPendingRevoke != nil },
+                set: { if !$0 { subkeyPendingRevoke = nil } },
+            ),
+        ) {
+            Button("Revoke", role: .destructive) {
+                if let idx = subkeyPendingRevoke {
+                    Task { await onRevokeSubkey(idx); subkeyPendingRevoke = nil }
+                }
+            }
+            Button("Cancel", role: .cancel) { subkeyPendingRevoke = nil }
+        } message: {
+            Text(
+                "Revoking marks this subkey invalid. Encrypted messages already sent to it stay decryptable; new ones will be rejected. The primary key and other subkeys stay active.",
+            )
+        }
+        .alert(
+            "Delete this subkey?",
+            isPresented: Binding(
+                get: { subkeyPendingDelete != nil },
+                set: { if !$0 { subkeyPendingDelete = nil } },
+            ),
+        ) {
+            Button("Delete", role: .destructive) {
+                if let idx = subkeyPendingDelete {
+                    Task { await onDeleteSubkey(idx); subkeyPendingDelete = nil }
+                }
+            }
+            Button("Cancel", role: .cancel) { subkeyPendingDelete = nil }
+        } message: {
+            Text(
+                "Removes the subkey from the local keyring without producing a revocation. Other people who have already imported the key will still see it as valid. Prefer Revoke for compromised material.",
+            )
+        }
+    }
+
+    private func subkeyMenu(subkeyIndex: Int, isRevoked: Bool) -> some View {
+        Menu {
+            if !isRevoked {
+                Button("Revoke this subkey…", role: .destructive) {
+                    subkeyPendingRevoke = subkeyIndex
+                }
+            }
+            Button("Delete this subkey…", role: .destructive) {
+                subkeyPendingDelete = subkeyIndex
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Subkey actions")
     }
 
     private func metadataGrid(_ pairs: [(String, String)]) -> some View {

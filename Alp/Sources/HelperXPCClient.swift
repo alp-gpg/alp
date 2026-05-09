@@ -196,6 +196,55 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    func addSubkey(
+        fingerprint: String,
+        algoTag: String,
+        expiryDays: Int,
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.addSubkey(
+                fingerprint: fingerprint,
+                algoTag: algoTag,
+                expiryDays: expiryDays,
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func revokeSubkey(
+        fingerprint: String,
+        subkeyIndex: Int,
+        reasonCode: Int,
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.revokeSubkey(
+                fingerprint: fingerprint,
+                subkeyIndex: subkeyIndex,
+                reasonCode: reasonCode,
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func deleteSubkey(
+        fingerprint: String,
+        subkeyIndex: Int,
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.deleteSubkey(
+                fingerprint: fingerprint,
+                subkeyIndex: subkeyIndex,
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     func addUserID(
         fingerprint: String,
         name: String,

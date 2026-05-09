@@ -413,6 +413,85 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return fingerprint
     }
 
+    /// Algorithm tags accepted by `_addSubkey`. Mapped to gpg's
+    /// `--quick-add-key` algorithm + usage syntax internally.
+    static let allowedSubkeyAlgoTags: Set<String> = [
+        "ed25519/sign",
+        "cv25519/encr",
+        "ed25519/auth",
+    ]
+
+    func _addSubkey(
+        fingerprint: String,
+        algoTag: String,
+        expiryDays: Int,
+    ) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard Self.allowedSubkeyAlgoTags.contains(algoTag) else {
+            throw GPGError.encodingError("unsupported subkey algorithm tag")
+        }
+        guard (0 ... 36500).contains(expiryDays) else {
+            throw GPGError.encodingError("expiryDays must be 0..36500")
+        }
+        // algoTag is "<curve>/<usage>"; gpg accepts that exact shape.
+        let parts = algoTag.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else {
+            throw GPGError.encodingError("malformed algoTag")
+        }
+        let expire = expiryDays == 0 ? "0" : "\(expiryDays)d"
+        let args = [
+            "--batch", "--status-fd", "2",
+            "--quick-add-key", fingerprint, parts[0], parts[1], expire,
+        ]
+        _ = try await runGPG(args)
+    }
+
+    func _revokeSubkey(
+        _ fingerprint: String,
+        subkeyIndex: Int,
+        reasonCode: Int,
+    ) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard subkeyIndex >= 1, subkeyIndex <= 50 else {
+            throw GPGError.encodingError("subkeyIndex must be a positive number ≤ 50")
+        }
+        guard (0 ... 3).contains(reasonCode) else {
+            throw GPGError.encodingError("reasonCode must be 0..3")
+        }
+        // gpg's `key <n>` command is 1-based on subkeys, so we feed the
+        // user's index unchanged. revkey then prompts: y → reason code →
+        // empty description → y final confirm → save.
+        let commands = "key \(subkeyIndex)\nrevkey\ny\n\(reasonCode)\n\ny\nsave\n"
+        let args = [
+            "--command-fd", "0", "--status-fd", "2",
+            "--edit-key", fingerprint,
+        ]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
+    func _deleteSubkey(
+        _ fingerprint: String,
+        subkeyIndex: Int,
+    ) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard subkeyIndex >= 1, subkeyIndex <= 50 else {
+            throw GPGError.encodingError("subkeyIndex must be a positive number ≤ 50")
+        }
+        // delkey: select subkey, delkey, y to confirm, save.
+        let commands = "key \(subkeyIndex)\ndelkey\ny\nsave\n"
+        let args = [
+            "--command-fd", "0", "--status-fd", "2",
+            "--edit-key", fingerprint,
+        ]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
     func _addUserID(
         fingerprint: String,
         name: String,
@@ -1310,6 +1389,67 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(nil, e.asNSError)
             } catch {
                 reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func addSubkey(
+        fingerprint: String,
+        algoTag: String,
+        expiryDays: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._addSubkey(
+                    fingerprint: fingerprint,
+                    algoTag: algoTag,
+                    expiryDays: expiryDays,
+                )
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func revokeSubkey(
+        fingerprint: String,
+        subkeyIndex: Int,
+        reasonCode: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._revokeSubkey(
+                    fingerprint,
+                    subkeyIndex: subkeyIndex,
+                    reasonCode: reasonCode,
+                )
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func deleteSubkey(
+        fingerprint: String,
+        subkeyIndex: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._deleteSubkey(fingerprint, subkeyIndex: subkeyIndex)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
             }
         }
     }

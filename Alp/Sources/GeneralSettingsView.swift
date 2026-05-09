@@ -39,6 +39,51 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Keyserver Security") {
+                Toggle(isOn: $strictKeyserverPinning) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Strict certificate pinning")
+                        Text(
+                            "Block keyserver connections when the pinned certificate does not match. Recommended for high-risk environments; may break key lookups if the pinned certificate rotates before Alp is updated.",
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Section("Privacy Limitations") {
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Drafts are not encrypted")
+                            .font(.callout.weight(.semibold))
+                        Text(
+                            "Mail saves draft messages to the server while you type. Alp only encrypts at send, so drafts reach IMAP/iCloud in plaintext. For any account where you use PGP, disable \"Store drafts on server\" in Mail → Settings → Accounts → Mailbox Behaviors.",
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .foregroundStyle(.orange)
+                }
+
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Subject lines are not encrypted")
+                            .font(.callout.weight(.semibold))
+                        Text(
+                            "PGP/MIME (RFC 3156) encrypts the message body but not the Subject header. Mail servers and anyone with access to message metadata can read it. Keep sensitive details out of the subject line.",
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "envelope.badge")
+                        .foregroundStyle(.orange)
+                }
+            }
+
             Section("Compose Defaults") {
                 Toggle("Sign messages by default", isOn: $vm.signByDefault)
                 Toggle("Encrypt messages by default", isOn: $vm.encryptByDefault)
@@ -92,6 +137,9 @@ struct GeneralSettingsView: View {
     }
 
     @AppStorage("autoRefreshExpiredOnShow") private var autoRefreshExpiredOnShow = false
+
+    @AppStorage(KeyserverSession.strictPinningDefaultsKey, store: UserDefaults(suiteName: BuildConfig.appGroup))
+    private var strictKeyserverPinning = false
 
     // MARK: – Setup Checklist
 

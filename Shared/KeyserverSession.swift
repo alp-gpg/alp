@@ -15,6 +15,19 @@ enum KeyserverSession {
     /// surface a non-blocking warning. Object is the mismatched host (String).
     static let pinningDegradedNotification = Notification.Name("app.alp.Alp.keyserverPinningDegraded")
 
+    /// App-group key for the "Strict Pinning" toggle. When true, a pin
+    /// mismatch cancels the TLS handshake instead of falling back to ATS.
+    /// Default is off so first-run / users behind MITM-proxies are not
+    /// silently broken — opt-in for high-risk environments.
+    static let strictPinningDefaultsKey = "strictKeyserverPinning"
+
+    /// Reads the strict-pinning toggle from the shared app group so both the
+    /// main app and the Mail extension honor the same setting.
+    static var isStrictPinningEnabled: Bool {
+        UserDefaults(suiteName: BuildConfig.appGroup)?
+            .bool(forKey: strictPinningDefaultsKey) ?? false
+    }
+
     /// SHA-256 hashes of public key data (SecKeyCopyExternalRepresentation) for
     /// Let's Encrypt intermediates serving keys.openpgp.org.
     /// Pinning intermediates (not the leaf) so 90-day LE renewals don't break.
@@ -79,9 +92,14 @@ private final class PinningDelegate: NSObject, URLSessionDelegate, Sendable {
             }
         }
 
-        // Pin mismatch — fall back to standard TLS (ATS still validates the chain)
-        // and notify once so the UI can warn the user.
-        log.warning("Certificate pin mismatch for \(KeyserverSession.host) — falling back to standard TLS")
+        // Pin mismatch. In strict mode, cancel outright. Otherwise fall back
+        // to standard ATS validation and notify the UI so the user is warned.
+        let strict = KeyserverSession.isStrictPinningEnabled
+        if strict {
+            log.error("Certificate pin mismatch for \(KeyserverSession.host) — strict pinning enabled, cancelling")
+        } else {
+            log.warning("Certificate pin mismatch for \(KeyserverSession.host) — falling back to standard TLS")
+        }
 
         let shouldNotify = hasNotified.withLock { notified -> Bool in
             if notified { return false }
@@ -97,7 +115,7 @@ private final class PinningDelegate: NSObject, URLSessionDelegate, Sendable {
             }
         }
 
-        return (.performDefaultHandling, nil)
+        return strict ? (.cancelAuthenticationChallenge, nil) : (.performDefaultHandling, nil)
     }
 }
 

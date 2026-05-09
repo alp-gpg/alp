@@ -4,6 +4,7 @@ import SwiftUI
 struct ComposeView: View {
     @Bindable var vm: ComposeViewModel
     @State private var showingMissingKeys = false
+    @State private var showingPrivacyTips = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -58,6 +59,21 @@ struct ComposeView: View {
                     }
                 }
             }
+
+            if vm.shouldEncrypt {
+                Button {
+                    showingPrivacyTips.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Privacy limits of PGP encryption — click for details")
+                .accessibilityLabel("Encryption privacy notes")
+                .popover(isPresented: $showingPrivacyTips, arrowEdge: .bottom) {
+                    PrivacyTipsView()
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -101,6 +117,44 @@ struct ComposeView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+}
+
+// MARK: – Privacy tips popover
+
+private struct PrivacyTipsView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("What encryption does not protect", systemImage: "info.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Subject lines are visible", systemImage: "envelope.badge")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(
+                    "PGP/MIME does not encrypt the Subject header. Mail servers in transit can read it — keep sensitive details out of the subject.",
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Drafts may be uploaded in plaintext", systemImage: "doc.text.magnifyingglass")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(
+                    "Mail saves drafts to the server as you type. Encryption only happens at send. Disable \"Store drafts on server\" for accounts you use with PGP — Mail → Settings → Accounts → Mailbox Behaviors.",
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding()
+        .frame(minWidth: 320, maxWidth: 420)
     }
 }
 

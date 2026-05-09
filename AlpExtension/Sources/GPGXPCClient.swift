@@ -23,7 +23,7 @@ final class GPGXPCClient: @unchecked Sendable {
     private static func makeConnection() -> NSXPCConnection {
         let conn = NSXPCConnection(machServiceName: BuildConfig.helperMachService)
         conn.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
-        conn.setCodeSigningRequirement(BuildConfig.codeSigningRequirement)
+        conn.setCodeSigningRequirement(BuildConfig.helperRequirement)
         conn.resume()
         return conn
     }

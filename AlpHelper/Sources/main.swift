@@ -13,7 +13,7 @@ final class HelperDelegate: NSObject, NSXPCListenerDelegate {
         // any reply is sent — we do not get a callback for those rejections,
         // but we do log the accepted ones so a security audit has a trail of
         // every client that successfully attached to the helper.
-        connection.setCodeSigningRequirement(BuildConfig.codeSigningRequirement)
+        connection.setCodeSigningRequirement(BuildConfig.clientRequirement)
 
         connection.exportedInterface = NSXPCInterface(with: GPGHelperProtocol.self)
         connection.exportedObject = GPGHelper()

@@ -40,6 +40,13 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             decoded = await Self.decrypt(data: data, parser: parser)
             sema.signal()
         }
+        // Fire-and-forget: try to harvest an Autocrypt header off the
+        // outer message and import the sender's key if we don't already
+        // have it. The decrypt path doesn't need this to finish, so it
+        // runs on its own detached task and never blocks the reply.
+        Task.detached {
+            await Self.tryAutocryptImport(rawMessage: data)
+        }
         // Bound the wait so a stuck gpg/gpg-agent cannot freeze Mail's XPC
         // thread indefinitely. Must exceed GPGXPCClient.callTimeout (60s) so
         // legitimate slow XPC replies (pinentry, slow keyserver) aren't cut
@@ -130,6 +137,28 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     encryptionError: isSigningError ? nil : nsError,
                 ))
             }
+        }
+    }
+
+    // MARK: – Autocrypt auto-import
+
+    /// Best-effort: parse the message's `Autocrypt:` header, verify the
+    /// `addr` matches `From`, and import the embedded public key when we
+    /// don't already have something for that address. Errors are
+    /// swallowed — the receive path must not be blocked or surface a
+    /// failure when an opportunistic key import doesn't work out.
+    private nonisolated static func tryAutocryptImport(rawMessage: Data) async {
+        guard let header = AutocryptHeader.parseAndValidate(rawMessage: rawMessage) else {
+            return
+        }
+        do {
+            let (found, _) = try await GPGXPCClient.shared
+                .publicKeyExists(email: header.address)
+            guard !found else { return }
+            _ = try await GPGXPCClient.shared.importKey(header.keyData)
+            log.info("Autocrypt: imported key for \(header.address, privacy: .private)")
+        } catch {
+            log.warning("Autocrypt: import failed for \(header.address, privacy: .private)")
         }
     }
 

@@ -15,7 +15,8 @@ struct ComposeView: View {
             .toggleStyle(.button)
             .tint(.blue)
             .disabled(!vm.canSign)
-            .help(vm.canSign ? "" : "No signing key. Add a secret key in Alp → General.")
+            .keyboardShortcut("s", modifiers: [.shift, .command])
+            .help(vm.canSign ? "Sign message (⇧⌘S)" : "No signing key. Add a secret key in Alp → General.")
             .accessibilityLabel("Sign message")
             .accessibilityValue(vm.shouldSign ? "On" : "Off")
 
@@ -32,7 +33,8 @@ struct ComposeView: View {
             .toggleStyle(.button)
             .tint(.green)
             .disabled(!vm.canEncrypt)
-            .help(encryptTooltip)
+            .keyboardShortcut("e", modifiers: [.shift, .command])
+            .help(vm.canEncrypt ? "Encrypt message (⇧⌘E)" : encryptTooltip)
             .accessibilityLabel("Encrypt message")
             .accessibilityValue(vm.shouldEncrypt ? "On" : "Off")
 
@@ -67,8 +69,9 @@ struct ComposeView: View {
                 }
                 .toggleStyle(.button)
                 .controlSize(.mini)
+                .keyboardShortcut("i", modifiers: [.shift, .command])
                 .help(
-                    "Send as inline ASCII-armor (RFC 4880) for legacy recipients. Falls back to PGP/MIME for messages with attachments.",
+                    "Send as inline ASCII-armor (RFC 4880) for legacy recipients. Falls back to PGP/MIME for messages with attachments. ⇧⌘I",
                 )
                 .accessibilityLabel("Inline PGP")
                 .accessibilityValue(vm.useInlinePGP ? "On" : "Off")

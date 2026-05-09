@@ -6,6 +6,7 @@ struct KeySettingsView: View {
     @AppStorage("showExpiredKeys") private var showExpired = false
     @AppStorage("autoRefreshExpiredOnShow") private var autoRefresh = false
 
+    @State private var searchQuery: String = ""
     @State private var showingGenerateSheet = false
     @State private var keyForSetExpiry: GPGKeyInfo?
     @State private var keyForRevoke: GPGKeyInfo?
@@ -30,11 +31,26 @@ struct KeySettingsView: View {
     /// Primary rows built from filtered keys, sorted with pub+sec first.
     private var primaryRows: [KeyRow] {
         let filtered = vm.filteredKeys(showExpired: showExpired)
-        let sorted = filtered.sorted { lhs, rhs in
+        let searched = Self.matching(query: searchQuery, in: filtered)
+        let sorted = searched.sorted { lhs, rhs in
             if lhs.hasSecretKey != rhs.hasSecretKey { return lhs.hasSecretKey }
             return lhs.displayName.localizedCompare(rhs.displayName) == .orderedAscending
         }
         return sorted.map { .primary($0) }
+    }
+
+    /// Case-insensitive substring match against display name, every UID
+    /// email, and the full fingerprint. Empty query returns every key.
+    /// `nonisolated` so unit tests can call it without hopping the main
+    /// actor; SwiftUI `View` is implicitly `@MainActor` otherwise.
+    nonisolated static func matching(query: String, in keys: [GPGKeyInfo]) -> [GPGKeyInfo] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return keys }
+        return keys.filter { key in
+            if key.fingerprint.lowercased().contains(trimmed) { return true }
+            if key.displayName.lowercased().contains(trimmed) { return true }
+            return key.emails.contains { $0.contains(trimmed) }
+        }
     }
 
     var body: some View {
@@ -282,6 +298,7 @@ struct KeySettingsView: View {
             Text(actionError ?? "")
         }
         .navigationTitle("Keys")
+        .searchable(text: $searchQuery, placement: .toolbar, prompt: "Search keys")
     }
 
     private var actionErrorBinding: Binding<Bool> {

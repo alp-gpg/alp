@@ -813,6 +813,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         var primaryUIDs: [String] = []
         var primaryCapabilities = ""
         var primaryExpiry: Date?
+        var primaryOwnerTrust: String?
         var subkeys: [GPGSubkey] = []
 
         // Staging area for the subkey we're currently filling in. We can't
@@ -851,11 +852,13 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 capabilities: primaryCapabilities,
                 expiryDate: primaryExpiry,
                 subkeys: subkeys,
+                ownerTrustCode: primaryOwnerTrust,
             ))
             primaryFingerprint = nil
             primaryUIDs = []
             primaryCapabilities = ""
             primaryExpiry = nil
+            primaryOwnerTrust = nil
             subkeys = []
         }
 
@@ -871,6 +874,12 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                     primaryExpiry = Date(timeIntervalSince1970: ts)
                 } else {
                     primaryExpiry = nil
+                }
+                // Field 9 of the pub colon record is the ownertrust code.
+                if fields.count > 8, !fields[8].isEmpty {
+                    primaryOwnerTrust = fields[8]
+                } else {
+                    primaryOwnerTrust = nil
                 }
             } else if recordType.hasPrefix("sub") || recordType.hasPrefix("ssb") {
                 flushSubkey()

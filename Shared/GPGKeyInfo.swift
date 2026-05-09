@@ -45,6 +45,10 @@ struct GPGKeyInfo: Codable, Identifiable, Hashable {
     var expiryDate: Date?
     /// Subkeys attached to this primary. Empty when the key has none.
     var subkeys: [GPGSubkey]
+    /// Single-letter ownertrust value from `gpg --list-keys --with-colons`
+    /// field 9 (one of `-`, `n`, `m`, `f`, `u`). nil when absent or not yet
+    /// parsed. Use `OwnerTrust(rawValue:)` for a typed view.
+    var ownerTrustCode: String?
 
     var id: String {
         fingerprint
@@ -99,6 +103,7 @@ struct GPGKeyInfo: Codable, Identifiable, Hashable {
         hasSecretKey: Bool = false,
         expiryDate: Date? = nil,
         subkeys: [GPGSubkey] = [],
+        ownerTrustCode: String? = nil,
     ) {
         self.fingerprint = fingerprint
         self.userIDs = userIDs
@@ -106,5 +111,38 @@ struct GPGKeyInfo: Codable, Identifiable, Hashable {
         self.hasSecretKey = hasSecretKey
         self.expiryDate = expiryDate
         self.subkeys = subkeys
+        self.ownerTrustCode = ownerTrustCode
+    }
+}
+
+/// Typed view of the gpg ownertrust single-letter code. Maps the raw
+/// character (field 9 of `pub` colon records) into a small set of
+/// user-facing labels and colors.
+enum OwnerTrust: Codable, Hashable {
+    case unknown
+    case never
+    case marginal
+    case full
+    case ultimate
+
+    init?(rawCode: String?) {
+        switch rawCode {
+        case "n": self = .never
+        case "m": self = .marginal
+        case "f": self = .full
+        case "u": self = .ultimate
+        case "-", "q", "o", nil: self = .unknown
+        default: return nil
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .unknown: "Unknown"
+        case .never: "Never"
+        case .marginal: "Marginal"
+        case .full: "Full"
+        case .ultimate: "Ultimate"
+        }
     }
 }

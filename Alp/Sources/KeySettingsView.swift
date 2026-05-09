@@ -91,6 +91,15 @@ struct KeySettingsView: View {
                         }
                         .width(80)
 
+                        TableColumn("Trust") { row in
+                            if case let .primary(key) = row,
+                               let trust = OwnerTrust(rawCode: key.ownerTrustCode)
+                            {
+                                TrustPill(trust: trust)
+                            }
+                        }
+                        .width(90)
+
                         TableColumn("Fingerprint") { row in
                             Text(row.shortFingerprint)
                                 .font(.caption.monospaced())
@@ -746,6 +755,32 @@ private struct ExpiryLabel: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Never expires")
+        }
+    }
+}
+
+/// Compact trust display for the Keys table. Color follows the same logic
+/// that drives Set Trust: green for full/ultimate, orange for marginal,
+/// red for never, secondary for unknown.
+private struct TrustPill: View {
+    let trust: OwnerTrust
+
+    var body: some View {
+        Text(trust.title)
+            .font(.caption2)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15), in: .capsule)
+            .foregroundStyle(color)
+            .accessibilityLabel("Owner trust: \(trust.title)")
+    }
+
+    private var color: Color {
+        switch trust {
+        case .full, .ultimate: .green
+        case .marginal: .orange
+        case .never: .red
+        case .unknown: .secondary
         }
     }
 }

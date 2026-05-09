@@ -4,6 +4,40 @@ import Testing
 @Suite("Colon listing parser — subkeys")
 struct ColonParserSubkeyTests {
     @Test
+    func `Owner trust code is read from field 9 of the pub record`() async {
+        let helper = await GPGHelper()
+        // Trailing trust char varies per fixture: `u` ultimate, `f` full,
+        // `m` marginal, `n` never, `-` unknown.
+        let cases: [(String, String?)] = [
+            ("pub:u:3072:1:AAAA:1700000000:0::u:::scESC::::::23::0:", "u"),
+            ("pub:f:3072:1:BBBB:1700000000:0::f:::scESC::::::23::0:", "f"),
+            ("pub:m:3072:1:CCCC:1700000000:0::m:::scESC::::::23::0:", "m"),
+            ("pub:-:3072:1:DDDD:1700000000:0::-:::scESC::::::23::0:", "-"),
+        ]
+        for (pubLine, expected) in cases {
+            let text = """
+            \(pubLine)
+            fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+            uid:u::::1700000000::DEADBEEF::Alice <a@x>::::::::::0:
+            """
+            let keys = await helper.testParseColonKeyListing(text)
+            #expect(keys.first?.ownerTrustCode == expected)
+        }
+    }
+
+    @Test
+    func `OwnerTrust enum collapses unknown variants to .unknown`() {
+        #expect(OwnerTrust(rawCode: "-") == .unknown)
+        #expect(OwnerTrust(rawCode: "q") == .unknown)
+        #expect(OwnerTrust(rawCode: "o") == .unknown)
+        #expect(OwnerTrust(rawCode: nil) == .unknown)
+        #expect(OwnerTrust(rawCode: "n") == .never)
+        #expect(OwnerTrust(rawCode: "m") == .marginal)
+        #expect(OwnerTrust(rawCode: "f") == .full)
+        #expect(OwnerTrust(rawCode: "u") == .ultimate)
+    }
+
+    @Test
     func `Primary with no subkeys has empty subkeys array`() async {
         let helper = await GPGHelper()
         let text = """

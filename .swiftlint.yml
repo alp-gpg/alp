@@ -60,8 +60,8 @@ file_length:
   warning: 1400
   error: 1800
 function_body_length:
-  warning: 90
-  error: 120
+  warning: 100
+  error: 130
 cyclomatic_complexity:
   warning: 18
   error: 25

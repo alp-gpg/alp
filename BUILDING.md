@@ -97,4 +97,4 @@ Lose the Keychain entry, lose the ability to sign updates — back it up
 the produced DMG and prints a `sparkle:edSignature="..." length=...` line.
 Paste it into `docs/appcast.xml` as a new `<item>` `<enclosure>` element
 along with the GitHub Releases asset URL, then push to `main` so GitHub
-Pages serves the new appcast at <https://rhaist.github.io/alp/appcast.xml>.
+Pages serves the new appcast at <https://alp-gpg.github.io/alp/appcast.xml>.

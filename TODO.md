@@ -10,8 +10,8 @@
 - [ ] **Run Sparkle `generate_keys` once** and paste the public key into
       `Alp/SupportingFiles/Info.plist` as `SUPublicEDKey`. See
       [`BUILDING.md`](BUILDING.md#releasing-one-time-sparkle-key-setup).
-- [ ] Enable GitHub Pages on `rhaist/alp` from the `docs/` folder so the
-      Sparkle appcast is served at <https://rhaist.github.io/alp/appcast.xml>.
+- [ ] Enable GitHub Pages on `alp-gpg/alp` from the `docs/` folder so the
+      Sparkle appcast is served at <https://alp-gpg.github.io/alp/appcast.xml>.
 
 ## In Progress
 

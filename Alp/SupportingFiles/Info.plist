@@ -22,7 +22,7 @@
         <false/>
     </dict>
     <key>SUFeedURL</key>
-    <string>https://rhaist.github.io/alp/appcast.xml</string>
+    <string>https://alp-gpg.github.io/alp/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string></string>
     <key>SUEnableAutomaticChecks</key>

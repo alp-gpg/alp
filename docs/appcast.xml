@@ -4,7 +4,7 @@
         <title>Alp</title>
         <description>Updates for Alp — GPG Mail extension for macOS Tahoe.</description>
         <language>en</language>
-        <link>https://github.com/rhaist/alp</link>
+        <link>https://github.com/alp-gpg/alp</link>
         <!--
             Each release appends an <item> here. Replace the placeholder
             below with the real version, signature, and asset URL on first
@@ -19,7 +19,7 @@
                 <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
                 <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
                 <enclosure
-                    url="https://github.com/rhaist/alp/releases/download/v1.0.0/Alp-1.0.0.dmg"
+                    url="https://github.com/alp-gpg/alp/releases/download/v1.0.0/Alp-1.0.0.dmg"
                     sparkle:edSignature="BASE64_FROM_sign_update"
                     length="DMG_BYTES_FROM_sign_update"
                     type="application/octet-stream"/>

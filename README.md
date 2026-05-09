@@ -101,4 +101,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and ho
 
 ## License
 
-MIT
+GNU General Public License v3.0 or later — full text in [LICENSE](LICENSE).
+
+GPLv3 was chosen over MIT because Alp is a security tool. Permissive
+licenses let a downstream vendor fork the code, add telemetry or a closed
+key-handling component, and ship that fork under a different name with no
+obligation to publish the modifications. GPLv3 forecloses that path:
+anyone redistributing a modified Alp must ship the modifications under the
+same license, so users can audit what they are running. This is the same
+reason GnuPG, GPGTools, ProtonMail Bridge, KeePassXC, and Bitwarden's
+clients all use copyleft.
+
+Copyright © 2025–2026 Alp contributors.

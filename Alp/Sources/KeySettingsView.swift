@@ -179,27 +179,43 @@ struct KeySettingsView: View {
             }
         }
         .toolbar {
+            // `.titleAndIcon` on every label so users see what each
+            // toolbar control does without having to hover for the
+            // tooltip. macOS otherwise renders these icon-only.
             ToolbarItem {
-                Button("Generate Key…", systemImage: "key.horizontal") {
+                Button {
                     showingGenerateSheet = true
+                } label: {
+                    Label("Generate", systemImage: "key.horizontal")
+                        .labelStyle(.titleAndIcon)
                 }
                 .help("Generate a new Ed25519 + Cv25519 key pair")
             }
             ToolbarItem {
-                Button("Import Key…", systemImage: "square.and.arrow.down") {
+                Button {
                     importKeyFromFile()
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                        .labelStyle(.titleAndIcon)
                 }
+                .help("Import an armored or binary public key from disk")
             }
             ToolbarItem {
-                Button("Reload", systemImage: "arrow.clockwise") {
+                Button {
                     Task { await vm.refreshKeys() }
+                } label: {
+                    Label("Reload", systemImage: "arrow.clockwise")
+                        .labelStyle(.titleAndIcon)
                 }
                 .help("Re-read keys from the local keyring")
             }
             ToolbarItem {
                 Toggle(isOn: $showExpired) {
-                    Label(showExpired ? "Hide expired" : "Show all",
-                          systemImage: showExpired ? "eye.slash" : "eye")
+                    Label(
+                        showExpired ? "Hide expired" : "Show all",
+                        systemImage: showExpired ? "eye.slash" : "eye",
+                    )
+                    .labelStyle(.titleAndIcon)
                 }
                 .toggleStyle(.button)
                 .help(showExpired ? "Hide expired keys" : "Show expired keys")

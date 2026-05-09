@@ -15,8 +15,21 @@ enum KeyRow: Identifiable, Hashable {
     var displayName: String {
         switch self {
         case let .primary(k): k.displayName
-        case .subkey: ""
+        case let .subkey(s, _): Self.subkeyLabel(for: s)
         }
+    }
+
+    /// Subkey rows previously left the User ID column blank, which made an
+    /// expanded primary look like it had a phantom row. Surface the
+    /// subkey's purpose instead so the UI carries useful information.
+    private static func subkeyLabel(for sub: GPGSubkey) -> String {
+        let caps = sub.capabilities.lowercased()
+        var roles: [String] = []
+        if caps.contains("s") { roles.append("Signing") }
+        if caps.contains("e") { roles.append("Encryption") }
+        if caps.contains("a") { roles.append("Authentication") }
+        let role = roles.isEmpty ? "Subkey" : "\(roles.joined(separator: " + ")) subkey"
+        return sub.isRevoked ? "\(role) (revoked)" : role
     }
 
     var shortFingerprint: String {

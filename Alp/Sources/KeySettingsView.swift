@@ -11,6 +11,7 @@ struct KeySettingsView: View {
     @State private var keyForRevoke: GPGKeyInfo?
     @State private var keyToDelete: KeyDeletionRequest?
     @State private var keyForUpload: GPGKeyInfo?
+    @State private var keyForCertify: GPGKeyInfo?
     @State private var actionError: String?
 
     /// Pairs a key with the kind of delete the user requested so the confirm
@@ -185,6 +186,18 @@ struct KeySettingsView: View {
         .sheet(item: $keyForUpload) { key in
             PublishKeySheet(key: key)
         }
+        .sheet(item: $keyForCertify) { key in
+            CertifyKeySheet(key: key, signers: vm.secretKeys) { signerFP, exportable in
+                await runHelperAction("Certify key") {
+                    try await HelperXPCClient.shared.signKey(
+                        fingerprint: key.fingerprint,
+                        signer: signerFP,
+                        exportable: exportable,
+                    )
+                    await vm.refreshKeys()
+                }
+            }
+        }
         .alert(item: $keyToDelete) { request in
             Alert(
                 title: Text(request.secretOnly
@@ -238,6 +251,24 @@ struct KeySettingsView: View {
                 Button("Change Passphrase…") { changePassphrase(for: key) }
             }
             Button("Set Expiry…") { keyForSetExpiry = key }
+
+            if !vm.secretKeys.isEmpty {
+                Button("Certify…") { keyForCertify = key }
+                Menu("Set Trust") {
+                    ForEach(OwnerTrustLevel.userVisible, id: \.rawValue) { level in
+                        Button(level.title) {
+                            Task {
+                                await runHelperAction("Set trust") {
+                                    try await HelperXPCClient.shared.setOwnerTrust(
+                                        fingerprint: key.fingerprint, level: level.rawValue,
+                                    )
+                                    await vm.refreshKeys()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             if key.hasSecretKey {
                 Button("Generate Revocation Certificate…") { keyForRevoke = key }
@@ -387,6 +418,104 @@ struct KeySettingsView: View {
         } catch {
             actionError = "Could not write exported key: \(error.localizedDescription)"
         }
+    }
+}
+
+// MARK: – OwnerTrust levels
+
+/// gpg's `--import-ownertrust` numeric encoding (RFC 4880 §5.2.3.13). Only
+/// the values a user explicitly picks (never / marginal / full / ultimate)
+/// are exposed; "unknown" is the implicit default and "undefined" is set
+/// programmatically when keys are imported.
+enum OwnerTrustLevel: Int, CaseIterable {
+    case never = 2
+    case marginal = 3
+    case full = 4
+    case ultimate = 5
+
+    static let userVisible: [OwnerTrustLevel] = [.never, .marginal, .full, .ultimate]
+
+    var title: String {
+        switch self {
+        case .never: "Never"
+        case .marginal: "Marginal"
+        case .full: "Full"
+        case .ultimate: "Ultimate"
+        }
+    }
+}
+
+// MARK: – Certify Key Sheet
+
+private struct CertifyKeySheet: View {
+    let key: GPGKeyInfo
+    let signers: [GPGKeyInfo]
+    let onConfirm: (_ signerFingerprint: String, _ exportable: Bool) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var signerFingerprint: String?
+    @State private var exportable = true
+    @State private var isWorking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Certify Key")
+                .font(.title2.weight(.semibold))
+            Text(key.displayName)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Form {
+                Picker("Sign with", selection: $signerFingerprint) {
+                    Text("Choose…").tag(String?.none)
+                    ForEach(signers) { signer in
+                        Text(signer.displayName).tag(Optional(signer.fingerprint))
+                    }
+                }
+                .disabled(isWorking)
+
+                Toggle("Exportable certification", isOn: $exportable)
+                    .disabled(isWorking)
+            }
+            .formStyle(.grouped)
+
+            Text(
+                exportable
+                    ? "An exportable certification can be uploaded to keyservers and shared with others — use it when you've verified the key out-of-band and want to vouch for it publicly."
+                    :
+                    "A local certification stays on this Mac. gpg uses it for trust decisions but it is never shared. Pick this if you trust the key for your own use without making a public claim.",
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack {
+                if isWorking {
+                    ProgressView().controlSize(.small)
+                    Text("Waiting for pinentry…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(isWorking)
+                Button("Certify") {
+                    Task {
+                        guard let fp = signerFingerprint else { return }
+                        isWorking = true
+                        defer { isWorking = false }
+                        await onConfirm(fp, exportable)
+                        dismiss()
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(isWorking || signerFingerprint == nil)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 460, idealWidth: 520)
     }
 }
 

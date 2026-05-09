@@ -176,6 +176,32 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    func signKey(
+        fingerprint: String,
+        signer: String,
+        exportable: Bool,
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.signKey(
+                fingerprint: fingerprint,
+                signerFingerprint: signer,
+                exportable: exportable,
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func setOwnerTrust(fingerprint: String, level: Int) async throws {
+        let _: Bool = try await call { proxy, resume in
+            proxy.setOwnerTrust(fingerprint: fingerprint, level: level) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     func revokePrimaryKey(
         fingerprint: String,
         reasonCode: Int,

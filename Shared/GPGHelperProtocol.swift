@@ -133,6 +133,30 @@ import Foundation
         reply: @escaping @Sendable (NSError?) -> Void,
     )
 
+    /// Certify a public key with one of *our* secret keys (`gpg --quick-sign-key`
+    /// or `--quick-lsign-key`). When `exportable` is true, the signature can
+    /// be uploaded to keyservers and shared. When false, the certification
+    /// stays local — useful when you want to mark someone's key as trusted
+    /// for your own decisions without making a public claim.
+    /// reply: (error?) — error is nil on success.
+    func signKey(
+        fingerprint: String,
+        signerFingerprint: String,
+        exportable: Bool,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Set the local ownertrust value for a key via `gpg --import-ownertrust`.
+    /// `level` follows gpg's numeric encoding: 2=never, 3=marginal, 4=full,
+    /// 5=ultimate. The `unknown` level (1) is the implicit default — call
+    /// this only with 2..5.
+    /// reply: (error?) — error is nil on success.
+    func setOwnerTrust(
+        fingerprint: String,
+        level: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
     /// Generate a revocation certificate via `gpg --gen-revoke` and import it
     /// immediately, marking the local key as revoked.
     /// `reasonCode` follows RFC 4880 §5.2.3.23: 0=no reason, 1=compromised,

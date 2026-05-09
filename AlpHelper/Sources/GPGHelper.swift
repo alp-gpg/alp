@@ -413,6 +413,44 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return fingerprint
     }
 
+    func _signKey(
+        fingerprint: String,
+        signer: String,
+        exportable: Bool,
+    ) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid target fingerprint")
+        }
+        guard Self.isValidFingerprint(signer) else {
+            throw GPGError.encodingError("invalid signer fingerprint")
+        }
+        // --quick-sign-key produces an exportable cert; --quick-lsign-key a
+        // local non-exportable one. gpg-agent prompts via pinentry for the
+        // signer's passphrase as usual.
+        let subcommand = exportable ? "--quick-sign-key" : "--quick-lsign-key"
+        let args = [
+            "--batch", "--yes", "--status-fd", "2",
+            "--local-user", signer,
+            subcommand, fingerprint,
+        ]
+        _ = try await runGPG(args)
+    }
+
+    func _setOwnerTrust(_ fingerprint: String, level: Int) async throws {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
+        guard (2 ... 5).contains(level) else {
+            throw GPGError.encodingError("trust level must be 2..5")
+        }
+        // `--import-ownertrust` reads `<fingerprint>:<level>:` lines from
+        // stdin. This is the documented non-interactive path; the
+        // alternative (`--edit-key trust`) is menu-driven.
+        let payload = "\(fingerprint):\(level):\n"
+        let args = ["--batch", "--yes", "--import-ownertrust"]
+        _ = try await runGPG(args, input: Data(payload.utf8))
+    }
+
     func _changePassphrase(_ fingerprint: String) async throws {
         guard Self.isValidFingerprint(fingerprint) else {
             throw GPGError.encodingError("invalid fingerprint")
@@ -1087,6 +1125,45 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(nil, e.asNSError)
             } catch {
                 reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func signKey(
+        fingerprint: String,
+        signerFingerprint: String,
+        exportable: Bool,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._signKey(
+                    fingerprint: fingerprint,
+                    signer: signerFingerprint,
+                    exportable: exportable,
+                )
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func setOwnerTrust(
+        fingerprint: String,
+        level: Int,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._setOwnerTrust(fingerprint, level: level)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
             }
         }
     }

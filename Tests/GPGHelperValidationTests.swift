@@ -167,6 +167,38 @@ struct GPGHelperEditKeyValidationTests {
             _ = try await helper._revokePrimaryKey(valid, reasonCode: 1, description: "bad <script>")
         }
     }
+
+    @Test
+    func `signKey rejects malformed target or signer fingerprint`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._signKey(fingerprint: "nope", signer: valid, exportable: true)
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._signKey(fingerprint: valid, signer: "nope", exportable: false)
+        }
+    }
+
+    @Test
+    func `setOwnerTrust rejects malformed fingerprint`() async {
+        let helper = GPGHelper()
+        await #expect(throws: GPGError.self) {
+            try await helper._setOwnerTrust("nope", level: 4)
+        }
+    }
+
+    @Test
+    func `setOwnerTrust rejects out-of-range level`() async {
+        let helper = GPGHelper()
+        let valid = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+        await #expect(throws: GPGError.self) {
+            try await helper._setOwnerTrust(valid, level: 1) // unknown is not settable
+        }
+        await #expect(throws: GPGError.self) {
+            try await helper._setOwnerTrust(valid, level: 6)
+        }
+    }
 }
 
 @Suite("GPGHelper key-generation parser")

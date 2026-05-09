@@ -18,19 +18,17 @@
 - [ ] **Keys list hierarchy + expired key handling**
       Spec: `docs/superpowers/specs/2026-04-11-keys-list-hierarchy-design.md`
 
-- [ ] **GPGTools-parity P0**
+- [x] **GPGTools-parity P0**
       Spec: `docs/superpowers/specs/2026-05-09-gpgtools-parity-design.md`
-  - [x] Helper RPCs: `deletePublicKey`, `deleteSecretKey`, `exportPublicKey`, `exportSecretKey`
-  - [x] Helper RPC: `generatePrimaryKey` (Ed25519 + Cv25519, 2y default expiry)
-  - [x] Helper RPCs: `changePassphrase`, `setExpiry`, `revokePrimaryKey`
-  - [x] Settings UI: per-row lifecycle actions + generate-key sheet
-  - [x] WKD lookup fallback (advanced + direct method)
-  - [x] First-run gpg install guidance in setup checklist
-  - [x] Pinentry-mac decision (bundle / brew / native) — **brew**, see spec
-  - [x] Inline-PGP outgoing toggle for legacy recipients
-  - [x] Per-account default signing key (`from -> fingerprint` map)
-  - [x] Services menu (Decrypt / Verify / Sign selection — encrypt deferred)
-  - [x] Sparkle auto-update wiring (EdDSA-signed appcast)
+
+- [ ] **GPGTools-parity P1**
+      Spec: `docs/superpowers/specs/2026-05-09-gpgtools-parity-p1-design.md`
+  - [ ] Keyserver upload RPC + UI (`uploadPublicKey` to keys.openpgp.org)
+  - [ ] `signKey` + `setOwnerTrust` RPCs + per-row Certify / Trust UI
+  - [ ] Multi-keyserver fallback chain (proton.me, HKPS pool after WKD)
+  - [ ] Smartcard / YubiKey read-only status panel
+  - [ ] Photo IDs surfaced in the Keys table
+  - [ ] Localization pass with seed `de` + `fr` entries
 
 ## Future / Deferred
 

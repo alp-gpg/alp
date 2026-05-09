@@ -354,24 +354,113 @@ private enum KeyserverClient {
     }
 
     static func fetch(email: String) async throws -> Data {
-        // Try keys.openpgp.org first — pinned, well-known, indexed. Fall back
-        // to WKD when keys.openpgp.org reports notFound so domains using
-        // self-hosted Web Key Directories (corporate, proton, gnupg.org…)
-        // aren't dead-ends.
-        do {
-            return try await fetchOpenPGPDirectory(email: email)
-        } catch Error.notFound {
+        // Sources are tried in priority order; first hit wins. The order
+        // is: pinned keys.openpgp.org → WKD (advanced + direct) → Proton's
+        // PKS endpoint → the HKPS pool. Each hop falls through on
+        // `notFound`; the rest of the network errors propagate so users
+        // see actionable messages instead of silent failure.
+        var lastNetworkError: Swift.Error?
+        for source in fallbackOrder {
             do {
-                return try await WKDClient.fetch(email: email)
-            } catch WKDClient.Error.notFound, WKDClient.Error.malformedEmail {
-                throw Error.notFound
-            } catch let WKDClient.Error.networkError(inner) {
-                throw Error.networkError(inner)
-            } catch let WKDClient.Error.httpError(code) {
-                throw Error.httpError(code)
-            } catch WKDClient.Error.responseTooLarge {
-                throw Error.httpError(0) // surfaced as "WKD response too large"
+                return try await source.fetch(email)
+            } catch Error.notFound {
+                continue
+            } catch let Error.networkError(inner) {
+                lastNetworkError = inner
+                continue
+            } catch let Error.httpError(code) where (400 ... 499).contains(code) {
+                continue
             }
+        }
+        if let lastNetworkError {
+            throw Error.networkError(lastNetworkError)
+        }
+        throw Error.notFound
+    }
+
+    /// Each fallback is independent; failure surfaces as one of the
+    /// canonical `Error` cases so the outer dispatcher can decide whether
+    /// to keep trying.
+    struct Source {
+        let label: String
+        let fetch: @Sendable (_ email: String) async throws -> Data
+    }
+
+    private static var fallbackOrder: [Source] {
+        [
+            Source(label: "keys.openpgp.org", fetch: fetchOpenPGPDirectory),
+            Source(label: "WKD", fetch: fetchWKD),
+            Source(label: "proton.me", fetch: fetchProton),
+            Source(label: "HKPS pool", fetch: fetchHKPSPool),
+        ]
+    }
+
+    private static let openSession: URLSession = .makeWKDSession()
+
+    private static func fetchWKD(email: String) async throws -> Data {
+        do {
+            return try await WKDClient.fetch(email: email)
+        } catch WKDClient.Error.notFound, WKDClient.Error.malformedEmail {
+            throw Error.notFound
+        } catch let WKDClient.Error.networkError(inner) {
+            throw Error.networkError(inner)
+        } catch let WKDClient.Error.httpError(code) {
+            throw Error.httpError(code)
+        } catch WKDClient.Error.responseTooLarge {
+            throw Error.httpError(0)
+        }
+    }
+
+    private static func fetchProton(email: String) async throws -> Data {
+        try await fetchPKSLookup(host: "api.protonmail.ch", email: email, session: openSession)
+    }
+
+    private static func fetchHKPSPool(email: String) async throws -> Data {
+        try await fetchPKSLookup(host: "keyserver.ubuntu.com", email: email, session: openSession)
+    }
+
+    private static func fetchPKSLookup(
+        host: String,
+        email: String,
+        session: URLSession,
+    ) async throws -> Data {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.path = "/pks/lookup"
+        components.queryItems = [
+            URLQueryItem(name: "op", value: "get"),
+            URLQueryItem(name: "options", value: "mr"),
+            URLQueryItem(name: "search", value: email),
+        ]
+        guard let url = components.url, url.scheme == "https" else {
+            throw Error.notFound
+        }
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            throw Error.networkError(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw Error.notFound }
+        switch http.statusCode {
+        case 200:
+            // Some PKS hosts return 200 with an HTML "no key found" page.
+            // The `mr` (machine-readable) option asks for a raw armored
+            // body; if it's not armored, treat as notFound rather than
+            // attempting to import HTML as a key.
+            let prefix = data.prefix(64)
+            guard prefix.contains("-----BEGIN PGP".utf8.first ?? 0),
+                  let head = String(data: prefix, encoding: .utf8),
+                  head.contains("-----BEGIN PGP")
+            else {
+                throw Error.notFound
+            }
+            return data
+        case 404:
+            throw Error.notFound
+        default:
+            throw Error.httpError(http.statusCode)
         }
     }
 

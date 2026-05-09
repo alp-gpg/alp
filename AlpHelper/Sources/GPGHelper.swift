@@ -284,17 +284,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     func _listAllKeys() async throws -> [GPGKeyInfo] {
         let pubOut = try await runGPG(["--list-keys", "--with-colons", "--with-fingerprint"])
         var keys = parseColonKeyListing(String(data: pubOut, encoding: .utf8) ?? "")
-        // Cross-reference with secret keys to set hasSecretKey
+        // Cross-reference with secret keys to set hasSecretKey. Mutating
+        // hasSecretKey in place preserves every other field — earlier
+        // versions rebuilt each GPGKeyInfo via the minimal init and silently
+        // dropped subkeys / ownerTrustCode / creationDate / algorithm.
         if let secOut = try? await runGPG(["--list-secret-keys", "--with-colons", "--with-fingerprint"]) {
             let secFPs = Set(parseColonKeyListing(String(data: secOut, encoding: .utf8) ?? "").map(\.fingerprint))
-            keys = keys.map { k in
-                GPGKeyInfo(
-                    fingerprint: k.fingerprint,
-                    userIDs: k.userIDs,
-                    capabilities: k.capabilities,
-                    hasSecretKey: secFPs.contains(k.fingerprint),
-                    expiryDate: k.expiryDate,
-                )
+            for index in keys.indices {
+                keys[index].hasSecretKey = secFPs.contains(keys[index].fingerprint)
             }
         }
         return keys

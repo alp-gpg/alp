@@ -91,36 +91,31 @@ Surface read-only metadata.
   Read-only — adding card management UI (PIN change, key transfer) is
   deferred.
 
-### 5. Photo IDs in Keys table
+### 5. Photo IDs in Keys table — **deferred to P2**
 
 UAT packets are an underused but pleasant feature: a 64×64 portrait
 embedded in the public key. Surface the thumbnail next to the UID column.
 
-* `gpg --list-options show-photos --list-keys` writes each photo to a temp
-  file. Easier path: `gpg --list-packets --no-armor` exposes UAT packets
-  inline; parse the JPEG bytes and decode in-memory.
-* The `parseColonKeyListing` flow already gathers per-key data; add an
-  optional `photoData: Data?` field on `GPGKeyInfo` populated when the
-  user attribute is present.
-* `KeyListRow` shows a 24×24 image thumbnail aligned with the User ID
-  column when `photoData` is non-nil.
-
-Add/remove flows are deferred — generating a UAT requires bundled tooling
-that's noisy.
+The cleanest path requires a small OpenPGP packet parser (RFC 4880 §4.2 +
+§5.12 user-attribute sub-packet type 1 for image attributes). gpg's
+`--list-packets` text output describes UATs but does not expose the raw
+JPEG bytes inline, and the alternative `--photo-viewer "cat %i"` hack
+forks a shell per key. Defer to a focused round where we can ship the
+parser with proper tests against captured key fixtures.
 
 ### 6. Localization pass
 
-Strings are mostly already wrapped through SwiftUI's `Text(...)` /
-`Label(...)`, which routes through `Localizable.xcstrings` automatically.
-A few hardcoded `String` literals in error messages, helper output, and
-shell strings remain. The pass:
+Strings shown via SwiftUI `Text(...)` / `Label(...)` are auto-extracted
+into `Localizable.xcstrings`. The remaining gap is raw `String` literals
+returned through `LocalizedError.errorDescription` — these aren't picked
+up unless wrapped in `String(localized:)`. The first pass converts those
+in `GPGError`, `KeyserverUploader.Error`, and `WKDClient.Error` so the
+catalog reflects every user-facing message Alp can throw.
 
-* Audit each `*.swift` for raw string literals shown to the user; convert
-  to `String(localized:)` with stable keys.
-* Seed `de.lproj` and `fr.lproj` entries in `Localizable.xcstrings` and
-  rough-translate via Apple's machine translation (Xcode 26 has it built
-  in). Real translations follow when contributors arrive.
-* Keep the catalog sorted alphabetically so diffs stay readable.
+Real translations are deferred to a later round where a native speaker
+reviews the catalog before any locale ships. Machine translation in a
+security tool produces dangerous mistranslations and we will not be the
+ones to demonstrate that.
 
 ## Order of work
 

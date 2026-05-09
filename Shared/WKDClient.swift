@@ -32,10 +32,10 @@ enum WKDClient {
 
         var errorDescription: String? {
             switch self {
-            case .malformedEmail: "Invalid email address."
-            case .notFound: "No WKD key published for this address."
-            case .responseTooLarge: "WKD response was unexpectedly large; refusing to import."
-            case let .httpError(code): "WKD server returned HTTP \(code)."
+            case .malformedEmail: String(localized: "Invalid email address.")
+            case .notFound: String(localized: "No WKD key published for this address.")
+            case .responseTooLarge: String(localized: "WKD response was unexpectedly large; refusing to import.")
+            case let .httpError(code): String(localized: "WKD server returned HTTP \(code).")
             case let .networkError(inner): inner.localizedDescription
             }
         }

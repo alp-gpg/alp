@@ -46,9 +46,9 @@ enum KeyserverUploader {
             switch self {
             case let .networkError(inner): inner.localizedDescription
             case let .httpError(code, body):
-                "Keyserver upload failed (HTTP \(code)): \(body)"
+                String(localized: "Keyserver upload failed (HTTP \(code)): \(body)")
             case .malformedResponse:
-                "Keyserver upload reply was not valid JSON."
+                String(localized: "Keyserver upload reply was not valid JSON.")
             }
         }
     }

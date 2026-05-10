@@ -70,10 +70,27 @@ let project = Project(
                     outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AlpHelper"],
                     basedOnDependencyAnalysis: false,
                 ),
+                // Embed the AlpPinentry command-line tool. gpg-agent will
+                // execute this binary via a stable shim path the
+                // `configurePinentry` helper RPC writes into the user's
+                // gpg-agent.conf, so it must live somewhere predictable
+                // inside the bundle.
+                .post(
+                    script: """
+                    DEST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+                    mkdir -p "$DEST"
+                    cp "${BUILT_PRODUCTS_DIR}/AlpPinentry" "$DEST/AlpPinentry"
+                    """,
+                    name: "Embed AlpPinentry",
+                    inputPaths: ["$(BUILT_PRODUCTS_DIR)/AlpPinentry"],
+                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/AlpPinentry"],
+                    basedOnDependencyAnalysis: false,
+                ),
             ],
             dependencies: [
                 .target(name: "AlpExtension"),
                 .target(name: "AlpHelper"),
+                .target(name: "AlpPinentry"),
                 .package(product: "Sparkle"),
             ],
             settings: .settings(
@@ -143,6 +160,30 @@ let project = Project(
                 "ENABLE_HARDENED_RUNTIME": "YES",
                 "CREATE_INFOPLIST_SECTION_IN_BINARY": "YES",
                 "OTHER_CODE_SIGN_FLAGS": "--identifier app.alp.Alp.helper",
+            ]),
+        ),
+
+        // ── Pinentry (Assuan-speaking GUI passphrase prompt) ──────────
+        .target(
+            name: "AlpPinentry",
+            destinations: .macOS,
+            product: .commandLineTool,
+            bundleId: "app.alp.Alp.pinentry",
+            deploymentTargets: .macOS("26.0"),
+            infoPlist: .file(path: "AlpPinentry/SupportingFiles/Info.plist"),
+            sources: [
+                "AlpPinentry/Sources/**",
+            ],
+            // No entitlements: pinentry runs as a child of gpg-agent in
+            // the user's session and only needs Cocoa for the secure
+            // text field. No sandbox, no XPC, no network.
+            settings: .settings(base: [
+                "CODE_SIGN_IDENTITY": "Apple Development",
+                "CODE_SIGN_STYLE": "Automatic",
+                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
+                "ENABLE_HARDENED_RUNTIME": "YES",
+                "CREATE_INFOPLIST_SECTION_IN_BINARY": "YES",
+                "OTHER_CODE_SIGN_FLAGS": "--identifier app.alp.Alp.pinentry",
             ]),
         ),
 

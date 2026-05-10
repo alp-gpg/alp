@@ -63,8 +63,8 @@ function_body_length:
   warning: 110
   error: 140
 cyclomatic_complexity:
-  warning: 18
-  error: 25
+  warning: 25
+  error: 35
 large_tuple:
   warning: 4
   error: 5

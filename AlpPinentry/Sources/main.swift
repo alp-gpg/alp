@@ -1,0 +1,304 @@
+import AppKit
+import Foundation
+import os.log
+
+private let log = Logger(subsystem: "app.alp.Alp.pinentry", category: "Pinentry")
+
+// Native Assuan-speaking pinentry for gpg-agent. gpg-agent invokes us as
+// a child process and drives the Assuan protocol over stdin/stdout. We
+// pop a Cocoa secure-text-field prompt for GETPIN and a yes/no alert for
+// CONFIRM. Everything else (SETxxx, OPTION, GETINFO) is acknowledged
+// without state change beyond updating our prompt strings.
+//
+// Protocol reference: <https://www.gnupg.org/documentation/manuals/assuan/Server-responses.html>
+// and pinentry's `doc/pinentry.texi` in the gnupg-pinentry source tree.
+
+// MARK: – Assuan codec
+
+/// Assuan command lines are ASCII; values within them are %-encoded so
+/// CR / LF / `%` survive the line-oriented protocol.
+enum Assuan {
+    static func decode(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        var i = s.startIndex
+        while i < s.endIndex {
+            let c = s[i]
+            if c == "%", s.distance(from: i, to: s.endIndex) >= 3 {
+                let hex = s[s.index(after: i) ..< s.index(i, offsetBy: 3)]
+                if let v = UInt8(hex, radix: 16) {
+                    out.unicodeScalars.append(Unicode.Scalar(v))
+                    i = s.index(i, offsetBy: 3)
+                    continue
+                }
+            }
+            out.append(c)
+            i = s.index(after: i)
+        }
+        return out
+    }
+
+    static func encode(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for scalar in s.unicodeScalars {
+            switch scalar.value {
+            case 0x25, 0x0A, 0x0D: // % LF CR
+                out.append(String(format: "%%%02X", scalar.value))
+            default:
+                out.unicodeScalars.append(scalar)
+            }
+        }
+        return out
+    }
+}
+
+// MARK: – State
+
+/// Mutable session state collected from SET* commands and consumed by
+/// GETPIN / CONFIRM. Value type because we copy snapshots onto the main
+/// thread for each prompt; the Assuan loop owns the original.
+struct PinentryState {
+    var title: String = "Alp"
+    var description: String = "Enter passphrase"
+    var prompt: String = "Passphrase:"
+    var error: String?
+    var okLabel: String = "OK"
+    var cancelLabel: String = "Cancel"
+}
+
+// MARK: – I/O helpers
+
+private let stdoutHandle = FileHandle.standardOutput
+private let stdinHandle = FileHandle.standardInput
+
+private func send(_ line: String) {
+    let bytes = (line + "\n").data(using: .utf8) ?? Data()
+    stdoutHandle.write(bytes)
+}
+
+private func sendOK(_ comment: String? = nil) {
+    if let comment, !comment.isEmpty {
+        send("OK \(comment)")
+    } else {
+        send("OK")
+    }
+}
+
+private func sendErr(_ code: Int, _ message: String) {
+    send("ERR \(code) \(message)")
+}
+
+/// Persistent stdin buffer. The Assuan loop reads one line at a time,
+/// but stdin can deliver multiple lines per `availableData` call —
+/// without this, every line after the first in a single chunk would be
+/// silently discarded.
+private nonisolated(unsafe) var stdinBuffer = Data()
+
+/// Reads one CRLF/LF-terminated line from stdin. Returns nil on EOF
+/// once the buffer is fully drained.
+private func readAssuanLine() -> String? {
+    while true {
+        if let nl = stdinBuffer.firstIndex(of: 0x0A) {
+            let line = stdinBuffer.subdata(in: stdinBuffer.startIndex ..< nl)
+            stdinBuffer.removeSubrange(stdinBuffer.startIndex ... nl)
+            return String(data: line, encoding: .utf8)?
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+        }
+        let chunk = stdinHandle.availableData
+        if chunk.isEmpty {
+            // EOF. Surface any trailing line without a newline, then nil.
+            if stdinBuffer.isEmpty { return nil }
+            let trailing = String(data: stdinBuffer, encoding: .utf8)
+            stdinBuffer.removeAll()
+            return trailing
+        }
+        stdinBuffer.append(chunk)
+    }
+}
+
+// MARK: – Cocoa prompts (must run on main)
+
+@MainActor
+private enum Prompt {
+    /// Returns the entered passphrase, or nil when the user cancelled.
+    static func passphrase(state: PinentryState) -> String? {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = state.title
+        alert.informativeText = errorPrefixed(state.description, error: state.error)
+        alert.addButton(withTitle: state.okLabel)
+        alert.addButton(withTitle: state.cancelLabel)
+
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 22))
+        field.placeholderString = state.prompt
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        bringToFront()
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return nil }
+        return field.stringValue
+    }
+
+    /// Returns true on Yes, false on No / Cancel.
+    static func confirm(state: PinentryState, oneButton: Bool) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = state.title
+        alert.informativeText = errorPrefixed(state.description, error: state.error)
+        alert.addButton(withTitle: state.okLabel)
+        if !oneButton {
+            alert.addButton(withTitle: state.cancelLabel)
+        }
+        bringToFront()
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    static func message(state: PinentryState) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = state.title
+        alert.informativeText = state.description
+        alert.addButton(withTitle: state.okLabel)
+        bringToFront()
+        _ = alert.runModal()
+    }
+
+    private static func errorPrefixed(_ description: String, error: String?) -> String {
+        guard let error, !error.isEmpty else { return description }
+        return "⚠️ \(error)\n\n\(description)"
+    }
+
+    private static func bringToFront() {
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: – Main loop
+
+private func runAssuanLoop() {
+    var state = PinentryState()
+
+    sendOK("Pleased to meet you, please come in")
+
+    while let raw = readAssuanLine() {
+        let line = raw.trimmingCharacters(in: .whitespaces)
+        if line.isEmpty || line.hasPrefix("#") { continue }
+
+        let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
+        let command = parts[0].uppercased()
+        let argument = parts.count > 1 ? Assuan.decode(parts[1]) : ""
+
+        switch command {
+        case "BYE":
+            sendOK("closing connection")
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+            return
+
+        case "RESET", "STOP":
+            state.error = nil
+            sendOK()
+
+        case "OPTION":
+            // ttytype, lc-ctype, default-* — none affect our Cocoa UI.
+            sendOK()
+
+        case "GETINFO":
+            switch argument {
+            case "version": send("D 1.0.0+alp")
+            case "pid": send("D \(getpid())")
+            case "flavor": send("D alp")
+            default: break
+            }
+            sendOK()
+
+        case "SETTITLE":
+            state.title = argument.isEmpty ? "Alp" : argument
+            sendOK()
+
+        case "SETDESC":
+            state.description = argument
+            sendOK()
+
+        case "SETPROMPT":
+            state.prompt = argument
+            sendOK()
+
+        case "SETERROR":
+            state.error = argument
+            sendOK()
+
+        case "SETOK":
+            state.okLabel = stripUnderscoreAccelerator(argument)
+            sendOK()
+
+        case "SETCANCEL":
+            state.cancelLabel = stripUnderscoreAccelerator(argument)
+            sendOK()
+
+        case "SETNOTOK",
+             "SETKEYINFO",
+             "SETREPEAT",
+             "SETREPEATERROR",
+             "SETQUALITYBAR",
+             "SETQUALITYBAR_TT",
+             "SETGENPIN",
+             "SETGENPIN_TT",
+             "SETTIMEOUT":
+            // We don't render quality bars or the repeat-passphrase
+            // helper today; acknowledging keeps gpg-agent happy.
+            sendOK()
+
+        case "GETPIN":
+            let snapshot = state
+            var pin: String?
+            DispatchQueue.main.sync { pin = Prompt.passphrase(state: snapshot) }
+            if let pin {
+                send("D \(Assuan.encode(pin))")
+                sendOK()
+            } else {
+                sendErr(83_886_179, "Operation cancelled")
+            }
+            state.error = nil
+
+        case "CONFIRM":
+            let oneButton = argument.contains("--one-button")
+            let snapshot = state
+            var ok = false
+            DispatchQueue.main.sync { ok = Prompt.confirm(state: snapshot, oneButton: oneButton) }
+            if ok { sendOK() } else { sendErr(83_886_194, "Not confirmed") }
+            state.error = nil
+
+        case "MESSAGE":
+            let snapshot = state
+            DispatchQueue.main.sync { Prompt.message(state: snapshot) }
+            sendOK()
+
+        case "NOP":
+            sendOK()
+
+        default:
+            // Unknown commands get a soft error so gpg-agent can fall
+            // back without aborting the whole flow.
+            sendErr(83_886_184, "Unknown command \(command)")
+        }
+    }
+    // EOF: gpg-agent closed stdin without sending BYE.
+    DispatchQueue.main.async { NSApp.terminate(nil) }
+}
+
+/// Pinentry's button labels carry an `_` underscore accelerator (e.g.
+/// `_OK`, `_Cancel`) that's meaningless in Cocoa. Strip it for display.
+private func stripUnderscoreAccelerator(_ s: String) -> String {
+    s.replacingOccurrences(of: "_", with: "")
+}
+
+// MARK: – Entry point
+
+NSApplication.shared.setActivationPolicy(.accessory)
+DispatchQueue.global(qos: .userInitiated).async {
+    runAssuanLoop()
+}
+
+NSApplication.shared.run()

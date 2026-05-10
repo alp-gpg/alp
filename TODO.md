@@ -13,9 +13,44 @@
 
 ## Future ideas (not scheduled)
 
+### Adjacent expansion — "macOS GPG productivity tool"
+
+PGP-email is a flat-to-shrinking market; GPG-the-tool isn't going
+anywhere because of Linux package signing, git commit signing,
+YubiKey, ProtonMail, RFC 9580 refresh, and Sequoia rebuild. These
+extend Alp's value to the GPG users who don't email-PGP much, which
+is most of them.
+
+- [ ] **File encryption / decryption.** Drag-drop encrypt, "Encrypt
+      File…" / "Decrypt File…" Services menu items. Reuses the helper.
+      Highest-value adjacent move — turns Alp into a GPG Services
+      replacement, not just a GPGMail replacement.
+- [ ] **Smartcard / YubiKey write ops.** PIN change, transfer key
+      to card, factory-reset card. Read-only panel already ships;
+      write ops would make Alp the macOS-native YubiKey provisioning
+      tool. Audience: every dev with a YubiKey.
+- [ ] **Git commit signing setup wizard.** Detects unsigned-commit
+      git config, offers to set `user.signingkey` to a chosen key
+      and turn `commit.gpgsign` on. Small, dev-loved feature.
+- [ ] **Key backup + restore wizard.** Guided export of secret key
+      + revocation certificate to an encrypted bundle, with a "test
+      restore on a different Mac" walk-through. Protects users from
+      the most common GPG-disaster: losing the only copy of the key.
+- [ ] **SSH-key via gpg-agent.** Configure gpg-agent's SSH socket
+      and link an authentication-capable subkey for `ssh-add -L`-style
+      use. Power user feature; cheap to wire once card-write lands.
+- [ ] **gpg-agent passphrase cache management.** "Clear cache" button
+      + visible cache TTL setting. Cheap win, today users have to
+      `gpgconf --reload` from Terminal.
+- [ ] **RFC 9580 / crypto-refresh readiness.** Health check warns
+      when local gpg is older than the version that ships RFC 9580
+      support (gpg ≥ 2.4.5 / Sequoia builds). Helps users on Linux
+      distro-locked gpg avoid silent compat issues.
+
+### Mail-side polish
+
 - [ ] Per-subkey refresh from keyserver (today's refresh is whole-primary).
 - [ ] Tor / SOCKS proxy for keyserver fetches.
+- [ ] Address-book "encryptable" badge in Contacts.
 - [ ] Real translations once a native speaker is available per locale —
       the xcstrings catalog already captures every user-facing string.
-- [ ] File encryption / decryption (Services menu currently text-only).
-- [ ] Address-book "encryptable" badge in Contacts.

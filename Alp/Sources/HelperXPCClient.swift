@@ -40,6 +40,41 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    struct PinentryConfig {
+        /// Path written in `~/.gnupg/gpg-agent.conf`, or nil when no
+        /// `pinentry-program` directive is present.
+        let configuredPath: String?
+        /// True when the configured path equals the Alp shim location.
+        let isAlpPinentry: Bool
+    }
+
+    func pinentryConfigStatus() async throws -> PinentryConfig {
+        try await call { proxy, resume in
+            proxy.pinentryConfigStatus { path, isAlp, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(PinentryConfig(configuredPath: path, isAlpPinentry: isAlp))) }
+            }
+        }
+    }
+
+    func installAlpPinentry(bundlePath: String) async throws {
+        let _: Bool = try await call { proxy, resume in
+            proxy.installAlpPinentry(bundlePath: bundlePath) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    func uninstallAlpPinentry() async throws {
+        let _: Bool = try await call { proxy, resume in
+            proxy.uninstallAlpPinentry { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     /// Returns nil when no smartcard is present. Errors propagate as
     /// thrown errors only for genuine helper failures.
     func cardStatus() async throws -> GPGCardStatus? {

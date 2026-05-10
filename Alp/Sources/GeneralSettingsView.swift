@@ -75,6 +75,10 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if vm.helperStatus == .enabled, let config = vm.pinentryConfig {
+                pinentrySection(config)
+            }
+
             if let card = vm.cardStatus, card.isPresent {
                 smartcardSection(card)
             }
@@ -167,6 +171,63 @@ struct GeneralSettingsView: View {
     }
 
     @AppStorage("autoRefreshExpiredOnShow") private var autoRefreshExpiredOnShow = false
+
+    /// Pinentry section: surfaces the current `gpg-agent.conf` value
+    /// and offers a one-click switch to Alp's bundled native pinentry.
+    /// Removes the brew dependency on `pinentry-mac` for users who
+    /// install it.
+    private func pinentrySection(_ config: HelperXPCClient.PinentryConfig) -> some View {
+        Section("Pinentry") {
+            if config.isAlpPinentry {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Using Alp's built-in pinentry")
+                        Text("gpg-agent will prompt for passphrases through Alp.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+                Button("Stop using Alp Pinentry") {
+                    Task { await vm.uninstallAlpPinentry() }
+                }
+                .controlSize(.small)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let path = config.configuredPath {
+                        LabeledContent("Current") {
+                            Text(path)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    } else {
+                        Text(
+                            "gpg-agent has no `pinentry-program` directive — it falls back to a default search path that often picks the curses pinentry, which can't prompt from a background daemon.",
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(
+                        "Switching to Alp's built-in pinentry removes the need for `brew install pinentry-mac` and gives Alp control over the prompt UI.",
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+                }
+                Button("Use Alp Pinentry") {
+                    Task { await vm.installAlpPinentry() }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+    }
 
     /// Read-only smartcard summary, hidden when no card is present. The
     /// values come straight from the helper's card-status RPC.

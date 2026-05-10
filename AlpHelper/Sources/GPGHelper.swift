@@ -724,6 +724,147 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     // MARK: – Health check
 
+    // MARK: – Pinentry installer
+
+    /// Stable path the shim script lives at. gpg-agent.conf points here
+    /// so app moves don't break the reference.
+    static var pinentryShimPath: String {
+        let home = NSHomeDirectory()
+        return "\(home)/Library/Application Support/Alp/pinentry"
+    }
+
+    private static var gpgAgentConfPath: String {
+        "\(NSHomeDirectory())/.gnupg/gpg-agent.conf"
+    }
+
+    /// Reads the current `pinentry-program` line from gpg-agent.conf.
+    /// Returns nil when the file or directive is missing.
+    func _readPinentryProgram() -> String? {
+        guard let text = try? String(contentsOfFile: Self.gpgAgentConfPath, encoding: .utf8) else {
+            return nil
+        }
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("pinentry-program") {
+                let parts = trimmed.split(separator: " ", maxSplits: 1)
+                if parts.count == 2 {
+                    return String(parts[1]).trimmingCharacters(in: .whitespaces)
+                }
+            }
+        }
+        return nil
+    }
+
+    /// True when `pinentry-program` already points at our shim.
+    func _isAlpPinentryConfigured() -> Bool {
+        _readPinentryProgram() == Self.pinentryShimPath
+    }
+
+    /// Writes the shim script (POSIX shell, Spotlight-resolves the app
+    /// bundle so app moves don't break the reference), edits
+    /// gpg-agent.conf, and restarts gpg-agent.
+    func _installAlpPinentry(bundlePath: String) async throws {
+        let shimContent = """
+        #!/bin/sh
+        # Alp Pinentry shim. gpg-agent invokes this; we resolve the current
+        # Alp.app bundle via Spotlight (so app moves keep working) and
+        # exec its embedded AlpPinentry binary.
+        APP_BUNDLE="\(bundlePath)"
+        if [ ! -x "$APP_BUNDLE/Contents/Helpers/AlpPinentry" ]; then
+            FOUND=$(/usr/bin/mdfind 'kMDItemCFBundleIdentifier == "app.alp.Alp"' | head -1)
+            if [ -n "$FOUND" ]; then
+                APP_BUNDLE="$FOUND"
+            fi
+        fi
+        exec "$APP_BUNDLE/Contents/Helpers/AlpPinentry" "$@"
+        """
+        let shimPath = Self.pinentryShimPath
+        let shimDir = (shimPath as NSString).deletingLastPathComponent
+        try FileManager.default.createDirectory(
+            atPath: shimDir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700],
+        )
+        try shimContent.write(toFile: shimPath, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: shimPath,
+        )
+        try Self.upsertPinentryProgram(shimPath)
+        try await Self.restartGpgAgent()
+    }
+
+    /// Strip the `pinentry-program` line and restart gpg-agent. Leaves
+    /// the shim file in place for re-enable.
+    func _uninstallAlpPinentry() async throws {
+        try Self.removePinentryProgram()
+        try await Self.restartGpgAgent()
+    }
+
+    /// Adds or replaces the `pinentry-program` directive in
+    /// gpg-agent.conf. Creates the file if it doesn't exist.
+    private static func upsertPinentryProgram(_ path: String) throws {
+        let conf = gpgAgentConfPath
+        let confDir = (conf as NSString).deletingLastPathComponent
+        try FileManager.default.createDirectory(
+            atPath: confDir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700],
+        )
+        let existing = (try? String(contentsOfFile: conf, encoding: .utf8)) ?? ""
+        var lines = existing.components(separatedBy: "\n")
+        var replaced = false
+        for index in lines.indices {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("pinentry-program") {
+                lines[index] = "pinentry-program \(path)"
+                replaced = true
+                break
+            }
+        }
+        if !replaced {
+            // Drop trailing blank line, then append + restore one.
+            while lines.last == "" {
+                lines.removeLast()
+            }
+            lines.append("pinentry-program \(path)")
+            lines.append("")
+        }
+        try lines.joined(separator: "\n").write(
+            toFile: conf, atomically: true, encoding: .utf8,
+        )
+    }
+
+    private static func removePinentryProgram() throws {
+        let conf = gpgAgentConfPath
+        guard let existing = try? String(contentsOfFile: conf, encoding: .utf8) else {
+            return
+        }
+        let lines = existing.components(separatedBy: "\n").filter { line in
+            !line.trimmingCharacters(in: .whitespaces).hasPrefix("pinentry-program")
+        }
+        try lines.joined(separator: "\n").write(
+            toFile: conf, atomically: true, encoding: .utf8,
+        )
+    }
+
+    private static func restartGpgAgent() async throws {
+        // `gpgconf --kill gpg-agent` is the documented way to force a
+        // reload of gpg-agent.conf. The next gpg invocation respawns it.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["gpgconf", "--kill", "gpg-agent"]
+        process.environment = sanitizedEnvironment()
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+        try process.run()
+        process.waitUntilExit()
+        // We don't check exit status — gpgconf returns non-zero when
+        // gpg-agent isn't running, which is fine: the next gpg call
+        // will spawn a fresh one with the new conf.
+    }
+
     /// Returns nil when no card is present rather than throwing — the UI
     /// uses presence as a hide/show signal, so a "no card" outcome is
     /// expected and not an error condition.
@@ -1309,6 +1450,45 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(data, nil)
             } catch {
                 reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func pinentryConfigStatus(
+        reply: @escaping @Sendable (String?, Bool, NSError?) -> Void,
+    ) {
+        Task {
+            let path = await self._readPinentryProgram()
+            let isAlp = await self._isAlpPinentryConfigured()
+            reply(path, isAlp, nil)
+        }
+    }
+
+    nonisolated func installAlpPinentry(
+        bundlePath: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                try await self._installAlpPinentry(bundlePath: bundlePath)
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func uninstallAlpPinentry(reply: @escaping @Sendable (NSError?) -> Void) {
+        Task {
+            do {
+                try await self._uninstallAlpPinentry()
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
             }
         }
     }

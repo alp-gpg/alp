@@ -70,6 +70,28 @@ import Foundation
     /// the error path is reserved for genuine helper failures.
     func cardStatus(reply: @escaping @Sendable (Data?, NSError?) -> Void)
 
+    /// Reads the `pinentry-program` line from `~/.gnupg/gpg-agent.conf`.
+    /// reply: (currentProgramPath?, isAlp, error?) where `isAlp` is
+    /// true when the configured path points at our shim.
+    func pinentryConfigStatus(
+        reply: @escaping @Sendable (String?, Bool, NSError?) -> Void,
+    )
+
+    /// Install the Alp pinentry shim and point gpg-agent at it.
+    /// `bundlePath` is the absolute path to the running Alp.app bundle so
+    /// the shim can `exec` `<bundle>/Contents/Helpers/AlpPinentry`.
+    /// gpg-agent is restarted via `gpgconf --kill gpg-agent` before the
+    /// reply.
+    func installAlpPinentry(
+        bundlePath: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Remove the `pinentry-program` line from `gpg-agent.conf` and
+    /// restart gpg-agent so it falls back to its default pinentry
+    /// search. The shim script is left in place for later re-enable.
+    func uninstallAlpPinentry(reply: @escaping @Sendable (NSError?) -> Void)
+
     /// Export a public key as ASCII-armored data (`gpg --armor --export FP`).
     /// reply: (armoredKey?, error?)
     func exportPublicKey(

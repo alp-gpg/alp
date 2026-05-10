@@ -113,6 +113,42 @@ final class SettingsViewModel {
         }
     }
 
+    // MARK: – Pinentry
+
+    /// Latest pinentry configuration read from `~/.gnupg/gpg-agent.conf`.
+    /// Settings shows / hides the "Use Alp Pinentry" suggestion based
+    /// on whether `isAlpPinentry` is true.
+    var pinentryConfig: HelperXPCClient.PinentryConfig?
+
+    func refreshPinentryConfig() async {
+        do {
+            pinentryConfig = try await HelperXPCClient.shared.pinentryConfigStatus()
+        } catch {
+            pinentryConfig = nil
+        }
+    }
+
+    func installAlpPinentry() async {
+        do {
+            let bundlePath = Bundle.main.bundlePath
+            try await HelperXPCClient.shared.installAlpPinentry(bundlePath: bundlePath)
+            await refreshPinentryConfig()
+            await refreshHealth()
+        } catch {
+            helperError = error.localizedDescription
+        }
+    }
+
+    func uninstallAlpPinentry() async {
+        do {
+            try await HelperXPCClient.shared.uninstallAlpPinentry()
+            await refreshPinentryConfig()
+            await refreshHealth()
+        } catch {
+            helperError = error.localizedDescription
+        }
+    }
+
     func refreshHealth() async {
         isCheckingHealth = true
         defer { isCheckingHealth = false }
@@ -167,6 +203,7 @@ final class SettingsViewModel {
             await refreshKeys()
             await refreshHealth()
             await refreshCardStatus()
+            await refreshPinentryConfig()
         }
     }
 

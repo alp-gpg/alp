@@ -22,7 +22,7 @@ There's also a Services menu integration. Select PGP-encrypted text in any app, 
 
 ## Requirements
 
-macOS 26 (Tahoe) and a working GnuPG install. The Setup checklist offers a one-click Homebrew path; if you'd rather not use Homebrew, install GnuPG from <https://gnupg.org/download/> and pinentry-mac alongside it. Alp picks them up automatically.
+macOS 26 (Tahoe) and a working GnuPG install. The Setup checklist offers a one-click Homebrew path; if you'd rather not use Homebrew, install GnuPG from <https://gnupg.org/download/>. The pinentry passphrase prompt ships inside Alp itself — General → Pinentry has a "Use Alp Pinentry" button that wires it into `gpg-agent.conf` for you, so `pinentry-mac` is no longer required.
 
 ## Installation
 
@@ -37,13 +37,16 @@ When you launch the app, the **General → Setup** checklist walks you through:
 
 ### A note on pinentry
 
-Alp's helper runs in the background with no terminal, so your `~/.gnupg/gpg-agent.conf` must point at a GUI pinentry:
+The simplest path is **General → Pinentry → "Use Alp Pinentry"**. Alp writes its bundled prompt into `~/.gnupg/gpg-agent.conf` and restarts gpg-agent — no external binaries, no manual config edits.
+
+If you'd rather use a different pinentry (pinentry-mac from Homebrew or GPG Suite, pinentry-qt, etc.), point gpg-agent at it directly:
 
 ```
+# ~/.gnupg/gpg-agent.conf
 pinentry-program /opt/homebrew/bin/pinentry-mac
 ```
 
-And `~/.gnupg/gpg.conf` must not contain `pinentry-mode loopback` — that forces a terminal-only prompt the helper can't answer. After changing either file, run `gpgconf --kill all`.
+Either way, `~/.gnupg/gpg.conf` must not contain `pinentry-mode loopback` — that forces a terminal-only prompt the helper can't answer. After changing config, run `gpgconf --kill gpg-agent`.
 
 GPG Suite users: Alp finds `/usr/local/MacGPG2/bin/gpg` automatically, with Homebrew taking priority.
 

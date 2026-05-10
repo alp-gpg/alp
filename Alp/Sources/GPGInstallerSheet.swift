@@ -70,14 +70,14 @@ struct GPGInstallerSheet: View {
             Label("Install via Homebrew", systemImage: "terminal")
                 .font(.callout.weight(.semibold))
             Text(
-                "Recommended — also installs `pinentry-mac` so Alp can prompt for passphrases without dropping into Terminal.",
+                "Recommended. Alp ships its own passphrase prompt, so the gpg binary is the only external dependency.",
             )
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
-                Text("brew install gnupg pinentry-mac")
+                Text("brew install gnupg")
                     .font(.caption.monospaced())
                     .padding(6)
                     .background(.quaternary, in: .rect(cornerRadius: 4))
@@ -85,7 +85,7 @@ struct GPGInstallerSheet: View {
 
                 Spacer()
 
-                Button("Copy") { copyToPasteboard("brew install gnupg pinentry-mac") }
+                Button("Copy") { copyToPasteboard("brew install gnupg") }
                     .controlSize(.small)
                 Button("Open Terminal") { openTerminal() }
                     .controlSize(.small)

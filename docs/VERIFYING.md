@@ -66,8 +66,8 @@ call.
 
 ## 4. Audit the source code
 
-Alp is intentionally small. The whole codebase is ~6000 lines of Swift
-that map cleanly to the surface area documented in `README.md`.
+Alp is intentionally small. The whole codebase is ~10,000 lines of
+Swift that map cleanly to the surface area documented in `README.md`.
 
 | Where to look | What it does |
 |---------------|--------------|
@@ -79,7 +79,7 @@ that map cleanly to the surface area documented in `README.md`.
 | `Alp/Sources/HelperXPCClient.swift` / `AlpExtension/Sources/GPGXPCClient.swift` | The two XPC clients (app + Mail extension) that talk to the helper. |
 | `Alp/Sources/KeyserverSession.swift` | The only outbound HTTPS code path. Uses SPKI pinning for `keys.openpgp.org`. |
 
-Read those eight files (≈ 3500 lines total) and you have read every
+Read those files (a few thousand lines total) and you have read every
 moving part of Alp.
 
 ## 5. Audit the gpg invocations

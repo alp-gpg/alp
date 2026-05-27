@@ -11,7 +11,6 @@ cask "alp" do
   homepage "https://github.com/alp-gpg/alp"
 
   depends_on formula: "gnupg"
-  depends_on formula: "pinentry-mac"
   depends_on macos: ">= :tahoe"
 
   app "Alp.app"

@@ -86,9 +86,17 @@ extension GPGHelper {
     /// so the user's local key remains unrevoked. Reason 0 / no
     /// description — appropriate for a "future revoke" cert kept in a
     /// backup bundle.
+    ///
+    /// `--no-tty` is load-bearing: without it, `gpg --gen-revoke`
+    /// tries to write its menu prompts to /dev/tty even when fed via
+    /// `--command-fd 0`, which fails inside the helper process where
+    /// no controlling terminal is attached (errno: "Device not
+    /// configured"). The `--command-fd`/`--status-fd` pair carries
+    /// every interaction we need.
     private func _generateRevocationCert(fingerprint: String) async throws -> Data {
         let commands = "y\n0\n\ny\n"
         let args = [
+            "--no-tty",
             "--armor", "--command-fd", "0", "--status-fd", "2",
             "--gen-revoke", fingerprint,
         ]

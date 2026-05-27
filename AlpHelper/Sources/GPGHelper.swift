@@ -671,7 +671,12 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         //   y           → confirm "Is this okay?"
         let descLine = trimmedDescription ?? ""
         let commands = "y\n\(reasonCode)\n\(descLine)\n\ny\n"
+        // `--no-tty` is load-bearing inside the helper: see the
+        // matching comment in GPGHelper+Backup.swift. Without it gpg
+        // tries to write its menu prompts to /dev/tty even when fed
+        // via --command-fd.
         let args = [
+            "--no-tty",
             "--armor", "--command-fd", "0", "--status-fd", "2",
             "--gen-revoke", fingerprint,
         ]

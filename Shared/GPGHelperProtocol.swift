@@ -125,6 +125,30 @@ import Foundation
     /// PIN material. reply: (error?)
     func changeCardPIN(reply: @escaping @Sendable (NSError?) -> Void)
 
+    /// Produce a passphrase-encrypted backup bundle for `fingerprint`
+    /// containing the public key, secret key, a fresh revocation
+    /// certificate (not imported), and the local ownertrust line. The
+    /// helper drives two pinentry prompts on the user's behalf: one
+    /// for the secret key passphrase (to export), one for the backup
+    /// archive passphrase (to symmetric-encrypt the bundle). The
+    /// archive material never traverses the helper as plaintext.
+    /// reply: (armoredBackupBundle?, error?)
+    func backupKey(
+        fingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    )
+
+    /// Restore a backup bundle previously produced by `backupKey`.
+    /// gpg-agent prompts via pinentry for the archive passphrase, the
+    /// helper imports every armored block from the decrypted bundle,
+    /// then re-applies the trailing ownertrust line. Returns the
+    /// fingerprints of every key the import touched.
+    /// reply: (importedFingerprints?, error?)
+    func restoreBackup(
+        bundlePath: String,
+        reply: @escaping @Sendable ([String]?, NSError?) -> Void,
+    )
+
     /// Reads the `pinentry-program` line from `~/.gnupg/gpg-agent.conf`.
     /// reply: (currentProgramPath?, isAlp, error?) where `isAlp` is
     /// true when the configured path points at our shim.

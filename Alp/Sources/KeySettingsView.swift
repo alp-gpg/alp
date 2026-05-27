@@ -202,6 +202,15 @@ struct KeySettingsView: View {
             }
             ToolbarItem {
                 Button {
+                    restoreBackupFromFile()
+                } label: {
+                    Label("Restore Backup", systemImage: "tray.and.arrow.down")
+                        .labelStyle(.titleAndIcon)
+                }
+                .help("Restore a key bundle previously produced by Back Up Key…")
+            }
+            ToolbarItem {
+                Button {
                     Task { await vm.refreshKeys() }
                 } label: {
                     Label("Reload", systemImage: "arrow.clockwise")
@@ -379,6 +388,7 @@ struct KeySettingsView: View {
             Button("Export Public Key…") { exportPublicKey(for: key) }
             if key.hasSecretKey {
                 Button("Export Secret Key…") { exportSecretKey(for: key) }
+                Button("Back Up Key…") { backUpKey(for: key) }
                 Button("Change Passphrase…") { changePassphrase(for: key) }
             }
             Button("Set Expiry…") { keyForSetExpiry = key }
@@ -483,6 +493,27 @@ struct KeySettingsView: View {
         }
     }
 
+    private func restoreBackupFromFile() {
+        let panel = NSOpenPanel()
+        panel.title = "Restore Alp Backup"
+        panel.allowedContentTypes = ["asc"].compactMap { UTType(filenameExtension: $0) }
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            await runHelperAction("Restore backup") {
+                // Pinentry collects the archive passphrase. Helper
+                // imports every armored block + replays ownertrust.
+                let imported = try await HelperXPCClient.shared.restoreBackup(
+                    bundlePath: url.path,
+                )
+                await vm.refreshKeys()
+                if imported.isEmpty {
+                    actionError = "Backup restored, but no new keys reported."
+                }
+            }
+        }
+    }
+
     // MARK: – Lifecycle action helpers
 
     private func exportPublicKey(for key: GPGKeyInfo) {
@@ -503,6 +534,27 @@ struct KeySettingsView: View {
                     fingerprint: key.fingerprint,
                 )
                 await saveExportedKey(armored, suggested: "\(key.fingerprint)-secret.asc")
+            }
+        }
+    }
+
+    private func backUpKey(for key: GPGKeyInfo) {
+        Task {
+            await runHelperAction("Back up key") {
+                // The helper drives two pinentry prompts in sequence:
+                // one for the secret-key passphrase (to export), one
+                // for the archive passphrase (to symmetric-encrypt the
+                // bundle). The plaintext bundle never reaches us — by
+                // the time the bytes return, they're already AES-256
+                // wrapped.
+                let bundle = try await HelperXPCClient.shared.backupKey(
+                    fingerprint: key.fingerprint,
+                )
+                let datestamp = Date.now.formatted(.iso8601.year().month().day())
+                await saveExportedKey(
+                    bundle,
+                    suggested: "alp-backup-\(key.shortName)-\(datestamp).asc",
+                )
             }
         }
     }

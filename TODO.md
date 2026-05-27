@@ -19,11 +19,6 @@ serve a Mail-PGP user, it does not belong here.
 
 ## Active backlog (mission-aligned, will likely land)
 
-- [ ] **Key backup + restore wizard.** Guided export of secret key
-      + revocation certificate to an encrypted bundle, with a "test
-      restore on another Mac" walk-through. The single biggest GPG
-      footgun for Mail users is losing the key that decrypts their
-      archive.
 - [ ] **RFC 9580 readiness tightening.** Health check currently
       requires gpg ≥ 2.2.14 (for `--show-keys`). Bump the warning
       threshold to 2.4.5 (Sequoia / crypto-refresh) so users on

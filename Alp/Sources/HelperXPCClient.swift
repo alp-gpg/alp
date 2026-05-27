@@ -75,6 +75,33 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    /// Produce a passphrase-protected backup bundle for a key. The
+    /// helper drives two pinentry prompts: secret-key passphrase to
+    /// export, then archive passphrase to symmetric-encrypt the
+    /// bundle. Returns the armored bundle bytes for the caller to
+    /// write to disk. Long timeout because two pinentry prompts.
+    func backupKey(fingerprint: String) async throws -> Data {
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.backupKey(fingerprint: fingerprint) { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data { resume(.success(data)) }
+                else { resume(.failure(GPGError.xpcUnavailable)) }
+            }
+        }
+    }
+
+    /// Decrypt + import the bundle at `bundlePath`. Returns the
+    /// fingerprints of every key the import touched. Long timeout —
+    /// pinentry collects the archive passphrase.
+    func restoreBackup(bundlePath: String) async throws -> [String] {
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.restoreBackup(bundlePath: bundlePath) { fps, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(fps ?? [])) }
+            }
+        }
+    }
+
     /// Trigger the smartcard user-PIN change flow. gpg-agent prompts via
     /// pinentry for the current and new PINs — the helper itself never
     /// sees PIN material. Long timeout because the user may take a while

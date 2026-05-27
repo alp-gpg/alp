@@ -83,6 +83,8 @@ Alp does not phone home. No analytics, no crash reporting, no usage pings.
 
 Auto-update is opt-in. A fresh install makes zero network calls until you flip the switch in **General → Updates**. Brew users get updates through `brew upgrade --cask alp` and don't need it.
 
+The trade-off is honest: leaving updates off keeps Alp from phoning home, but you also won't receive Alp's own bug fixes, cert-pin rotations, or Sparkle's CVE patches until you manually re-download. We recommend flipping it on or letting `brew` carry the load.
+
 Keyserver traffic happens only when you ask for it: clicking *Find Key* on a missing recipient, refreshing expired keys, or letting the Keys tab check whether your own published keys are up. Typing recipients does not leak — that's a local keyring lookup.
 
 ### What encryption does not protect

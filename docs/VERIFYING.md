@@ -51,6 +51,12 @@ Alp's Sparkle auto-update is **opt-in**. A fresh install makes zero
 outbound network calls until you flip the switch under
 **General → Updates**.
 
+The trade-off: leaving updates off means you also miss Alp's own
+bug fixes, cert-pin rotations, and Sparkle's CVE patches until you
+manually re-download from GitHub Releases or run `brew upgrade
+--cask alp`. We recommend enabling auto-update or letting brew
+carry the load.
+
 Verify with Little Snitch, LuLu, or by tcpdump on an isolated machine:
 
 ```bash

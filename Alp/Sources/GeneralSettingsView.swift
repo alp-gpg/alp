@@ -64,7 +64,7 @@ struct GeneralSettingsView: View {
                                 .help("Recommended for security")
                         }
                         Text(
-                            "Strongly recommended. Off by default because a security tool should not phone home without consent. Turning this on lets Alp pull cert-pin rotations and helper bug fixes from alp-gpg.github.io as soon as they ship.",
+                            "Strongly recommended. Off by default because a security tool should not phone home without consent. Turning this on lets Alp pull cert-pin rotations, helper bug fixes, and Sparkle's own CVE patches from alp-gpg.github.io as soon as they ship.",
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)

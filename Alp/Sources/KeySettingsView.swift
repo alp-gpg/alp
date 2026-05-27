@@ -499,6 +499,22 @@ struct KeySettingsView: View {
         panel.allowedContentTypes = ["asc"].compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // Pre-flight alert: tell the user exactly which passphrase
+        // they need (the archive passphrase from backup time, not
+        // their key passphrase).
+        let intro = NSAlert()
+        intro.alertStyle = .informational
+        intro.messageText = "Restore “\(url.lastPathComponent)”"
+        intro.informativeText = """
+        You'll be prompted for the archive passphrase you set when this backup was created — not your key passphrase.
+
+        After unlocking, Alp imports every key in the bundle and replays the ownertrust.
+        """
+        intro.addButton(withTitle: "Continue")
+        intro.addButton(withTitle: "Cancel")
+        guard intro.runModal() == .alertFirstButtonReturn else { return }
+
         Task {
             await runHelperAction("Restore backup") {
                 // Pinentry collects the archive passphrase. Helper
@@ -539,6 +555,26 @@ struct KeySettingsView: View {
     }
 
     private func backUpKey(for key: GPGKeyInfo) {
+        // Pre-flight alert: the helper triggers two pinentry prompts
+        // in sequence and they look superficially identical. Explain
+        // up front what the user will be asked for, what they're
+        // expected to type, and why. Without this the second prompt
+        // can read as "didn't gpg already take my passphrase?".
+        let intro = NSAlert()
+        intro.alertStyle = .informational
+        intro.messageText = "Back Up “\(key.shortName)”"
+        intro.informativeText = """
+        You'll see two passphrase prompts in a row:
+
+        1. Your existing key passphrase — so gpg can read the secret material.
+        2. A new archive passphrase — Alp uses this to AES-256 wrap the backup file.
+
+        Write the archive passphrase down. Without it you cannot restore the backup. Alp never sees either passphrase.
+        """
+        intro.addButton(withTitle: "Continue")
+        intro.addButton(withTitle: "Cancel")
+        guard intro.runModal() == .alertFirstButtonReturn else { return }
+
         Task {
             await runHelperAction("Back up key") {
                 // The helper drives two pinentry prompts in sequence:

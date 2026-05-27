@@ -65,6 +65,12 @@ struct PinentryState {
     var error: String?
     var okLabel: String = "OK"
     var cancelLabel: String = "Cancel"
+    /// Set when gpg-agent sends SETREPEAT to request a repeat-field
+    /// confirmation flow. nil means no repeat required.
+    var repeatPrompt: String?
+    /// Inline message gpg-agent supplies via SETREPEATERROR (e.g.
+    /// "Passphrases don't match"). Shown only when we re-prompt.
+    var repeatError: String?
 }
 
 // MARK: – I/O helpers
@@ -122,23 +128,56 @@ private func readAssuanLine() -> String? {
 @MainActor
 private enum Prompt {
     /// Returns the entered passphrase, or nil when the user cancelled.
+    /// When `state.repeatPrompt` is non-nil, the dialog shows a second
+    /// secure field and only returns once both fields hold the same
+    /// value; mismatches re-prompt inline with `repeatError`.
     static func passphrase(state: PinentryState) -> String? {
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = state.title
-        alert.informativeText = errorPrefixed(state.description, error: state.error)
-        alert.addButton(withTitle: state.okLabel)
-        alert.addButton(withTitle: state.cancelLabel)
+        var error = state.error
+        while true {
+            let alert = NSAlert()
+            alert.alertStyle = .informational
+            alert.messageText = state.title
+            alert.informativeText = errorPrefixed(state.description, error: error)
+            alert.addButton(withTitle: state.okLabel)
+            alert.addButton(withTitle: state.cancelLabel)
 
-        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 22))
-        field.placeholderString = state.prompt
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
+            let primary = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 22))
+            primary.placeholderString = state.prompt
+            let confirm: NSSecureTextField?
+            if let repeatLabel = state.repeatPrompt {
+                let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 22))
+                field.placeholderString = repeatLabel
+                confirm = field
+                // Stack the two fields vertically inside a container so
+                // we can present both in the alert's accessoryView slot.
+                let stack = NSStackView(views: [primary, field])
+                stack.orientation = .vertical
+                stack.alignment = .leading
+                stack.spacing = 8
+                stack.translatesAutoresizingMaskIntoConstraints = false
+                stack.frame = NSRect(x: 0, y: 0, width: 280, height: 56)
+                alert.accessoryView = stack
+            } else {
+                confirm = nil
+                alert.accessoryView = primary
+            }
+            alert.window.initialFirstResponder = primary
 
-        bringToFront()
-        let response = alert.runModal()
-        guard response == .alertFirstButtonReturn else { return nil }
-        return field.stringValue
+            bringToFront()
+            let response = alert.runModal()
+            guard response == .alertFirstButtonReturn else { return nil }
+
+            let value = primary.stringValue
+            if let confirm {
+                guard value == confirm.stringValue else {
+                    // Surface gpg-agent's mismatch message if we got
+                    // one, else a sensible English fallback.
+                    error = state.repeatError ?? "Passphrases do not match. Try again."
+                    continue
+                }
+            }
+            return value
+        }
     }
 
     /// Returns true on Yes, false on No / Cancel.
@@ -198,6 +237,8 @@ private func runAssuanLoop() {
 
         case "RESET", "STOP":
             state.error = nil
+            state.repeatPrompt = nil
+            state.repeatError = nil
             sendOK()
 
         case "OPTION":
@@ -237,17 +278,26 @@ private func runAssuanLoop() {
             state.cancelLabel = stripUnderscoreAccelerator(argument)
             sendOK()
 
+        case "SETREPEAT":
+            // gpg-agent uses an empty argument or a localized label like
+            // "_Re-enter:". Default to "Confirm:" when blank so users
+            // see a meaningful placeholder either way.
+            state.repeatPrompt = argument.isEmpty ? "Confirm:" : argument
+            sendOK()
+
+        case "SETREPEATERROR":
+            state.repeatError = argument.isEmpty ? nil : argument
+            sendOK()
+
         case "SETNOTOK",
              "SETKEYINFO",
-             "SETREPEAT",
-             "SETREPEATERROR",
              "SETQUALITYBAR",
              "SETQUALITYBAR_TT",
              "SETGENPIN",
              "SETGENPIN_TT",
              "SETTIMEOUT":
-            // We don't render quality bars or the repeat-passphrase
-            // helper today; acknowledging keeps gpg-agent happy.
+            // We don't render quality bars or the generated-pin helper
+            // today; acknowledging keeps gpg-agent happy.
             sendOK()
 
         case "GETPIN":
@@ -260,7 +310,11 @@ private func runAssuanLoop() {
             } else {
                 sendErr(83_886_179, "Operation cancelled")
             }
+            // Drop per-prompt state so a subsequent GETPIN does not
+            // inherit a SETREPEAT request from the previous call.
             state.error = nil
+            state.repeatPrompt = nil
+            state.repeatError = nil
 
         case "CONFIRM":
             let oneButton = argument.contains("--one-button")

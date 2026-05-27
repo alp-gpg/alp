@@ -214,6 +214,124 @@ struct PGPMessageParserTests {
             Issue.record("Expected .mimeSignature, got \(String(describing: result))")
         }
     }
+
+    @Test
+    func `Inline PGP with BEGIN but no END returns nil`() {
+        // A truncated body shouldn't trigger a half-baked decrypt.
+        let truncated = """
+        From: alice@example.com
+
+        -----BEGIN PGP MESSAGE-----
+
+        hQIMA0z9...
+        """
+        #expect(parser.parse(Data(truncated.utf8)) == nil)
+    }
+
+    @Test
+    func `Inline PGP with END before BEGIN returns nil`() {
+        // Real attacker payload would be more sophisticated; this
+        // covers the obvious case where the markers are swapped.
+        let swapped = """
+        -----END PGP MESSAGE-----
+        ciphertext-shaped-noise
+        -----BEGIN PGP MESSAGE-----
+        """
+        // BEGIN comes after END, so extractInlinePGP searches from BEGIN
+        // forward and finds no later END — returns nil.
+        #expect(parser.parse(Data(swapped.utf8)) == nil)
+    }
+
+    @Test
+    func `Inline PGP only extracts the first complete block`() {
+        // Concatenated messages: should not blindly include both.
+        // We grab the first BEGIN..END pair and stop.
+        let multi = """
+        -----BEGIN PGP MESSAGE-----
+        first
+        -----END PGP MESSAGE-----
+        -----BEGIN PGP MESSAGE-----
+        second
+        -----END PGP MESSAGE-----
+        """
+        guard case let .inline(cipher) = parser.parse(Data(multi.utf8)) else {
+            Issue.record("Expected .inline result")
+            return
+        }
+        let extracted = String(data: cipher, encoding: .utf8) ?? ""
+        #expect(extracted.contains("first"))
+        #expect(!extracted.contains("second"))
+    }
+
+    @Test
+    func `PGP-MIME with missing boundary falls through gracefully`() {
+        // Content-Type lies about being multipart/encrypted but
+        // doesn't specify a boundary — extractBoundary returns nil,
+        // the .mime branch declines, and the inline check doesn't
+        // match either. Parser returns nil rather than crashing.
+        let lying = """
+        Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"
+
+        not-a-real-mime-body
+        """
+        #expect(parser.parse(Data(lying.utf8)) == nil)
+    }
+
+    @Test
+    func `PGP-MIME with extra ciphertext-shaped parts ignores trailing parts`() {
+        // RFC 3156 demands exactly two parts: version + ciphertext.
+        // A malicious sender might tack on a third part that looks
+        // like more ciphertext. The parser uses parts[2] only — the
+        // trailing crud is dropped, not silently forwarded.
+        let mime = """
+        Content-Type: multipart/encrypted; boundary="b"; protocol="application/pgp-encrypted"
+
+        --b
+        Content-Type: application/pgp-encrypted
+
+        Version: 1
+
+        --b
+        Content-Type: application/octet-stream
+
+        -----BEGIN PGP MESSAGE-----
+        real-cipher
+        -----END PGP MESSAGE-----
+
+        --b
+        Content-Type: application/octet-stream
+
+        -----BEGIN PGP MESSAGE-----
+        attacker-cipher
+        -----END PGP MESSAGE-----
+
+        --b--
+        """
+        guard case let .mime(cipher) = parser.parse(Data(mime.utf8)) else {
+            Issue.record("Expected .mime result")
+            return
+        }
+        let extracted = String(data: cipher, encoding: .utf8) ?? ""
+        #expect(extracted.contains("real-cipher"))
+        #expect(!extracted.contains("attacker-cipher"))
+    }
+}
+
+@Suite("Keyserver pin set integrity")
+struct KeyserverPinSetTests {
+    @Test
+    func `Pinned SPKI set has at least one entry`() {
+        // A zero-entry set silently disables pinning — make sure the
+        // build never accidentally ships in that state.
+        #expect(!KeyserverSession.pinnedSPKIHashes.isEmpty)
+    }
+
+    @Test
+    func `Pinned SPKI entries are all 32 bytes (SHA-256)`() {
+        for hash in KeyserverSession.pinnedSPKIHashes {
+            #expect(hash.count == 32, "Pin hash \(hash.base64EncodedString()) is \(hash.count) bytes, expected 32")
+        }
+    }
 }
 
 extension PGPContent: Equatable {

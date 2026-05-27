@@ -254,50 +254,8 @@ private func runAssuanLoop() {
             }
             sendOK()
 
-        case "SETTITLE":
-            state.title = argument.isEmpty ? "Alp" : argument
-            sendOK()
-
-        case "SETDESC":
-            state.description = argument
-            sendOK()
-
-        case "SETPROMPT":
-            state.prompt = argument
-            sendOK()
-
-        case "SETERROR":
-            state.error = argument
-            sendOK()
-
-        case "SETOK":
-            state.okLabel = stripUnderscoreAccelerator(argument)
-            sendOK()
-
-        case "SETCANCEL":
-            state.cancelLabel = stripUnderscoreAccelerator(argument)
-            sendOK()
-
-        case "SETREPEAT":
-            // gpg-agent uses an empty argument or a localized label like
-            // "_Re-enter:". Default to "Confirm:" when blank so users
-            // see a meaningful placeholder either way.
-            state.repeatPrompt = argument.isEmpty ? "Confirm:" : argument
-            sendOK()
-
-        case "SETREPEATERROR":
-            state.repeatError = argument.isEmpty ? nil : argument
-            sendOK()
-
-        case "SETNOTOK",
-             "SETKEYINFO",
-             "SETQUALITYBAR",
-             "SETQUALITYBAR_TT",
-             "SETGENPIN",
-             "SETGENPIN_TT",
-             "SETTIMEOUT":
-            // We don't render quality bars or the generated-pin helper
-            // today; acknowledging keeps gpg-agent happy.
+        case let cmd where cmd.hasPrefix("SET"):
+            applySetCommand(cmd, argument: argument, state: &state)
             sendOK()
 
         case "GETPIN":
@@ -346,6 +304,40 @@ private func runAssuanLoop() {
 /// `_OK`, `_Cancel`) that's meaningless in Cocoa. Strip it for display.
 private func stripUnderscoreAccelerator(_ s: String) -> String {
     s.replacingOccurrences(of: "_", with: "")
+}
+
+/// Apply a SET* Assuan command to the session state. Pulled out of the
+/// main dispatch switch so the loop's cyclomatic complexity stays
+/// within budget. Unknown SET* commands are silently acknowledged —
+/// the matching OK is emitted by the caller.
+private func applySetCommand(_ command: String, argument: String, state: inout PinentryState) {
+    switch command {
+    case "SETTITLE":
+        state.title = argument.isEmpty ? "Alp" : argument
+    case "SETDESC":
+        state.description = argument
+    case "SETPROMPT":
+        state.prompt = argument
+    case "SETERROR":
+        state.error = argument
+    case "SETOK":
+        state.okLabel = stripUnderscoreAccelerator(argument)
+    case "SETCANCEL":
+        state.cancelLabel = stripUnderscoreAccelerator(argument)
+    case "SETREPEAT":
+        // gpg-agent uses an empty argument or a localized label like
+        // "_Re-enter:". Default to "Confirm:" when blank so users see
+        // a meaningful placeholder either way.
+        state.repeatPrompt = argument.isEmpty ? "Confirm:" : argument
+    case "SETREPEATERROR":
+        state.repeatError = argument.isEmpty ? nil : argument
+    default:
+        // SETNOTOK, SETKEYINFO, SETQUALITYBAR, SETQUALITYBAR_TT,
+        // SETGENPIN, SETGENPIN_TT, SETTIMEOUT — we don't render quality
+        // bars or the generated-pin helper today; ignoring keeps
+        // gpg-agent happy.
+        break
+    }
 }
 
 // MARK: – Entry point

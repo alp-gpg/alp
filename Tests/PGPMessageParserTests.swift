@@ -328,17 +328,36 @@ struct KeyserverPinSetTests {
 
     @Test
     func `Pinned SPKI entries are all 32 bytes (SHA-256)`() {
+        // The 32-byte check would silently pass on a 32-character
+        // base64 string stored as UTF-8 bytes. A round-trip through
+        // base64 confirms the entries are actually raw digest bytes
+        // (decoding then re-encoding yields the same Data).
         for hash in KeyserverSession.pinnedSPKIHashes {
             #expect(hash.count == 32, "Pin hash \(hash.base64EncodedString()) is \(hash.count) bytes, expected 32")
+            let b64 = hash.base64EncodedString()
+            let decoded = Data(base64Encoded: b64)
+            #expect(
+                decoded == hash,
+                "Pin hash must round-trip through base64 — confirms raw SHA-256 bytes, not a string",
+            )
         }
     }
 }
 
 extension PGPContent: Equatable {
+    /// Compare associated payloads, not just the case discriminator —
+    /// otherwise an assertion like `result == .inline(expectedCipher)`
+    /// would silently pass when the cipher bytes differ.
     public static func == (lhs: PGPContent, rhs: PGPContent) -> Bool {
         switch (lhs, rhs) {
-        case (.mime, .mime), (.inline, .inline), (.inlineSigned, .inlineSigned), (.mimeSignature, .mimeSignature):
-            true
+        case let (.mime(a), .mime(b)):
+            a == b
+        case let (.inline(a), .inline(b)):
+            a == b
+        case let (.inlineSigned(a), .inlineSigned(b)):
+            a == b
+        case let (.mimeSignature(body: a1, signature: a2), .mimeSignature(body: b1, signature: b2)):
+            a1 == b1 && a2 == b2
         default:
             false
         }

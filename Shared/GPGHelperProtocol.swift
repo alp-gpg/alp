@@ -130,6 +130,27 @@ import Foundation
     /// reply: (error?)
     func changeCardAdminPIN(reply: @escaping @Sendable (NSError?) -> Void)
 
+    /// Flush gpg-agent's passphrase cache via
+    /// `gpg-connect-agent reloadagent /bye`. After this the next gpg
+    /// operation will prompt for the passphrase again. reply: (error?)
+    func clearAgentCache(reply: @escaping @Sendable (NSError?) -> Void)
+
+    /// Read the user's global git config for `user.signingkey` and
+    /// `commit.gpgsign`. Both fields are nil/false when unset.
+    /// reply: (signingKey?, commitGpgsign, error?)
+    func gitSigningStatus(
+        reply: @escaping @Sendable (String?, Bool, NSError?) -> Void,
+    )
+
+    /// Write `user.signingkey = <fingerprint>` and
+    /// `commit.gpgsign = true` to `~/.gitconfig`. Pass empty
+    /// fingerprint to disable signing (unsets both keys).
+    /// reply: (error?)
+    func setGitSigning(
+        fingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
     /// Reads the `pinentry-program` line from `~/.gnupg/gpg-agent.conf`.
     /// reply: (currentProgramPath?, isAlp, error?) where `isAlp` is
     /// true when the configured path points at our shim.

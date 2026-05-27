@@ -145,6 +145,57 @@ final class SettingsViewModel {
         await refreshCardStatus()
     }
 
+    // MARK: – gpg-agent cache
+
+    /// Surface for the most recent passphrase-cache clear failure.
+    var agentCacheError: String?
+
+    func clearAgentCache() async {
+        agentCacheError = nil
+        do {
+            try await HelperXPCClient.shared.clearAgentCache()
+        } catch {
+            agentCacheError = error.localizedDescription
+        }
+    }
+
+    // MARK: – Git commit signing
+
+    var gitSigningStatus: HelperXPCClient.GitSigningStatus?
+    var gitSigningError: String?
+
+    func refreshGitSigningStatus() async {
+        do {
+            gitSigningStatus = try await HelperXPCClient.shared.gitSigningStatus()
+            gitSigningError = nil
+        } catch {
+            gitSigningStatus = nil
+            gitSigningError = error.localizedDescription
+        }
+    }
+
+    func applyDefaultSignerToGit() async {
+        guard let fp = UserDefaults.standard.string(forKey: "defaultSignerFingerprint") else {
+            gitSigningError = "No default signing key — pick one in Settings → Keys first."
+            return
+        }
+        await applyGitSigning(fingerprint: fp)
+    }
+
+    func disableGitSigning() async {
+        await applyGitSigning(fingerprint: "")
+    }
+
+    private func applyGitSigning(fingerprint: String) async {
+        gitSigningError = nil
+        do {
+            try await HelperXPCClient.shared.setGitSigning(fingerprint: fingerprint)
+        } catch {
+            gitSigningError = error.localizedDescription
+        }
+        await refreshGitSigningStatus()
+    }
+
     // MARK: – Pinentry
 
     /// Latest pinentry configuration read from `~/.gnupg/gpg-agent.conf`.

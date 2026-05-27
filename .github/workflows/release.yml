@@ -81,17 +81,10 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: bash scripts/build-release.sh "$RELEASE_VERSION"
 
-      - name: Generate SHA256 checksum
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          cd build
-          shasum -a 256 "Alp-${RELEASE_VERSION}.dmg" > "Alp-${RELEASE_VERSION}.dmg.sha256"
-
-      - name: Upload DMG
+      - name: Upload DMG and SHA256SUMS
         uses: softprops/action-gh-release@v2
         with:
           files: |
             build/Alp-${{ steps.version.outputs.version }}.dmg
-            build/Alp-${{ steps.version.outputs.version }}.dmg.sha256
+            build/Alp-${{ steps.version.outputs.version }}.SHA256SUMS
           generate_release_notes: true

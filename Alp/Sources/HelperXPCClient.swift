@@ -98,6 +98,41 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    /// Flush gpg-agent's cached passphrases. The next gpg operation will
+    /// prompt again via pinentry.
+    func clearAgentCache() async throws {
+        let _: Bool = try await call { proxy, resume in
+            proxy.clearAgentCache { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    struct GitSigningStatus {
+        let signingKey: String?
+        let commitGpgsign: Bool
+    }
+
+    func gitSigningStatus() async throws -> GitSigningStatus {
+        try await call { proxy, resume in
+            proxy.gitSigningStatus { key, gpgsign, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(GitSigningStatus(signingKey: key, commitGpgsign: gpgsign))) }
+            }
+        }
+    }
+
+    /// Pass empty string to disable signing.
+    func setGitSigning(fingerprint: String) async throws {
+        let _: Bool = try await call { proxy, resume in
+            proxy.setGitSigning(fingerprint: fingerprint) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     /// Returns nil when no smartcard is present. Errors propagate as
     /// thrown errors only for genuine helper failures.
     func cardStatus() async throws -> GPGCardStatus? {

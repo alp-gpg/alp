@@ -40,7 +40,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     /// Allowlist of environment variables forwarded to gpg.
     /// Prevents GNUPGHOME redirection and DYLD_INSERT_LIBRARIES injection.
-    private static func sanitizedEnvironment() -> [String: String] {
+    static func sanitizedEnvironment() -> [String: String] {
         let inherited = ProcessInfo.processInfo.environment
         let allowed = ["HOME", "USER", "LANG", "LC_ALL", "LC_CTYPE", "DISPLAY", "GPG_TTY",
                        "DBUS_SESSION_BUS_ADDRESS", "SSH_AUTH_SOCK", "TERM"]

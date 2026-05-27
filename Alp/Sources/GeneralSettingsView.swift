@@ -83,6 +83,11 @@ struct GeneralSettingsView: View {
                 smartcardSection(card)
             }
 
+            if vm.helperStatus == .enabled {
+                gpgAgentSection
+                gitSigningSection
+            }
+
             Section("Privacy Limitations") {
                 Label {
                     VStack(alignment: .leading, spacing: 4) {
@@ -294,6 +299,65 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.red)
             }
         }
+    }
+
+    /// One-button passphrase-cache clear. gpg-agent normally caches the
+    /// user's passphrase for several minutes after a successful prompt;
+    /// some workflows want to invalidate that immediately (e.g. before
+    /// stepping away from the laptop).
+    private var gpgAgentSection: some View {
+        Section("gpg-agent") {
+            HStack {
+                Text("Passphrase cache")
+                Spacer()
+                Button("Clear now") {
+                    Task { await vm.clearAgentCache() }
+                }
+                .controlSize(.small)
+                .help("Runs gpg-connect-agent reloadagent /bye; the next operation prompts again.")
+            }
+            if let error = vm.agentCacheError {
+                Text(error)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    /// Lightweight git commit-signing wizard. Reads the user's current
+    /// `user.signingkey` + `commit.gpgsign` from `~/.gitconfig`, offers
+    /// to set them to a chosen key, or to disable signing.
+    private var gitSigningSection: some View {
+        Section("Git commit signing") {
+            if let status = vm.gitSigningStatus {
+                LabeledContent("Configured key") {
+                    Text(status.signingKey ?? "—")
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+                LabeledContent("commit.gpgsign") {
+                    Text(status.commitGpgsign ? "true" : "false")
+                        .foregroundStyle(status.commitGpgsign ? .primary : .secondary)
+                }
+            }
+            HStack {
+                Button("Use default Alp signer") {
+                    Task { await vm.applyDefaultSignerToGit() }
+                }
+                .disabled(UserDefaults.standard.string(forKey: "defaultSignerFingerprint") == nil)
+                .help("Writes user.signingkey + commit.gpgsign=true to ~/.gitconfig.")
+                Button("Disable signing") {
+                    Task { await vm.disableGitSigning() }
+                }
+            }
+            .controlSize(.small)
+            if let error = vm.gitSigningError {
+                Text(error)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
+        }
+        .task { await vm.refreshGitSigningStatus() }
     }
 
     @AppStorage(KeyserverSession.strictPinningDefaultsKey, store: UserDefaults(suiteName: BuildConfig.appGroup))

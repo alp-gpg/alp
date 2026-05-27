@@ -9,6 +9,11 @@ let baseSettings: SettingsDictionary = [
     "ENABLE_HARDENED_RUNTIME": "YES",
     "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
     "SWIFT_EMIT_LOC_STRINGS": "YES",
+    // Generate type-safe accessors for every entry in
+    // Localizable.xcstrings so SwiftUI code can reference strings as
+    // properties instead of as stringly-typed keys.
+    "LOCALIZED_STRING_SWIFTUI_SUPPORT": "YES",
+    "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
     "CURRENT_PROJECT_VERSION": "1",
     "VERSIONING_SYSTEM": "apple-generic",
 ]
@@ -99,6 +104,10 @@ let project = Project(
                     "CODE_SIGN_STYLE": "Automatic",
                     "DEVELOPMENT_TEAM": "3G6WR6H4M5",
                     "ENABLE_HARDENED_RUNTIME": "YES",
+                    // Xcode 26 surfaces app-group membership in the
+                    // provisioning profile via this flag. Without it the
+                    // settings-side capabilities pane keeps nagging.
+                    "ENABLE_APP_GROUPS": "YES",
                 ],
                 configurations: [
                     .debug(
@@ -137,6 +146,7 @@ let project = Project(
                 "CODE_SIGN_STYLE": "Automatic",
                 "DEVELOPMENT_TEAM": "3G6WR6H4M5",
                 "ENABLE_HARDENED_RUNTIME": "YES",
+                "ENABLE_APP_GROUPS": "YES",
             ]),
         ),
 

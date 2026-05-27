@@ -73,7 +73,7 @@ struct GenerateKeySheet: View {
             .formStyle(.grouped)
 
             Text(
-                "Generates an Ed25519 signing primary with a Cv25519 encryption subkey. You'll be asked for a passphrase via the system pinentry.",
+                "Generates an Ed25519 signing primary with a Cv25519 encryption subkey. Pinentry will ask for a new passphrase (with a confirm field) to protect this key. Pick something strong and back it up — a forgotten passphrase cannot be recovered.",
             )
             .font(.caption)
             .foregroundStyle(.secondary)

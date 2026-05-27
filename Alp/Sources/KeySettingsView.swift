@@ -544,6 +544,22 @@ struct KeySettingsView: View {
     }
 
     private func exportSecretKey(for key: GPGKeyInfo) {
+        // Secret keys decrypt everything the user has ever received
+        // with this key. Pause for a clear "yes, I know" before the
+        // file lands on disk — and steer users toward Back Up Key…
+        // when that's actually what they want.
+        let intro = NSAlert()
+        intro.alertStyle = .warning
+        intro.messageText = "Export secret key for “\(key.shortName)”?"
+        intro.informativeText = """
+        Anyone with this file plus your passphrase can decrypt every message ever sent to this key. Treat it like a password — never email it, never sync it to a public cloud folder.
+
+        For a long-term offline backup, use Back Up Key… instead. That bundles the secret key, a fresh revocation cert, and your ownertrust in one AES-256 wrapped file.
+        """
+        intro.addButton(withTitle: "Continue")
+        intro.addButton(withTitle: "Cancel")
+        guard intro.runModal() == .alertFirstButtonReturn else { return }
+
         Task {
             await runHelperAction("Export secret key") {
                 let armored = try await HelperXPCClient.shared.exportSecretKey(
@@ -596,6 +612,24 @@ struct KeySettingsView: View {
     }
 
     private func changePassphrase(for key: GPGKeyInfo) {
+        // Pre-flight: same two-prompt confusion as Back Up Key.
+        // gpg-agent asks for the current passphrase, then a new one
+        // (with confirmation when AlpPinentry honors SETREPEAT).
+        let intro = NSAlert()
+        intro.alertStyle = .informational
+        intro.messageText = "Change passphrase for “\(key.shortName)”"
+        intro.informativeText = """
+        You'll see two prompts:
+
+        1. The current passphrase for this key.
+        2. The new passphrase (with a confirm field).
+
+        Alp never sees either — gpg-agent talks to pinentry directly. If you forget the new passphrase there is no recovery.
+        """
+        intro.addButton(withTitle: "Continue")
+        intro.addButton(withTitle: "Cancel")
+        guard intro.runModal() == .alertFirstButtonReturn else { return }
+
         Task {
             await runHelperAction("Change passphrase") {
                 try await HelperXPCClient.shared.changePassphrase(fingerprint: key.fingerprint)

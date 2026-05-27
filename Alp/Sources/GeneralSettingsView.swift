@@ -282,6 +282,10 @@ struct GeneralSettingsView: View {
                     Task { await vm.changeCardPIN() }
                 }
                 .help("Drives gpg --card-edit; pinentry prompts for old + new PIN.")
+                Button("Change Admin PIN…") {
+                    Task { await vm.changeCardAdminPIN() }
+                }
+                .help("Drives gpg --card-edit; pinentry prompts for old + new admin PIN.")
             }
             .controlSize(.small)
             if let error = vm.cardError {

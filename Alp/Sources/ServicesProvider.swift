@@ -139,12 +139,17 @@ final class ServicesProvider: NSObject {
             var lines: [String] = []
             for input in inputs {
                 do {
-                    let (valid, signer, signerName) = try await HelperXPCClient.shared.verifyFile(
+                    let (valid, signer, signerName, trust) = try await HelperXPCClient.shared.verifyFile(
                         inputPath: input.path,
                     )
                     let who = signerName ?? signer ?? "unknown signer"
                     let mark = valid ? "✓" : "✗"
-                    lines.append("\(mark) \(input.lastPathComponent) — \(who)")
+                    // Surface ownertrust only when it actually adds signal:
+                    // "ultimate" / "fully" reassure the reader, "marginal"
+                    // / "never" / "undefined" are warnings worth showing
+                    // even on a valid signature.
+                    let trustSuffix = trust.map { " [trust: \($0)]" } ?? ""
+                    lines.append("\(mark) \(input.lastPathComponent) — \(who)\(trustSuffix)")
                 } catch {
                     lines.append("✗ \(input.lastPathComponent) — \(error.localizedDescription)")
                 }

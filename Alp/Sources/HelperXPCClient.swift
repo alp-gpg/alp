@@ -88,6 +88,16 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    /// Sibling of `changeCardPIN` for the admin PIN.
+    func changeCardAdminPIN() async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.changeCardAdminPIN { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     /// Returns nil when no smartcard is present. Errors propagate as
     /// thrown errors only for genuine helper failures.
     func cardStatus() async throws -> GPGCardStatus? {
@@ -420,16 +430,21 @@ final class HelperXPCClient: @unchecked Sendable {
     }
 
     /// File-level verify. Pass `signaturePath` for detached signatures, or
-    /// nil for clearsigned / standalone armored signature files.
+    /// nil for clearsigned / standalone armored signature files. `trust`
+    /// is the local ownertrust label on the signing key (lowercase
+    /// "ultimate", "fully", "marginal", "never", "undefined") or nil.
     func verifyFile(
         inputPath: String,
         signaturePath: String? = nil,
-    ) async throws -> (valid: Bool, signer: String?, signerName: String?) {
+    ) async throws -> (valid: Bool, signer: String?, signerName: String?, trust: String?) {
         try await call { proxy, resume in
-            proxy.verifyFile(inputPath: inputPath, signaturePath: signaturePath) { valid, signer, signerName, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success((valid, signer, signerName))) }
-            }
+            proxy
+                .verifyFile(inputPath: inputPath,
+                            signaturePath: signaturePath)
+                { valid, signer, signerName, trust, error in
+                    if let error { resume(.failure(error)) }
+                    else { resume(.success((valid, signer, signerName, trust))) }
+                }
         }
     }
 

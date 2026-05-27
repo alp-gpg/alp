@@ -38,7 +38,7 @@ extension GPGHelper {
     func _verifyFile(
         inputPath: String,
         signaturePath: String?,
-    ) async throws -> (Bool, String?, String?) {
+    ) async throws -> (Bool, String?, String?, String?) {
         try Self.validateFileOpPaths(inputPath: inputPath, outputPath: nil, requireInputExists: true)
         var args = ["--batch", "--verify", "--status-fd", "2"]
         if let signaturePath {
@@ -56,7 +56,28 @@ extension GPGHelper {
         let (_, stderr, _) = try await runGPGRaw(args)
         let statusText = String(data: stderr, encoding: .utf8) ?? ""
         let (fp, name) = extractSignerInfo(from: statusText)
-        return (fp != nil, fp, name)
+        let trust = Self.parseTrustLevel(from: statusText)
+        return (fp != nil, fp, name, trust)
+    }
+
+    /// Map gpg's `TRUST_*` status line to a lowercase label. Returns nil
+    /// when no trust line is present (e.g. unsigned input or gpg refused
+    /// to evaluate trust). The return values match `OwnerTrust`'s title
+    /// vocabulary in lowercase form.
+    static func parseTrustLevel(from statusText: String) -> String? {
+        for line in statusText.components(separatedBy: "\n") {
+            let parts = line.split(whereSeparator: \.isWhitespace).map(String.init)
+            guard let tag = parts.first(where: { $0.hasPrefix("TRUST_") }) else { continue }
+            switch tag {
+            case "TRUST_ULTIMATE": return "ultimate"
+            case "TRUST_FULLY": return "fully"
+            case "TRUST_MARGINAL": return "marginal"
+            case "TRUST_NEVER": return "never"
+            case "TRUST_UNDEFINED": return "undefined"
+            default: return nil
+            }
+        }
+        return nil
     }
 
     /// ASCII-armored detached signature for the file at `inputPath`,
@@ -185,19 +206,19 @@ extension GPGHelper {
     nonisolated func verifyFile(
         inputPath: String,
         signaturePath: String?,
-        reply: @escaping @Sendable (Bool, String?, String?, NSError?) -> Void,
+        reply: @escaping @Sendable (Bool, String?, String?, String?, NSError?) -> Void,
     ) {
         Task {
             do {
-                let (valid, signer, signerName) = try await self._verifyFile(
+                let (valid, signer, signerName, trust) = try await self._verifyFile(
                     inputPath: inputPath,
                     signaturePath: signaturePath,
                 )
-                reply(valid, signer, signerName, nil)
+                reply(valid, signer, signerName, trust, nil)
             } catch let e as GPGError {
-                reply(false, nil, nil, e.asNSError)
+                reply(false, nil, nil, nil, e.asNSError)
             } catch {
-                reply(false, nil, nil, error as NSError)
+                reply(false, nil, nil, nil, error as NSError)
             }
         }
     }

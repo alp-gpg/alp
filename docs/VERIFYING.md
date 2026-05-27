@@ -118,7 +118,20 @@ xcodebuild test -workspace Alp.xcworkspace -scheme Alp -destination 'platform=ma
 If the resulting binary behaves the same as the released DMG, you have
 end-to-end proof that the released binary matches the source.
 
-## 7. Sparkle update signing
+## 7. SHA256 checksums
+
+Every release ships a `SHA256SUMS` file alongside the DMG. Verify the
+download independently:
+
+```bash
+shasum -a 256 -c Alp-<VERSION>.SHA256SUMS
+```
+
+Expected: `Alp-<VERSION>.dmg: OK`. Any other output means the bytes
+on disk do not match what we released — stop and re-download from the
+official GitHub Releases page.
+
+## 8. Sparkle update signing
 
 Auto-update DMGs are signed with an EdDSA key whose public half is
 embedded in `Alp/SupportingFiles/Info.plist` (`SUPublicEDKey`). The
@@ -132,7 +145,7 @@ You can confirm the embedded public key by reading the Info.plist:
 /usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' /Applications/Alp.app/Contents/Info.plist
 ```
 
-## 8. What Alp does not protect
+## 9. What Alp does not protect
 
 These are limits, not bugs. We surface them in the app too:
 

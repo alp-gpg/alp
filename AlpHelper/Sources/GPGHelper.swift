@@ -880,7 +880,23 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     /// (twice). The helper feeds only menu commands — the PIN material
     /// itself never traverses our process.
     func _changeCardPIN() async throws {
-        let commands = "admin\npasswd\n1\nq\nquit\n"
+        try await _runCardPasswdMenu(menuOption: "1")
+    }
+
+    /// Sibling of `_changeCardPIN` for the OpenPGP admin PIN
+    /// (`passwd` menu option 3).
+    func _changeCardAdminPIN() async throws {
+        try await _runCardPasswdMenu(menuOption: "3")
+    }
+
+    /// Shared driver for the `passwd` submenu of `gpg --card-edit`. The
+    /// option string is fed verbatim to gpg; callers must pass "1"
+    /// (user PIN) or "3" (admin PIN) only.
+    private func _runCardPasswdMenu(menuOption: String) async throws {
+        guard menuOption == "1" || menuOption == "3" else {
+            throw GPGError.encodingError("invalid PIN menu option")
+        }
+        let commands = "admin\npasswd\n\(menuOption)\nq\nquit\n"
         let args = ["--card-edit", "--command-fd", "0", "--status-fd", "2"]
         _ = try await runGPG(args, input: Data(commands.utf8))
     }
@@ -1531,6 +1547,19 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         Task {
             do {
                 try await self._changeCardPIN()
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
+            }
+        }
+    }
+
+    nonisolated func changeCardAdminPIN(reply: @escaping @Sendable (NSError?) -> Void) {
+        Task {
+            do {
+                try await self._changeCardAdminPIN()
                 reply(nil)
             } catch let e as GPGError {
                 reply(e.asNSError)

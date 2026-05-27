@@ -58,12 +58,14 @@ import Foundation
     /// Verify a signature file. When `signaturePath` is nil, `inputPath`
     /// is expected to be a clearsigned or armored signature wrapping its
     /// own data. When `signaturePath` is non-nil, it points at a detached
-    /// signature and `inputPath` is the data being verified.
-    /// reply: (valid, signerFingerprint?, signerDisplayName?, error?)
+    /// signature and `inputPath` is the data being verified. `trustLevel`
+    /// reports the local ownertrust on the signing key, lowercase:
+    /// "ultimate", "fully", "marginal", "never", "undefined", or nil.
+    /// reply: (valid, signerFingerprint?, signerDisplayName?, trustLevel?, error?)
     func verifyFile(
         inputPath: String,
         signaturePath: String?,
-        reply: @escaping @Sendable (Bool, String?, String?, NSError?) -> Void,
+        reply: @escaping @Sendable (Bool, String?, String?, String?, NSError?) -> Void,
     )
 
     /// Produce an ASCII-armored detached signature for `inputPath`,
@@ -122,6 +124,11 @@ import Foundation
     /// current PIN and then the new PIN twice; the helper never sees the
     /// PIN material. reply: (error?)
     func changeCardPIN(reply: @escaping @Sendable (NSError?) -> Void)
+
+    /// Drive `gpg --card-edit` → `passwd` → option 3 to change the
+    /// OpenPGP admin PIN. Identical safety story to `changeCardPIN`.
+    /// reply: (error?)
+    func changeCardAdminPIN(reply: @escaping @Sendable (NSError?) -> Void)
 
     /// Reads the `pinentry-program` line from `~/.gnupg/gpg-agent.conf`.
     /// reply: (currentProgramPath?, isAlp, error?) where `isAlp` is

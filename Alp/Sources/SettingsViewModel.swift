@@ -134,6 +134,17 @@ final class SettingsViewModel {
         await refreshCardStatus()
     }
 
+    /// Sibling of `changeCardPIN` for the admin PIN.
+    func changeCardAdminPIN() async {
+        cardError = nil
+        do {
+            try await HelperXPCClient.shared.changeCardAdminPIN()
+        } catch {
+            cardError = error.localizedDescription
+        }
+        await refreshCardStatus()
+    }
+
     // MARK: – Pinentry
 
     /// Latest pinentry configuration read from `~/.gnupg/gpg-agent.conf`.

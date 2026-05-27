@@ -120,12 +120,22 @@ struct GPGHelperFileRoundTripTests {
         )
         #expect(FileManager.default.fileExists(atPath: sigURL.path))
 
-        let (valid, signer, _) = try await helper._verifyFile(
+        let (valid, signer, _, _) = try await helper._verifyFile(
             inputPath: dataURL.path,
             signaturePath: sigURL.path,
         )
         #expect(valid)
         #expect(signer != nil)
+    }
+
+    @Test
+    func `parseTrustLevel maps every TRUST_* tag`() {
+        #expect(GPGHelper.parseTrustLevel(from: "[GNUPG:] TRUST_ULTIMATE\n") == "ultimate")
+        #expect(GPGHelper.parseTrustLevel(from: "[GNUPG:] TRUST_FULLY 0\n") == "fully")
+        #expect(GPGHelper.parseTrustLevel(from: "[GNUPG:] TRUST_MARGINAL\n") == "marginal")
+        #expect(GPGHelper.parseTrustLevel(from: "[GNUPG:] TRUST_NEVER\n") == "never")
+        #expect(GPGHelper.parseTrustLevel(from: "[GNUPG:] TRUST_UNDEFINED\n") == "undefined")
+        #expect(GPGHelper.parseTrustLevel(from: "no trust line at all") == nil)
     }
 
     @Test

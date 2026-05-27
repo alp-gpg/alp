@@ -75,6 +75,14 @@ create-dmg \
 # Sign DMG
 codesign --force --sign "${DEVELOPER_ID_APPLICATION}" "$DMG_PATH"
 
+# SHA256 manifest. Lets users verify download integrity independently of
+# the Sparkle EdDSA signature — useful when fetching via curl/wget or
+# when comparing the DMG against the GitHub release page checksum.
+SHASUM_PATH="build/Alp-${VERSION}.SHA256SUMS"
+shasum -a 256 "$DMG_PATH" | sed "s|build/||" > "$SHASUM_PATH"
+echo "==> SHA256 manifest at $SHASUM_PATH"
+cat "$SHASUM_PATH"
+
 # Sparkle signature for the appcast. `sign_update` reads the EdDSA private
 # key from the login Keychain (created once via `generate_keys`). Output is
 # `sparkle:edSignature="..." length=...` ready to drop into appcast.xml.

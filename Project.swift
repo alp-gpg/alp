@@ -24,7 +24,7 @@ let project = Project(
         // upgrade via `brew upgrade --cask`; Sparkle covers everyone else.
         .remote(
             url: "https://github.com/sparkle-project/Sparkle",
-            requirement: .upToNextMajor(from: "2.6.0"),
+            requirement: .upToNextMajor(from: "2.9.2"),
         ),
     ],
     settings: .settings(base: baseSettings),

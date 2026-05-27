@@ -75,6 +75,8 @@ A few things worth knowing about how Alp protects you:
 - Auto-update DMGs (when enabled) are EdDSA-signed. Anyone who hijacks the appcast or the release URL can't ship a malicious binary without our private key.
 - Logging respects `os_log` `.private` — plaintext, fingerprints, and email addresses never appear in release logs.
 
+[docs/VERIFYING.md](docs/VERIFYING.md) walks through how to confirm any of the above on your own machine — signature checks, source-audit map, gpg invocation review, and a build-from-source recipe.
+
 ### Privacy
 
 Alp does not phone home. No analytics, no crash reporting, no usage pings.

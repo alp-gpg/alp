@@ -3,8 +3,10 @@
 ## Getting Started
 
 1. Fork the repository and clone your fork.
-2. Follow [BUILDING.md](BUILDING.md) to set up the project.
+2. Run `./scripts/setup.sh` — installs every Homebrew prerequisite and generates the Xcode project.
 3. Create a branch for your change.
+
+If you want to know exactly what Alp is doing before contributing, read [docs/VERIFYING.md](docs/VERIFYING.md). It maps each capability to the file that owns it.
 
 ## Development Workflow
 

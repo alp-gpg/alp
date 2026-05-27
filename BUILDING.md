@@ -1,10 +1,22 @@
 # Building Alp
 
+## One-command setup
+
+```bash
+./scripts/setup.sh
+```
+
+Installs every Homebrew prerequisite, runs `tuist generate`, and prints
+the next steps. Re-runnable; skips anything already in place.
+
+If you'd rather do it by hand:
+
 ## Prerequisites
 
 ```bash
 brew install gnupg           # GPG binary (required at runtime)
-brew install pinentry-mac    # GUI passphrase dialog (required at runtime)
+brew install swiftlint       # lint
+brew install swiftformat     # format
 brew install --cask tuist    # Xcode project generation
 ```
 

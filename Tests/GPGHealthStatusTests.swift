@@ -72,4 +72,48 @@ struct GPGHealthStatusTests {
         status.hasSecretKeys = true
         #expect(status.issues.contains { $0.contains("tofu+pgp") })
     }
+
+    @Test
+    func `warnings flag pre-RFC-9580 gpg`() {
+        var status = GPGHealthStatus()
+        status.gpgPath = "/opt/homebrew/bin/gpg"
+        status.gpgVersion = "2.2.40"
+        status.versionSufficient = true
+        status.rfc9580Ready = false
+        #expect(status.warnings.contains { $0.contains("RFC 9580") })
+    }
+
+    @Test
+    func `warnings stay empty on a modern gpg`() {
+        var status = GPGHealthStatus()
+        status.gpgPath = "/opt/homebrew/bin/gpg"
+        status.gpgVersion = "2.4.7"
+        status.versionSufficient = true
+        status.rfc9580Ready = true
+        #expect(status.warnings.isEmpty)
+    }
+
+    @Test
+    func `warnings stay silent when gpg is missing`() {
+        // Don't double up — missing gpg already shows up as a hard
+        // issue; the RFC 9580 advisory would be noise.
+        let status = GPGHealthStatus()
+        #expect(status.warnings.isEmpty)
+    }
+
+    @Test
+    func `allPassed ignores rfc9580Ready`() {
+        // RFC 9580 is advisory; Alp still operates on older gpg.
+        var status = GPGHealthStatus()
+        status.gpgPath = "/opt/homebrew/bin/gpg"
+        status.gpgVersion = "2.2.40"
+        status.versionSufficient = true
+        status.agentRunning = true
+        status.pinentryConfigured = true
+        status.hasSecretKeys = true
+        status.secretKeyCount = 1
+        status.tofuSupported = true
+        status.rfc9580Ready = false
+        #expect(status.allPassed)
+    }
 }

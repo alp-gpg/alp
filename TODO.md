@@ -19,11 +19,8 @@ serve a Mail-PGP user, it does not belong here.
 
 ## Active backlog (mission-aligned, will likely land)
 
-- [ ] **RFC 9580 readiness tightening.** Health check currently
-      requires gpg ≥ 2.2.14 (for `--show-keys`). Bump the warning
-      threshold to 2.4.5 (Sequoia / crypto-refresh) so users on
-      distro-locked gpg get a heads-up before they hit silent compat
-      issues with modern keys.
+(empty — the backup wizard and RFC 9580 readiness advisory have
+shipped. New items go here as they emerge.)
 
 ## Open-ended
 

@@ -477,6 +477,14 @@ struct GeneralSettingsView: View {
             }
         }
 
+        if !health.warnings.isEmpty {
+            ForEach(health.warnings, id: \.self) { warning in
+                Label(warning, systemImage: "info.circle")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            }
+        }
+
         Button {
             Task { await vm.refreshHealth() }
         } label: {

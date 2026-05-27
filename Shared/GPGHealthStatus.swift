@@ -9,6 +9,12 @@ struct GPGHealthStatus: Codable {
     var gpgVersion: String?
     /// True if version is ≥ 2.2.14 (required for --show-keys).
     var versionSufficient: Bool = false
+    /// True if version is ≥ 2.4.5 (RFC 9580 / OpenPGP crypto-refresh).
+    /// Below this threshold Alp still works, but the user may hit
+    /// silent compat issues with v6 keys or modern AEAD packets that
+    /// senders are starting to use. Surfaced as a warning, not a hard
+    /// blocker.
+    var rfc9580Ready: Bool = false
     /// True if gpg-agent is reachable.
     var agentRunning: Bool = false
     /// True if pinentry-mac (or compatible GUI pinentry) is configured.
@@ -51,6 +57,18 @@ struct GPGHealthStatus: Codable {
         }
         if !tofuSupported {
             result.append("Trust model tofu+pgp is not supported by this GnuPG build.")
+        }
+        return result
+    }
+
+    /// Non-blocking advisories. Alp keeps working but the user should
+    /// know. Today: gpg older than RFC 9580 / crypto-refresh support.
+    var warnings: [String] {
+        var result: [String] = []
+        if gpgPath != nil, versionSufficient, !rfc9580Ready {
+            result.append(
+                "GnuPG \(gpgVersion ?? "?") predates RFC 9580 (crypto-refresh) support. Upgrade to gpg ≥ 2.4.5 to interoperate with senders using v6 keys or modern AEAD packets.",
+            )
         }
         return result
     }

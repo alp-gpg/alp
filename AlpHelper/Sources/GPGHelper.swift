@@ -995,6 +995,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 let ver = String(firstLine[match])
                 status.gpgVersion = ver
                 status.versionSufficient = compareVersion(ver, isAtLeast: "2.2.14")
+                status.rfc9580Ready = compareVersion(ver, isAtLeast: "2.4.5")
             }
         }
 

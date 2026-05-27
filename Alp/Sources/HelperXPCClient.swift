@@ -75,6 +75,19 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    /// Trigger the smartcard user-PIN change flow. gpg-agent prompts via
+    /// pinentry for the current and new PINs — the helper itself never
+    /// sees PIN material. Long timeout because the user may take a while
+    /// to type two PINs into pinentry.
+    func changeCardPIN() async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.changeCardPIN { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     /// Returns nil when no smartcard is present. Errors propagate as
     /// thrown errors only for genuine helper failures.
     func cardStatus() async throws -> GPGCardStatus? {

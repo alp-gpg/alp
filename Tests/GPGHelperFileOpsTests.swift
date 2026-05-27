@@ -143,4 +143,35 @@ struct GPGHelperFileRoundTripTests {
             )
         }
     }
+
+    @Test
+    func `Multi-file decrypt round-trip — independent inputs`() async throws {
+        defer { cleanup() }
+        let fp = try await firstSecretKeyFingerprint()
+        let inputs = (0 ..< 3).map { idx in
+            scratch.appendingPathComponent("note-\(idx).txt")
+        }
+        for (idx, url) in inputs.enumerated() {
+            try Data("payload \(idx)".utf8).write(to: url)
+        }
+        // Mimic the multi-file batch driver: encrypt each file
+        // independently, then decrypt each and confirm content survives.
+        for input in inputs {
+            let cipherURL = scratch.appendingPathComponent("\(input.lastPathComponent).gpg")
+            try await helper._encryptFile(
+                inputPath: input.path,
+                outputPath: cipherURL.path,
+                recipients: [fp],
+                signer: nil,
+            )
+            let outURL = scratch.appendingPathComponent("\(input.lastPathComponent).out")
+            _ = try await helper._decryptFile(
+                inputPath: cipherURL.path,
+                outputPath: outURL.path,
+            )
+            let original = try Data(contentsOf: input)
+            let decrypted = try Data(contentsOf: outURL)
+            #expect(decrypted == original)
+        }
+    }
 }

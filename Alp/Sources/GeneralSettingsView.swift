@@ -274,10 +274,21 @@ struct GeneralSettingsView: View {
                     }
                 }
             }
-            Button("Refresh") {
-                Task { await vm.refreshCardStatus() }
+            HStack {
+                Button("Refresh") {
+                    Task { await vm.refreshCardStatus() }
+                }
+                Button("Change User PIN…") {
+                    Task { await vm.changeCardPIN() }
+                }
+                .help("Drives gpg --card-edit; pinentry prompts for old + new PIN.")
             }
             .controlSize(.small)
+            if let error = vm.cardError {
+                Text(error)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
         }
     }
 

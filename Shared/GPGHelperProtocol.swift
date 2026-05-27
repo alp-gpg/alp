@@ -117,6 +117,12 @@ import Foundation
     /// the error path is reserved for genuine helper failures.
     func cardStatus(reply: @escaping @Sendable (Data?, NSError?) -> Void)
 
+    /// Drive `gpg --card-edit` → `passwd` → option 1 to change the
+    /// OpenPGP user PIN. gpg-agent prompts the user via pinentry for the
+    /// current PIN and then the new PIN twice; the helper never sees the
+    /// PIN material. reply: (error?)
+    func changeCardPIN(reply: @escaping @Sendable (NSError?) -> Void)
+
     /// Reads the `pinentry-program` line from `~/.gnupg/gpg-agent.conf`.
     /// reply: (currentProgramPath?, isAlp, error?) where `isAlp` is
     /// true when the configured path points at our shim.

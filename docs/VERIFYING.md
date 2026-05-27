@@ -101,8 +101,10 @@ output cannot equal input.
 ## 6. Build it yourself
 
 The most reliable verification is to build Alp from source and compare
-behavior. See [BUILDING.md](../BUILDING.md). The `Project.swift` Tuist
-manifest is the single source of truth for build settings; the
+behavior. See [BUILDING.md](../BUILDING.md) for the dev setup and
+[REPRODUCIBLE-BUILD.md](REPRODUCIBLE-BUILD.md) for an honest accounting
+of what is and is not reproducible across machines. The `Project.swift`
+Tuist manifest is the single source of truth for build settings; the
 `.xcodeproj` is generated at build time and never committed.
 
 ```bash

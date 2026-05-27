@@ -99,33 +99,25 @@ final class ServicesProvider: NSObject {
         // NSPasteboard is not Sendable. Read it synchronously here, then
         // dispatch the rest of the flow onto the main actor with only
         // Sendable values crossing the boundary.
-        let input = readFirstFileURL(from: pboard)
+        let inputs = readAllFileURLs(from: pboard)
         Task { @MainActor in
-            guard let input else {
+            guard !inputs.isEmpty else {
                 presentAlert(title: "Decrypt File", message: "No file selected.")
                 return
             }
             NSApp.activate(ignoringOtherApps: true)
-            guard let output = promptSave(
-                title: "Save decrypted file",
-                defaultName: strippedEncryptedExtensionName(for: input),
-                relativeTo: input,
-            ) else { return }
-            do {
-                let (signer, signerName) = try await HelperXPCClient.shared.decryptFile(
-                    inputPath: input.path,
-                    outputPath: output.path,
-                )
-                let who = signerName ?? signer
-                let suffix = who.map { " (signed by \($0))" } ?? ""
-                presentAlert(
-                    title: "Decrypted",
-                    message: "\(output.lastPathComponent)\(suffix)",
-                    reveal: output,
-                )
-            } catch {
-                presentAlert(title: "Decrypt failed", message: error.localizedDescription)
-            }
+            await runFileBatch(
+                label: "Decrypt",
+                inputs: inputs,
+                singleOutputName: { strippedEncryptedExtensionName(for: $0) },
+                batchOutputName: { strippedEncryptedExtensionName(for: $0) },
+                perFile: { input, output in
+                    _ = try await HelperXPCClient.shared.decryptFile(
+                        inputPath: input.path,
+                        outputPath: output.path,
+                    )
+                },
+            )
         }
     }
 
@@ -134,27 +126,33 @@ final class ServicesProvider: NSObject {
         userData _: String?,
         error _: AutoreleasingUnsafeMutablePointer<NSString?>,
     ) {
-        let input = readFirstFileURL(from: pboard)
+        let inputs = readAllFileURLs(from: pboard)
         Task { @MainActor in
-            guard let input else {
+            guard !inputs.isEmpty else {
                 presentAlert(title: "Verify File", message: "No file selected.")
                 return
             }
             NSApp.activate(ignoringOtherApps: true)
-            // If the user picked a detached signature (e.g. report.pdf.sig)
-            // gpg looks for the companion data file at the basename minus
-            // the .sig/.asc suffix. We pass only the user's selection and
-            // let gpg resolve the pair.
-            do {
-                let (valid, signer, signerName) = try await HelperXPCClient.shared.verifyFile(
-                    inputPath: input.path,
-                )
-                let who = signerName ?? signer ?? "unknown signer"
-                let title = valid ? "Signature valid" : "Signature invalid"
-                presentAlert(title: title, message: "\(input.lastPathComponent) — \(who)")
-            } catch {
-                presentAlert(title: "Verify failed", message: error.localizedDescription)
+            // If a single detached signature was selected (e.g. report.pdf.sig)
+            // gpg resolves the companion data file by stripping .sig/.asc.
+            // Multi-file verify treats each item independently.
+            var lines: [String] = []
+            for input in inputs {
+                do {
+                    let (valid, signer, signerName) = try await HelperXPCClient.shared.verifyFile(
+                        inputPath: input.path,
+                    )
+                    let who = signerName ?? signer ?? "unknown signer"
+                    let mark = valid ? "✓" : "✗"
+                    lines.append("\(mark) \(input.lastPathComponent) — \(who)")
+                } catch {
+                    lines.append("✗ \(input.lastPathComponent) — \(error.localizedDescription)")
+                }
             }
+            presentAlert(
+                title: inputs.count == 1 ? "Verify File" : "Verify (\(inputs.count) files)",
+                message: lines.joined(separator: "\n"),
+            )
         }
     }
 
@@ -163,10 +161,10 @@ final class ServicesProvider: NSObject {
         userData _: String?,
         error _: AutoreleasingUnsafeMutablePointer<NSString?>,
     ) {
-        let input = readFirstFileURL(from: pboard)
+        let inputs = readAllFileURLs(from: pboard)
         let signer = UserDefaults.standard.string(forKey: "defaultSignerFingerprint")
         Task { @MainActor in
-            guard let input else {
+            guard !inputs.isEmpty else {
                 presentAlert(title: "Sign File", message: "No file selected.")
                 return
             }
@@ -178,25 +176,19 @@ final class ServicesProvider: NSObject {
                 return
             }
             NSApp.activate(ignoringOtherApps: true)
-            guard let output = promptSave(
-                title: "Save signature",
-                defaultName: "\(input.lastPathComponent).sig",
-                relativeTo: input,
-            ) else { return }
-            do {
-                try await HelperXPCClient.shared.signFile(
-                    inputPath: input.path,
-                    outputPath: output.path,
-                    signer: signer,
-                )
-                presentAlert(
-                    title: "Signed",
-                    message: output.lastPathComponent,
-                    reveal: output,
-                )
-            } catch {
-                presentAlert(title: "Sign failed", message: error.localizedDescription)
-            }
+            await runFileBatch(
+                label: "Sign",
+                inputs: inputs,
+                singleOutputName: { "\($0.lastPathComponent).sig" },
+                batchOutputName: { "\($0.lastPathComponent).sig" },
+                perFile: { input, output in
+                    try await HelperXPCClient.shared.signFile(
+                        inputPath: input.path,
+                        outputPath: output.path,
+                        signer: signer,
+                    )
+                },
+            )
         }
     }
 
@@ -205,9 +197,9 @@ final class ServicesProvider: NSObject {
         userData _: String?,
         error _: AutoreleasingUnsafeMutablePointer<NSString?>,
     ) {
-        let input = readFirstFileURL(from: pboard)
+        let inputs = readAllFileURLs(from: pboard)
         Task { @MainActor in
-            guard let input else {
+            guard !inputs.isEmpty else {
                 presentAlert(title: "Encrypt File", message: "No file selected.")
                 return
             }
@@ -228,30 +220,89 @@ final class ServicesProvider: NSObject {
                     )
                     return
                 }
+                let pickerLabel = inputs.count == 1
+                    ? inputs[0].lastPathComponent
+                    : "\(inputs.count) files"
                 guard let choice = await RecipientPickerWindow.present(
                     keys: candidates,
-                    fileName: input.lastPathComponent,
+                    fileName: pickerLabel,
                 ) else { return }
-                guard let output = promptSave(
-                    title: "Save encrypted file",
-                    defaultName: "\(input.lastPathComponent).gpg",
-                    relativeTo: input,
-                ) else { return }
-                try await HelperXPCClient.shared.encryptFile(
-                    inputPath: input.path,
-                    outputPath: output.path,
-                    recipients: choice.recipientFingerprints,
-                    signer: choice.signerFingerprint,
-                )
-                presentAlert(
-                    title: "Encrypted",
-                    message: output.lastPathComponent,
-                    reveal: output,
+                await runFileBatch(
+                    label: "Encrypt",
+                    inputs: inputs,
+                    singleOutputName: { "\($0.lastPathComponent).gpg" },
+                    batchOutputName: { "\($0.lastPathComponent).gpg" },
+                    perFile: { input, output in
+                        try await HelperXPCClient.shared.encryptFile(
+                            inputPath: input.path,
+                            outputPath: output.path,
+                            recipients: choice.recipientFingerprints,
+                            signer: choice.signerFingerprint,
+                        )
+                    },
                 )
             } catch {
                 presentAlert(title: "Encrypt failed", message: error.localizedDescription)
             }
         }
+    }
+
+    /// Shared batch driver: NSSavePanel for the 1-file case, NSOpenPanel
+    /// directory-picker for the >1-file case. Each helper invocation
+    /// captures its own success/failure status; the user sees a single
+    /// summary alert at the end with a "Show in Finder" button when at
+    /// least one output landed on disk.
+    @MainActor
+    private func runFileBatch(
+        label: String,
+        inputs: [URL],
+        singleOutputName: @MainActor (URL) -> String,
+        batchOutputName: @MainActor (URL) -> String,
+        perFile: @MainActor (URL, URL) async throws -> Void,
+    ) async {
+        if inputs.count == 1 {
+            let input = inputs[0]
+            guard let output = promptSave(
+                title: "Save \(label.lowercased())ed file",
+                defaultName: singleOutputName(input),
+                relativeTo: input,
+            ) else { return }
+            do {
+                try await perFile(input, output)
+                presentAlert(
+                    title: "\(label)ed",
+                    message: output.lastPathComponent,
+                    reveal: output,
+                )
+            } catch {
+                presentAlert(title: "\(label) failed", message: error.localizedDescription)
+            }
+            return
+        }
+
+        guard let outDir = promptOutputDirectory(
+            title: "Choose output folder for \(inputs.count) files",
+            suggested: inputs[0],
+        ) else { return }
+
+        var successes: [URL] = []
+        var failures: [String] = []
+        for input in inputs {
+            let output = outDir.appendingPathComponent(batchOutputName(input))
+            do {
+                try await perFile(input, output)
+                successes.append(output)
+            } catch {
+                failures.append("\(input.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        var lines = successes.map { "✓ \($0.lastPathComponent)" }
+        lines.append(contentsOf: failures.map { "✗ \($0)" })
+        presentAlert(
+            title: "\(label) — \(successes.count)/\(inputs.count) succeeded",
+            message: lines.joined(separator: "\n"),
+            reveal: successes.first.map { _ in outDir },
+        )
     }
 
     // MARK: – File Services helpers
@@ -270,12 +321,9 @@ final class ServicesProvider: NSObject {
         return "\(name).dec"
     }
 
-    private nonisolated func readFirstFileURL(from pboard: NSPasteboard) -> URL? {
+    private nonisolated func readAllFileURLs(from pboard: NSPasteboard) -> [URL] {
         let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
-        guard let urls = pboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL],
-              let first = urls.first
-        else { return nil }
-        return first
+        return (pboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL]) ?? []
     }
 
     @MainActor
@@ -286,6 +334,18 @@ final class ServicesProvider: NSObject {
         panel.directoryURL = input.deletingLastPathComponent()
         panel.canCreateDirectories = true
         // .OK == 1; modal returns .cancel when the user backs out.
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    @MainActor
+    private func promptOutputDirectory(title: String, suggested: URL) -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = title
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = suggested.deletingLastPathComponent()
+        panel.canCreateDirectories = true
         return panel.runModal() == .OK ? panel.url : nil
     }
 

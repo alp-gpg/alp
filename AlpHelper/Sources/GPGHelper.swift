@@ -875,6 +875,16 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // will spawn a fresh one with the new conf.
     }
 
+    /// Drive `gpg --card-edit` → `passwd` → option 1, which triggers a
+    /// pinentry prompt for the current user PIN and then the new PIN
+    /// (twice). The helper feeds only menu commands — the PIN material
+    /// itself never traverses our process.
+    func _changeCardPIN() async throws {
+        let commands = "admin\npasswd\n1\nq\nquit\n"
+        let args = ["--card-edit", "--command-fd", "0", "--status-fd", "2"]
+        _ = try await runGPG(args, input: Data(commands.utf8))
+    }
+
     /// Returns nil when no card is present rather than throwing — the UI
     /// uses presence as a hide/show signal, so a "no card" outcome is
     /// expected and not an error condition.
@@ -1513,6 +1523,19 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 try reply(JSONEncoder().encode(status), nil)
             } catch {
                 reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func changeCardPIN(reply: @escaping @Sendable (NSError?) -> Void) {
+        Task {
+            do {
+                try await self._changeCardPIN()
+                reply(nil)
+            } catch let e as GPGError {
+                reply(e.asNSError)
+            } catch {
+                reply(error as NSError)
             }
         }
     }

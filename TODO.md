@@ -21,13 +21,9 @@ YubiKey, ProtonMail, RFC 9580 refresh, and Sequoia rebuild. These
 extend Alp's value to the GPG users who don't email-PGP much, which
 is most of them.
 
-- [ ] **Smartcard / YubiKey write ops.** PIN change, transfer key
-      to card, factory-reset card. Read-only panel already ships;
-      write ops would make Alp the macOS-native YubiKey provisioning
-      tool. Audience: every dev with a YubiKey.
-- [ ] **Git commit signing setup wizard.** Detects unsigned-commit
-      git config, offers to set `user.signingkey` to a chosen key
-      and turn `commit.gpgsign` on. Small, dev-loved feature.
+- [ ] **Smartcard / YubiKey write ops (remaining).** Transfer key
+      to card and factory-reset card. User-PIN and admin-PIN change
+      already ship.
 - [ ] **Key backup + restore wizard.** Guided export of secret key
       + revocation certificate to an encrypted bundle, with a "test
       restore on a different Mac" walk-through. Protects users from
@@ -35,9 +31,6 @@ is most of them.
 - [ ] **SSH-key via gpg-agent.** Configure gpg-agent's SSH socket
       and link an authentication-capable subkey for `ssh-add -L`-style
       use. Power user feature; cheap to wire once card-write lands.
-- [ ] **gpg-agent passphrase cache management.** "Clear cache" button
-      + visible cache TTL setting. Cheap win, today users have to
-      `gpgconf --reload` from Terminal.
 - [ ] **RFC 9580 / crypto-refresh readiness.** Health check warns
       when local gpg is older than the version that ships RFC 9580
       support (gpg ≥ 2.4.5 / Sequoia builds). Helps users on Linux

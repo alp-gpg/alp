@@ -11,35 +11,26 @@
       public, so the Sparkle appcast is served at
       <https://alp-gpg.github.io/alp/appcast.xml>.
 
-## Future ideas (not scheduled)
+## Future ideas (mission-aligned only)
 
-### Adjacent expansion — "macOS GPG productivity tool"
+Alp is GPG for Apple Mail. Ideas here must serve a Mail-PGP user. We
+do not bolt on git tooling, SSH-auth helpers, or general macOS-GPG
+productivity features just because they share a binary.
 
-PGP-email is a flat-to-shrinking market; GPG-the-tool isn't going
-anywhere because of Linux package signing, git commit signing,
-YubiKey, ProtonMail, RFC 9580 refresh, and Sequoia rebuild. These
-extend Alp's value to the GPG users who don't email-PGP much, which
-is most of them.
-
-- [ ] **Smartcard / YubiKey write ops (remaining).** Transfer key
-      to card and factory-reset card. User-PIN and admin-PIN change
-      already ship.
 - [ ] **Key backup + restore wizard.** Guided export of secret key
       + revocation certificate to an encrypted bundle, with a "test
       restore on a different Mac" walk-through. Protects users from
-      the most common GPG-disaster: losing the only copy of the key.
-- [ ] **SSH-key via gpg-agent.** Configure gpg-agent's SSH socket
-      and link an authentication-capable subkey for `ssh-add -L`-style
-      use. Power user feature; cheap to wire once card-write lands.
-- [ ] **RFC 9580 / crypto-refresh readiness.** Health check warns
-      when local gpg is older than the version that ships RFC 9580
-      support (gpg ≥ 2.4.5 / Sequoia builds). Helps users on Linux
-      distro-locked gpg avoid silent compat issues.
-
-### Mail-side polish
-
-- [ ] Per-subkey refresh from keyserver (today's refresh is whole-primary).
-- [ ] Tor / SOCKS proxy for keyserver fetches.
-- [ ] Address-book "encryptable" badge in Contacts.
-- [ ] Real translations once a native speaker is available per locale —
-      the xcstrings catalog already captures every user-facing string.
+      losing the only copy of the key that decrypts their mail.
+- [ ] **Per-subkey refresh from keyserver.** Today's refresh is
+      whole-primary; granular refresh would catch subkey rotation
+      faster.
+- [ ] **Address-book "encryptable" badge in Contacts.** Surface
+      whether an address can receive PGP mail without composing first.
+- [ ] **Tor / SOCKS proxy for keyserver fetches.** For users on hostile
+      networks.
+- [ ] **RFC 9580 readiness check.** Health check warns when local gpg
+      is older than the version shipping RFC 9580 support (gpg ≥ 2.4.5
+      / Sequoia). Helps users on distro-locked gpg avoid silent compat
+      issues.
+- [ ] **Real translations.** The xcstrings catalog already captures
+      every user-facing string; needs native speakers per locale.

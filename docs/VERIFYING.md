@@ -38,7 +38,7 @@ The XPC helper runs unsandboxed and is the only component that touches
 your gpg binary. Its signature must match the same Team ID as the app.
 
 ```bash
-codesign -dvv /Applications/Alp.app/Contents/Library/LoginItems/AlpHelper 2>&1 | grep TeamIdentifier
+codesign -dvv /Applications/Alp.app/Contents/MacOS/AlpHelper 2>&1 | grep TeamIdentifier
 ```
 
 Alp itself enforces this at runtime: every XPC connection is gated by

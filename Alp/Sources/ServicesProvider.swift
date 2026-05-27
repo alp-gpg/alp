@@ -82,6 +82,232 @@ final class ServicesProvider: NSObject {
         }
     }
 
+    // MARK: – File Services
+
+    //
+    // File entry points are fire-and-forget: AppKit hands us a file-URL
+    // pasteboard, we read it, then drive the rest of the flow ourselves
+    // (save panel, helper call, completion alert). The Services error
+    // pointer is no use for async results, so we deliberately ignore it
+    // and surface every outcome through NSAlert instead.
+
+    @objc nonisolated func decryptFile(
+        _ pboard: NSPasteboard,
+        userData _: String?,
+        error _: AutoreleasingUnsafeMutablePointer<NSString?>,
+    ) {
+        // NSPasteboard is not Sendable. Read it synchronously here, then
+        // dispatch the rest of the flow onto the main actor with only
+        // Sendable values crossing the boundary.
+        let input = readFirstFileURL(from: pboard)
+        Task { @MainActor in
+            guard let input else {
+                presentAlert(title: "Decrypt File", message: "No file selected.")
+                return
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            guard let output = promptSave(
+                title: "Save decrypted file",
+                defaultName: strippedEncryptedExtensionName(for: input),
+                relativeTo: input,
+            ) else { return }
+            do {
+                let (signer, signerName) = try await HelperXPCClient.shared.decryptFile(
+                    inputPath: input.path,
+                    outputPath: output.path,
+                )
+                let who = signerName ?? signer
+                let suffix = who.map { " (signed by \($0))" } ?? ""
+                presentAlert(
+                    title: "Decrypted",
+                    message: "\(output.lastPathComponent)\(suffix)",
+                    reveal: output,
+                )
+            } catch {
+                presentAlert(title: "Decrypt failed", message: error.localizedDescription)
+            }
+        }
+    }
+
+    @objc nonisolated func verifyFile(
+        _ pboard: NSPasteboard,
+        userData _: String?,
+        error _: AutoreleasingUnsafeMutablePointer<NSString?>,
+    ) {
+        let input = readFirstFileURL(from: pboard)
+        Task { @MainActor in
+            guard let input else {
+                presentAlert(title: "Verify File", message: "No file selected.")
+                return
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            // If the user picked a detached signature (e.g. report.pdf.sig)
+            // gpg looks for the companion data file at the basename minus
+            // the .sig/.asc suffix. We pass only the user's selection and
+            // let gpg resolve the pair.
+            do {
+                let (valid, signer, signerName) = try await HelperXPCClient.shared.verifyFile(
+                    inputPath: input.path,
+                )
+                let who = signerName ?? signer ?? "unknown signer"
+                let title = valid ? "Signature valid" : "Signature invalid"
+                presentAlert(title: title, message: "\(input.lastPathComponent) — \(who)")
+            } catch {
+                presentAlert(title: "Verify failed", message: error.localizedDescription)
+            }
+        }
+    }
+
+    @objc nonisolated func signFile(
+        _ pboard: NSPasteboard,
+        userData _: String?,
+        error _: AutoreleasingUnsafeMutablePointer<NSString?>,
+    ) {
+        let input = readFirstFileURL(from: pboard)
+        let signer = UserDefaults.standard.string(forKey: "defaultSignerFingerprint")
+        Task { @MainActor in
+            guard let input else {
+                presentAlert(title: "Sign File", message: "No file selected.")
+                return
+            }
+            guard let signer else {
+                presentAlert(
+                    title: "No signing key",
+                    message: "Set a default signing key in Alp Settings → General.",
+                )
+                return
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            guard let output = promptSave(
+                title: "Save signature",
+                defaultName: "\(input.lastPathComponent).sig",
+                relativeTo: input,
+            ) else { return }
+            do {
+                try await HelperXPCClient.shared.signFile(
+                    inputPath: input.path,
+                    outputPath: output.path,
+                    signer: signer,
+                )
+                presentAlert(
+                    title: "Signed",
+                    message: output.lastPathComponent,
+                    reveal: output,
+                )
+            } catch {
+                presentAlert(title: "Sign failed", message: error.localizedDescription)
+            }
+        }
+    }
+
+    @objc nonisolated func encryptFile(
+        _ pboard: NSPasteboard,
+        userData _: String?,
+        error _: AutoreleasingUnsafeMutablePointer<NSString?>,
+    ) {
+        let input = readFirstFileURL(from: pboard)
+        Task { @MainActor in
+            guard let input else {
+                presentAlert(title: "Encrypt File", message: "No file selected.")
+                return
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            do {
+                let keys = try await HelperXPCClient.shared.listAllKeys()
+                // Field-12 capability letters: lowercase = primary itself,
+                // uppercase = at least one subkey advertises the cap.
+                // Either way the key is a valid encryption recipient.
+                let candidates = keys.filter { key in
+                    !key.fingerprint.isEmpty
+                        && key.capabilities.contains(where: { $0 == "e" || $0 == "E" })
+                }
+                guard !candidates.isEmpty else {
+                    presentAlert(
+                        title: "No encryption keys",
+                        message: "Import or generate a key with an encrypt capability in the Keys tab first.",
+                    )
+                    return
+                }
+                guard let choice = await RecipientPickerWindow.present(
+                    keys: candidates,
+                    fileName: input.lastPathComponent,
+                ) else { return }
+                guard let output = promptSave(
+                    title: "Save encrypted file",
+                    defaultName: "\(input.lastPathComponent).gpg",
+                    relativeTo: input,
+                ) else { return }
+                try await HelperXPCClient.shared.encryptFile(
+                    inputPath: input.path,
+                    outputPath: output.path,
+                    recipients: choice.recipientFingerprints,
+                    signer: choice.signerFingerprint,
+                )
+                presentAlert(
+                    title: "Encrypted",
+                    message: output.lastPathComponent,
+                    reveal: output,
+                )
+            } catch {
+                presentAlert(title: "Encrypt failed", message: error.localizedDescription)
+            }
+        }
+    }
+
+    // MARK: – File Services helpers
+
+    /// Drop one common OpenPGP suffix to suggest a default plaintext
+    /// filename. Falls back to the original name with a `.dec` tail when
+    /// nothing matches, so the save panel never collides with the source.
+    private nonisolated func strippedEncryptedExtensionName(for url: URL) -> String {
+        let name = url.lastPathComponent
+        for ext in ["gpg", "pgp", "asc"] {
+            let dotted = ".\(ext)"
+            if name.lowercased().hasSuffix(dotted) {
+                return String(name.dropLast(dotted.count))
+            }
+        }
+        return "\(name).dec"
+    }
+
+    private nonisolated func readFirstFileURL(from pboard: NSPasteboard) -> URL? {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        guard let urls = pboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL],
+              let first = urls.first
+        else { return nil }
+        return first
+    }
+
+    @MainActor
+    private func promptSave(title: String, defaultName: String, relativeTo input: URL) -> URL? {
+        let panel = NSSavePanel()
+        panel.title = title
+        panel.nameFieldStringValue = defaultName
+        panel.directoryURL = input.deletingLastPathComponent()
+        panel.canCreateDirectories = true
+        // .OK == 1; modal returns .cancel when the user backs out.
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    @MainActor
+    private func presentAlert(title: String, message: String, reveal: URL? = nil) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        if let reveal {
+            alert.addButton(withTitle: "Show in Finder")
+            alert.addButton(withTitle: "OK")
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                NSWorkspace.shared.activateFileViewerSelecting([reveal])
+            }
+        } else {
+            alert.addButton(withTitle: "OK")
+            _ = alert.runModal()
+        }
+    }
+
     // MARK: – Private
 
     /// Reads UTF-8 text from `input`, awaits `transform`, writes the result

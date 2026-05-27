@@ -43,6 +43,53 @@ import Foundation
         reply: @escaping @Sendable (Bool, String?, String?, NSError?) -> Void,
     )
 
+    /// Decrypt a file in-place via gpg streaming — avoids the 50 MB XPC
+    /// payload limit. Both paths must be absolute; `outputPath` must
+    /// differ from `inputPath` so a malformed call can't clobber the
+    /// ciphertext. The helper reads `inputPath` and writes plaintext to
+    /// `outputPath`; gpg-agent prompts for the passphrase via pinentry.
+    /// reply: (signerFingerprint?, signerDisplayName?, error?)
+    func decryptFile(
+        inputPath: String,
+        outputPath: String,
+        reply: @escaping @Sendable (String?, String?, NSError?) -> Void,
+    )
+
+    /// Verify a signature file. When `signaturePath` is nil, `inputPath`
+    /// is expected to be a clearsigned or armored signature wrapping its
+    /// own data. When `signaturePath` is non-nil, it points at a detached
+    /// signature and `inputPath` is the data being verified.
+    /// reply: (valid, signerFingerprint?, signerDisplayName?, error?)
+    func verifyFile(
+        inputPath: String,
+        signaturePath: String?,
+        reply: @escaping @Sendable (Bool, String?, String?, NSError?) -> Void,
+    )
+
+    /// Produce an ASCII-armored detached signature for `inputPath`,
+    /// writing the .asc/.sig blob to `outputPath`. Both paths absolute,
+    /// must differ. gpg-agent prompts via pinentry for the signer's
+    /// passphrase. reply: (error?)
+    func signFile(
+        inputPath: String,
+        outputPath: String,
+        signingFingerprint: String,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
+    /// Encrypt `inputPath` to one or more recipients (optionally also
+    /// signing) and write the binary OpenPGP packet to `outputPath`. Both
+    /// paths absolute, must differ. Each recipient and the signer (when
+    /// present) must be a 40-char hex fingerprint.
+    /// reply: (error?)
+    func encryptFile(
+        inputPath: String,
+        outputPath: String,
+        recipientFingerprints: [String],
+        signingFingerprint: String?,
+        reply: @escaping @Sendable (NSError?) -> Void,
+    )
+
     /// reply: JSON-encoded [GPGKeyInfo] or error
     func listSecretKeys(reply: @escaping @Sendable ([Data]?, NSError?) -> Void)
 

@@ -390,6 +390,74 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    /// File-level decrypt. The helper streams ciphertext from `inputPath` to
+    /// plaintext at `outputPath`, so the XPC payload stays tiny regardless
+    /// of file size. Returns the signer info parsed from gpg's status output
+    /// (both nil when the source was unsigned).
+    func decryptFile(
+        inputPath: String,
+        outputPath: String,
+    ) async throws -> (signer: String?, signerName: String?) {
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.decryptFile(inputPath: inputPath, outputPath: outputPath) { signer, signerName, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success((signer, signerName))) }
+            }
+        }
+    }
+
+    /// File-level verify. Pass `signaturePath` for detached signatures, or
+    /// nil for clearsigned / standalone armored signature files.
+    func verifyFile(
+        inputPath: String,
+        signaturePath: String? = nil,
+    ) async throws -> (valid: Bool, signer: String?, signerName: String?) {
+        try await call { proxy, resume in
+            proxy.verifyFile(inputPath: inputPath, signaturePath: signaturePath) { valid, signer, signerName, error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success((valid, signer, signerName))) }
+            }
+        }
+    }
+
+    /// File-level detached signature.
+    func signFile(
+        inputPath: String,
+        outputPath: String,
+        signer: String,
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.signFile(
+                inputPath: inputPath,
+                outputPath: outputPath,
+                signingFingerprint: signer,
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
+    /// File-level encrypt to one or more recipients, optionally also signing.
+    func encryptFile(
+        inputPath: String,
+        outputPath: String,
+        recipients: [String],
+        signer: String?,
+    ) async throws {
+        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.encryptFile(
+                inputPath: inputPath,
+                outputPath: outputPath,
+                recipientFingerprints: recipients,
+                signingFingerprint: signer,
+            ) { error in
+                if let error { resume(.failure(error)) }
+                else { resume(.success(true)) }
+            }
+        }
+    }
+
     // MARK: – Private
 
     /// Shared timeout + single-resume guard pattern. See `GPGXPCClient.call`

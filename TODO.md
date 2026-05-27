@@ -21,10 +21,6 @@ YubiKey, ProtonMail, RFC 9580 refresh, and Sequoia rebuild. These
 extend Alp's value to the GPG users who don't email-PGP much, which
 is most of them.
 
-- [ ] **File encryption / decryption.** Drag-drop encrypt, "Encrypt
-      File…" / "Decrypt File…" Services menu items. Reuses the helper.
-      Highest-value adjacent move — turns Alp into a GPG Services
-      replacement, not just a GPGMail replacement.
 - [ ] **Smartcard / YubiKey write ops.** PIN change, transfer key
       to card, factory-reset card. Read-only panel already ships;
       write ops would make Alp the macOS-native YubiKey provisioning

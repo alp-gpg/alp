@@ -20,6 +20,8 @@ The Keys tab is a full key manager. Generate an Ed25519 + Cv25519 pair, change a
 
 There's also a Services menu integration. Select PGP-encrypted text in any app, right-click → Services → Decrypt with Alp. Same for Verify and Sign.
 
+For files, right-click any item in Finder (or another app's open panel) and pick **Decrypt File with Alp**, **Verify File with Alp**, **Sign File with Alp**, or **Encrypt File with Alp…**. Decrypt and Sign open a save panel pre-populated with a sensible default name; Verify pops a one-line result with the signer's identity; Encrypt opens a recipient picker that lists every key in your local keyring with an encrypt capability.
+
 ## Requirements
 
 macOS 26 (Tahoe) and a working GnuPG install. The Setup checklist offers a one-click Homebrew path; if you'd rather not use Homebrew, install GnuPG from <https://gnupg.org/download/>. The pinentry passphrase prompt ships inside Alp itself — General → Pinentry has a "Use Alp Pinentry" button that wires it into `gpg-agent.conf` for you, so `pinentry-mac` is no longer required.

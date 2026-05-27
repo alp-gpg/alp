@@ -474,6 +474,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // empty description → y final confirm → save.
         let commands = "key \(subkeyIndex)\nrevkey\ny\n\(reasonCode)\n\ny\nsave\n"
         let args = [
+            "--no-tty",
             "--command-fd", "0", "--status-fd", "2",
             "--edit-key", fingerprint,
         ]
@@ -493,6 +494,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // delkey: select subkey, delkey, y to confirm, save.
         let commands = "key \(subkeyIndex)\ndelkey\ny\nsave\n"
         let args = [
+            "--no-tty",
             "--command-fd", "0", "--status-fd", "2",
             "--edit-key", fingerprint,
         ]
@@ -518,6 +520,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         let selectLines = subkeyIndices.map { "key \($0)" }.joined(separator: "\n")
         let commands = "\(selectLines)\ndelkey\ny\nsave\n"
         let args = [
+            "--no-tty",
             "--command-fd", "0", "--status-fd", "2",
             "--edit-key", fingerprint,
         ]
@@ -552,6 +555,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // adduid menu: name → email → comment → O (okay) → save.
         let commands = "adduid\n\(trimmedName)\n\(trimmedEmail)\n\(trimmedComment)\nO\nsave\n"
         let args = [
+            "--no-tty",
             "--command-fd", "0", "--status-fd", "2",
             "--edit-key", fingerprint,
         ]
@@ -571,6 +575,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // 4 maps to "user id no longer valid" in gpg's revuid prompt.
         let commands = "uid \(uidIndex)\nrevuid\ny\n4\n\ny\nsave\n"
         let args = [
+            "--no-tty",
             "--command-fd", "0", "--status-fd", "2",
             "--edit-key", fingerprint,
         ]
@@ -624,6 +629,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // passphrases themselves never traverse the helper.
         let commands = "passwd\nsave\n"
         let args = [
+            "--no-tty",
             "--command-fd", "0", "--status-fd", "2",
             "--edit-key", fingerprint,
         ]
@@ -640,6 +646,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         let expireArg = expiryDays == 0 ? "0" : "\(expiryDays)d"
         let commands = "expire\n\(expireArg)\nsave\n"
         let args = [
+            "--no-tty",
             "--command-fd", "0", "--status-fd", "2",
             "--edit-key", fingerprint,
         ]
@@ -886,7 +893,10 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     /// itself never traverses our process.
     func _changeCardPIN() async throws {
         let commands = "admin\npasswd\n1\nq\nquit\n"
-        let args = ["--card-edit", "--command-fd", "0", "--status-fd", "2"]
+        let args = [
+            "--no-tty",
+            "--card-edit", "--command-fd", "0", "--status-fd", "2",
+        ]
         _ = try await runGPG(args, input: Data(commands.utf8))
     }
 

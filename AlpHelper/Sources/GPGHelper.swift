@@ -23,14 +23,21 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return value.allSatisfy(\.isHexDigit)
     }
 
-    /// Validation for file-op paths sent over XPC. Rejects relative paths,
-    /// empty strings, and embedded null bytes. We do not resolve symlinks
-    /// or canonicalize — the caller (a Services menu invocation) hands us
-    /// a user-selected URL whose path is already absolute.
+    /// Validation for file-op paths sent over XPC. Rejects relative
+    /// paths, empty strings, and any embedded control character
+    /// (null, tab, newline, etc.). Process(1) tolerates control chars
+    /// in argv, but a path that carries one is overwhelmingly a
+    /// smuggling attempt — real macOS paths don't contain them. We do
+    /// not resolve symlinks or canonicalize: the caller (a Services
+    /// menu invocation) hands us a user-selected URL whose path is
+    /// already absolute.
     static func isValidAbsolutePath(_ value: String) -> Bool {
         guard !value.isEmpty else { return false }
         guard value.hasPrefix("/") else { return false }
-        return !value.contains("\0")
+        for scalar in value.unicodeScalars {
+            if scalar.value < 0x20 || scalar.value == 0x7F { return false }
+        }
+        return true
     }
 
     override init() {

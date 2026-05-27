@@ -24,6 +24,41 @@ struct GPGHelperValidationTests {
         #expect(!GPGHelper.isValidFingerprint("--homedir /evil/malicious/keyring/here/ab"))
         #expect(!GPGHelper.isValidFingerprint("ABCDEF0123456789ABCDEF0123456789ABCDEF 1"))
     }
+
+    @Test
+    func `isValidFingerprint rejects embedded whitespace`() {
+        // Tab and newline are not hex digits; reject. Catches a
+        // class of smuggling where a 40-char string looks fine until
+        // gpg sees the embedded \n and treats it as a new argument.
+        #expect(!GPGHelper.isValidFingerprint("ABCDEF0123456789ABCDEF0123456789ABCDEF\t1"))
+        #expect(!GPGHelper.isValidFingerprint("ABCDEF0123456789ABCDEF0123456789ABCDEF\n1"))
+    }
+
+    @Test
+    func `isValidFingerprint rejects leading or trailing whitespace`() {
+        // String trimming is the caller's responsibility — surface
+        // the bad value rather than silently coercing.
+        #expect(!GPGHelper.isValidFingerprint(" ABCDEF0123456789ABCDEF0123456789ABCDEF1"))
+        #expect(!GPGHelper.isValidFingerprint("ABCDEF0123456789ABCDEF0123456789ABCDEF1 "))
+    }
+
+    @Test
+    func `isValidFingerprint rejects unicode digit lookalikes`() {
+        // Swift's Character.isHexDigit is ASCII-only by design, but
+        // pin the contract: Arabic-Indic and full-width digits don't
+        // count as hex.
+        let arabicIndic = "٠١٢٣٤٥٦٧٨٩" // 10 chars covering 0-9
+        let padded = arabicIndic + String(repeating: "0", count: 30)
+        #expect(!GPGHelper.isValidFingerprint(padded))
+    }
+
+    @Test
+    func `isValidFingerprint rejects null bytes`() {
+        // A null byte mid-string is the classic argv-injection
+        // setup. Reject before it touches Process.
+        let nulled = "ABCDEF0123456789ABCDEF0123456789ABCDEF0\u{0000}"
+        #expect(!GPGHelper.isValidFingerprint(nulled))
+    }
 }
 
 @Suite("GPGHelper key lifecycle validation")

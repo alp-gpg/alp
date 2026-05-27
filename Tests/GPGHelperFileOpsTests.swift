@@ -139,6 +139,135 @@ struct GPGHelperFileRoundTripTests {
     }
 
     @Test
+    func `parseTrustLevel survives CRLF line endings`() {
+        #expect(GPGHelper.parseTrustLevel(from: "[GNUPG:] TRUST_FULLY 0\r\n") == "fully")
+    }
+
+    @Test
+    func `parseTrustLevel returns first TRUST tag when status carries several`() {
+        // Verifying a multi-signed file emits TRUST_* per signature.
+        // We surface the first to keep the UI single-valued; document
+        // the choice with this test so it doesn't drift silently.
+        let status = """
+        [GNUPG:] TRUST_FULLY 0
+        [GNUPG:] TRUST_MARGINAL 0
+        """
+        #expect(GPGHelper.parseTrustLevel(from: status) == "fully")
+    }
+}
+
+@Suite("File-op path edge cases")
+struct GPGHelperFileOpsEdgeCaseTests {
+    @Test
+    func `validateFileOpPaths rejects parent dir that doesn't exist`() {
+        #expect(throws: GPGError.self) {
+            try GPGHelper.validateFileOpPaths(
+                inputPath: "/etc/hosts",
+                outputPath: "/var/folders/this/does/not/exist/out.gpg",
+                requireInputExists: true,
+            )
+        }
+    }
+
+    @Test
+    func `validateFileOpPaths does not resolve symlinks at output path`() throws {
+        // Symlinks at NSSavePanel-selected output paths are
+        // unrealistic — Save panels return fresh file paths — but
+        // make the behavior explicit so we don't pretend to defend
+        // against something we don't. Helper writes follow whatever
+        // the unsandboxed file API sees on disk.
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("alp-symlink-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let target = scratch.appendingPathComponent("real.txt")
+        let link = scratch.appendingPathComponent("link.txt")
+        try Data("hi".utf8).write(to: target)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        // Symlink is a valid file from FileManager's POV; validator
+        // accepts. The defense lives one layer up — NSSavePanel does
+        // not produce symlink targets.
+        #expect(throws: Never.self) {
+            try GPGHelper.validateFileOpPaths(
+                inputPath: link.path,
+                outputPath: scratch.appendingPathComponent("out.gpg").path,
+                requireInputExists: true,
+            )
+        }
+    }
+
+    @Test
+    func `isValidAbsolutePath rejects tab and newline characters`() {
+        // Process won't choke on tab/newline in argv, but a forged
+        // path containing them is almost certainly a smuggling
+        // attempt. Tighten the validator so we don't pass them
+        // through to gpg.
+        #expect(!GPGHelper.isValidAbsolutePath("/tmp/with\ttab"))
+        #expect(!GPGHelper.isValidAbsolutePath("/tmp/with\nnewline"))
+    }
+}
+
+@Suite("File-op large-payload streaming", .serialized)
+struct GPGHelperLargeFileTests {
+    let helper: GPGHelper
+    let scratch: URL
+
+    init() async throws {
+        helper = await GPGHelper()
+        scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("alp-large-fileops-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+    }
+
+    private func cleanup() {
+        try? FileManager.default.removeItem(at: scratch)
+    }
+
+    private func firstSecretKeyFingerprint() async throws -> String {
+        let keys = try await helper._listSecretKeys()
+        guard let fp = keys.first?.fingerprint else {
+            Issue.record("No secret keys in keyring — skipping large-file test")
+            throw GPGError.noSigningKey
+        }
+        return fp
+    }
+
+    @Test
+    func `Encrypts and decrypts a 2 MB file without losing bytes`() async throws {
+        defer { cleanup() }
+        let fp = try await firstSecretKeyFingerprint()
+        let inURL = scratch.appendingPathComponent("blob.bin")
+        // 2 MB of pseudo-random bytes — well past the 50 MB XPC cap
+        // does not apply because the file flows through gpg's
+        // --output, not through XPC. Catches regressions where
+        // someone re-routes file ops back through the Data-based
+        // bridge.
+        var random = Data(count: 2 * 1024 * 1024)
+        random.withUnsafeMutableBytes { ptr in
+            guard let base = ptr.baseAddress else { return }
+            _ = SecRandomCopyBytes(kSecRandomDefault, ptr.count, base)
+        }
+        try random.write(to: inURL)
+
+        let cipher = scratch.appendingPathComponent("blob.bin.gpg")
+        try await helper._encryptFile(
+            inputPath: inURL.path,
+            outputPath: cipher.path,
+            recipients: [fp],
+            signer: nil,
+        )
+
+        let out = scratch.appendingPathComponent("blob.bin.out")
+        _ = try await helper._decryptFile(
+            inputPath: cipher.path,
+            outputPath: out.path,
+        )
+        let roundTripped = try Data(contentsOf: out)
+        #expect(roundTripped == random, "2 MB round-trip preserved every byte")
+    }
+
+    @Test
     func `Encrypt rejects bogus recipient fingerprint`() async throws {
         defer { cleanup() }
         let plaintextURL = scratch.appendingPathComponent("plain.txt")

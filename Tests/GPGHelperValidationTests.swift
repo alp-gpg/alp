@@ -61,6 +61,40 @@ struct GPGHelperValidationTests {
     }
 }
 
+@Suite("GPGHelper pinentry shim path validation")
+struct GPGHelperShimPathValidationTests {
+    @Test
+    func `accepts a normal app bundle path`() {
+        #expect(GPGHelper.isValidBundlePathForShim("/Applications/Alp.app"))
+        #expect(GPGHelper.isValidBundlePathForShim("/Users/me/Library/Developer/Xcode/DerivedData/x/Build/Products/Debug/Alp.app"))
+    }
+
+    @Test
+    func `requires an absolute path ending in .app`() {
+        #expect(!GPGHelper.isValidBundlePathForShim(""))
+        #expect(!GPGHelper.isValidBundlePathForShim("Alp.app")) // relative
+        #expect(!GPGHelper.isValidBundlePathForShim("/Applications/Alp")) // no .app
+        #expect(!GPGHelper.isValidBundlePathForShim("/Applications/Alp.app/")) // trailing slash
+    }
+
+    @Test
+    func `rejects shell metacharacters that would break out of the shim string`() {
+        // The path is interpolated into APP_BUNDLE="..." in a /bin/sh script
+        // that gpg-agent runs on every passphrase prompt. A quote, $, backslash,
+        // or backtick must never reach that file.
+        #expect(!GPGHelper.isValidBundlePathForShim("/tmp/eviL\";rm -rf ~;\".app"))
+        #expect(!GPGHelper.isValidBundlePathForShim("/tmp/$(touch evil).app"))
+        #expect(!GPGHelper.isValidBundlePathForShim("/tmp/`touch evil`.app"))
+        #expect(!GPGHelper.isValidBundlePathForShim("/tmp/back\\slash.app"))
+    }
+
+    @Test
+    func `rejects control characters`() {
+        #expect(!GPGHelper.isValidBundlePathForShim("/tmp/new\nline.app"))
+        #expect(!GPGHelper.isValidBundlePathForShim("/tmp/null\u{0000}.app"))
+    }
+}
+
 @Suite("GPGHelper key lifecycle validation")
 struct GPGHelperLifecycleValidationTests {
     @Test

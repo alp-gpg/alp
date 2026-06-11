@@ -12,6 +12,15 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     /// Maximum message payload accepted over XPC (50 MB).
     private static let maxPayloadSize = 50 * 1024 * 1024
+    /// Upper bound on plaintext gpg may emit for an in-memory decrypt.
+    /// Ciphertext is already capped at `maxPayloadSize`, but an OpenPGP
+    /// message can carry a highly compressed literal packet that expands to
+    /// many gigabytes ("decompression bomb"). Because incoming mail is
+    /// attacker-controlled and decoded automatically, we pass this to gpg as
+    /// `--max-output` so it aborts instead of exhausting helper memory.
+    /// 4× the input cap leaves ample headroom for legitimately compressible
+    /// mail while still bounding the blast radius.
+    private static let maxDecryptOutput = 4 * maxPayloadSize
     /// Maximum recipients per encrypt call.
     static let maxRecipients = 100
 
@@ -36,6 +45,28 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         guard value.hasPrefix("/") else { return false }
         for scalar in value.unicodeScalars {
             if scalar.value < 0x20 || scalar.value == 0x7F { return false }
+        }
+        return true
+    }
+
+    /// Stricter validation for a path we interpolate into a `/bin/sh` script
+    /// that is persisted and later executed by gpg-agent on every passphrase
+    /// prompt. Beyond `isValidAbsolutePath`, reject any character that has
+    /// meaning inside a double-quoted shell string — a quote, `$`, or backtick
+    /// would let a caller break out and inject arbitrary commands into the
+    /// shim. The only legitimate caller passes `Bundle.main.bundlePath`, which
+    /// never contains these. We also require a `.app` bundle so a stray path
+    /// can't redirect the shim somewhere unexpected.
+    static func isValidBundlePathForShim(_ value: String) -> Bool {
+        guard isValidAbsolutePath(value) else { return false }
+        guard value.hasSuffix(".app") else { return false }
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x22, 0x24, 0x5C, 0x60: // " $ \ `
+                return false
+            default:
+                continue
+            }
         }
         return true
     }
@@ -158,7 +189,11 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     }
 
     func _decrypt(_ data: Data) async throws -> (Data, String?, String?) {
-        let args = ["--yes", "--decrypt", "--status-fd", "2", "--output", "-"]
+        let args = [
+            "--yes", "--decrypt", "--status-fd", "2",
+            "--max-output", String(Self.maxDecryptOutput),
+            "--output", "-",
+        ]
         // We need stderr for the status output (signer fingerprint), stdout for plaintext.
         // Run with a custom setup to capture both separately.
         return try await runGPGWithStatus(args, input: data)
@@ -793,6 +828,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     /// bundle so app moves don't break the reference), edits
     /// gpg-agent.conf, and restarts gpg-agent.
     func _installAlpPinentry(bundlePath: String) async throws {
+        guard Self.isValidBundlePathForShim(bundlePath) else {
+            throw GPGError.encodingError("invalid bundle path")
+        }
         let shimContent = """
         #!/bin/sh
         # Alp Pinentry shim. gpg-agent invokes this; we resolve the current

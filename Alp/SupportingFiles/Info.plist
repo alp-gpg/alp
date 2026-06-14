@@ -9,7 +9,7 @@
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
     <key>NSHumanReadableCopyright</key>
@@ -21,23 +21,18 @@
         <key>NSAllowsArbitraryLoads</key>
         <false/>
     </dict>
-    <key>SUFeedURL</key>
-    <string>https://alp-gpg.github.io/alp/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>x1JEeu9YAmQj4qXAdlxw0Y9KiizUVwJQzUcAVmajMuQ=</string>
     <!--
-        Default off so a fresh install does not phone home for update checks
-        without user consent — Alp is a privacy-focused tool. Users opt in
-        via the "Updates" section in General settings. We strongly recommend
-        flipping this on so security fixes (cert-pin rotations, helper
-        bugfixes) reach users quickly.
+        Notification-only updater config (replaced Sparkle). AlpUpdateFeedURL
+        serves a signed release.json; AlpUpdatePublicKey is the base64 Ed25519
+        public key (32 raw bytes) used by UpdateChecker to verify the manifest
+        signature with CryptoKit. Auto-checks are opt-in via Settings → Updates
+        (AlpAutomaticUpdateChecks); a fresh install never phones home for
+        updates without consent.
     -->
-    <key>SUEnableAutomaticChecks</key>
-    <false/>
-    <key>SUAutomaticallyUpdate</key>
-    <false/>
-    <key>SUEnableInstallerLauncherService</key>
-    <true/>
+    <key>AlpUpdateFeedURL</key>
+    <string>https://alp-gpg.github.io/alp/release.json</string>
+    <key>AlpUpdatePublicKey</key>
+    <string>x1JEeu9YAmQj4qXAdlxw0Y9KiizUVwJQzUcAVmajMuQ=</string>
     <key>NSServices</key>
     <array>
         <dict>
@@ -70,10 +65,6 @@
             <key>NSPortName</key>
             <string>Alp</string>
             <key>NSSendTypes</key>
-            <array>
-                <string>NSStringPboardType</string>
-            </array>
-            <key>NSReturnTypes</key>
             <array>
                 <string>NSStringPboardType</string>
             </array>

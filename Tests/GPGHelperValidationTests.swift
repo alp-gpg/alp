@@ -66,7 +66,8 @@ struct GPGHelperShimPathValidationTests {
     @Test
     func `accepts a normal app bundle path`() {
         #expect(GPGHelper.isValidBundlePathForShim("/Applications/Alp.app"))
-        #expect(GPGHelper.isValidBundlePathForShim("/Users/me/Library/Developer/Xcode/DerivedData/x/Build/Products/Debug/Alp.app"))
+        #expect(GPGHelper
+            .isValidBundlePathForShim("/Users/me/Library/Developer/Xcode/DerivedData/x/Build/Products/Debug/Alp.app"))
     }
 
     @Test

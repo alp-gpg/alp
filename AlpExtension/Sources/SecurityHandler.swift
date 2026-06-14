@@ -12,6 +12,13 @@ private let log = Logger(subsystem: "app.alp.Alp.extension", category: "Security
 final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     private nonisolated let parser = PGPMessageParser()
 
+    /// "Encrypt to my own key" toggle (default ON). Read on demand — a local
+    /// `UserDefaults` keeps this `nonisolated`-safe without a shared instance.
+    private nonisolated static func encryptToSelfEnabled() -> Bool {
+        UserDefaults(suiteName: BuildConfig.appGroup)?
+            .object(forKey: BuildConfig.DefaultsKey.encryptToSelf) as? Bool ?? true
+    }
+
     override nonisolated init() {
         super.init()
     }
@@ -62,12 +69,13 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 
     nonisolated func getEncodingStatus(
         for message: MEMessage,
-        composeContext _: MEComposeContext,
+        composeContext: MEComposeContext,
         completionHandler: @escaping (MEOutgoingMessageEncodingStatus) -> Void,
     ) {
         // Extract values synchronously on the calling thread, then do async work.
         let allAddresses = message.allRecipientAddresses
         let emails = allAddresses.map { $0.addressString ?? $0.rawString }
+        let contextID = composeContext.contextID
         // MailKit's completion handlers aren't annotated @Sendable but are
         // designed to be invoked from arbitrary XPC callback queues. Use
         // nonisolated(unsafe) so the detached Task can capture the handler
@@ -75,21 +83,44 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         nonisolated(unsafe) let handler = completionHandler
 
         Task.detached {
+            // Consult the per-window state: a missing-key error is only
+            // meaningful when the user actually intends to encrypt (§5.3).
+            let (_, shouldEncrypt, _, _) = await MainActor.run {
+                ComposeSessionStore.shared.state(forContextID: contextID)
+            }
+
             var missingEmails: [String] = []
+            var helperDown = false
             for email in emails {
                 do {
                     let (found, _) = try await GPGXPCClient.shared.publicKeyExists(email: email)
                     if !found { missingEmails.append(email) }
+                } catch GPGError.xpcUnavailable {
+                    helperDown = true
+                    break
                 } catch {
                     missingEmails.append(email)
                 }
             }
+
+            // Helper not running: surface the actionable "helper not running"
+            // text rather than the cryptic "Missing public keys for: <everyone>".
+            if helperDown {
+                handler(MEOutgoingMessageEncodingStatus(
+                    canSign: true,
+                    canEncrypt: false,
+                    securityError: shouldEncrypt ? GPGError.xpcUnavailable.asNSError : nil,
+                    addressesFailingEncryption: [],
+                ))
+                return
+            }
+
             let missingAddresses = missingEmails.map { MEEmailAddress(rawString: $0) }
-            let encryptionError: NSError? = missingEmails.isEmpty ? nil :
+            let encryptionError: NSError? = (shouldEncrypt && !missingEmails.isEmpty) ?
                 NSError(domain: MEMessageSecurityErrorDomain,
                         code: 0,
                         userInfo: [NSLocalizedDescriptionKey:
-                            "Missing public keys for: \(missingEmails.joined(separator: ", "))"])
+                            "Missing public keys for: \(missingEmails.joined(separator: ", "))"]) : nil
             handler(MEOutgoingMessageEncodingStatus(
                 canSign: true,
                 canEncrypt: missingEmails.isEmpty,
@@ -116,6 +147,12 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                 ComposeSessionStore.shared.state(forContextID: contextID)
             }
 
+            // "Encrypt to my own key" (default ON): add the user's own key as a
+            // recipient so their Sent items remain decryptable. The signer
+            // fingerprint is the user's own key and is populated even when
+            // signing is off, so it doubles as the self-encryption key.
+            let encryptToSelf = Self.encryptToSelfEnabled()
+
             do {
                 let encoded = try await Self.buildOutgoing(
                     rawData: rawData,
@@ -124,6 +161,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     shouldEncrypt: shouldEncrypt,
                     signerFingerprint: signerFP,
                     useInlinePGP: useInlinePGP,
+                    selfFingerprint: encryptToSelf ? signerFP : nil,
                 )
                 handler(MEMessageEncodingResult(
                     encodedMessage: encoded, signingError: nil, encryptionError: nil,
@@ -164,9 +202,12 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
 
     // MARK: – Decode implementation
 
-    private nonisolated static func decrypt(data: Data, parser: PGPMessageParser) async -> MEDecodedMessage {
+    private nonisolated static func decrypt(data: Data, parser: PGPMessageParser) async -> MEDecodedMessage? {
         guard let pgp = parser.parse(data) else {
-            return MEDecodedMessage(data: data, securityInformation: .notSecured, context: nil)
+            // Not a PGP message: return nil so Mail keeps its own rendering
+            // path instead of routing the message through the extension's
+            // re-serialization for nothing (§3.3).
+            return nil
         }
         log.info("PGP content detected")
         do {
@@ -230,16 +271,27 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         shouldEncrypt: Bool,
         signerFingerprint: String?,
         useInlinePGP: Bool = false,
+        selfFingerprint: String? = nil,
     ) async throws -> MEEncodedOutgoingMessage {
         guard let rawData else {
             throw GPGError.encodingError("MEMessage has no rawData")
         }
 
+        // Strip Bcc before anything is signed or encrypted: the result is read
+        // by every recipient, so a Bcc header riding inside the signed visible
+        // part or the encrypted payload would leak the blind-copy list to all
+        // of them. Mail delivers Bcc via the compose session's recipient list,
+        // not via a header in the bytes we return, so removing it here is safe
+        // (§5.5). The plaintext passthrough below keeps the original rawData.
+        let payload = (shouldSign || shouldEncrypt)
+            ? OutgoingMIMEParser.removingHeader("Bcc", from: rawData)
+            : rawData
+
         // Inline mode is only viable for single-part text bodies because
         // armored ciphertext or a clearsigned block has to land in a plain
         // text/plain part — multipart messages with attachments fall back to
         // PGP/MIME silently rather than refuse to send.
-        let inlineCandidate = useInlinePGP ? OutgoingMIMEParser.split(rawData) : nil
+        let inlineCandidate = useInlinePGP ? OutgoingMIMEParser.split(payload) : nil
 
         if shouldEncrypt {
             var fingerprints: [String] = []
@@ -247,6 +299,12 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                 let (found, fp) = try await GPGXPCClient.shared.publicKeyExists(email: email)
                 guard found, let fp else { throw GPGError.missingKeys([email]) }
                 fingerprints.append(fp)
+            }
+            // Encrypt-to-self: append the user's own key so their Sent copy is
+            // decryptable. Deduplicated so a user who is also an explicit
+            // recipient isn't added twice.
+            if let selfFingerprint, !fingerprints.contains(selfFingerprint) {
+                fingerprints.append(selfFingerprint)
             }
             if let parsed = inlineCandidate {
                 let ciphertext = try await GPGXPCClient.shared.encrypt(
@@ -260,7 +318,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                 )
             }
             let ciphertext = try await GPGXPCClient.shared.encrypt(
-                rawData,
+                payload,
                 recipients: fingerprints,
                 signer: shouldSign ? signerFingerprint : nil,
             )
@@ -281,7 +339,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     isSigned: true, isEncrypted: false,
                 )
             }
-            let canonicalBody = canonicalizeForSigning(rawData)
+            let canonicalBody = canonicalizeForSigning(payload)
             let (signature, micalg) = try await GPGXPCClient.shared.sign(canonicalBody, signer: fp)
             return MEEncodedOutgoingMessage(
                 rawData: pgpMIMESigned(canonicalBody, signature: signature, micalg: micalg),
@@ -313,6 +371,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data) -> Data {
         let boundary = "AlpBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
+            "MIME-Version: 1.0",
             "Content-Type: multipart/encrypted; boundary=\"\(boundary)\"; protocol=\"application/pgp-encrypted\"",
             "",
             "--\(boundary)",
@@ -342,6 +401,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     private nonisolated static func pgpMIMESigned(_ body: Data, signature: Data, micalg: String) -> Data {
         let boundary = "AlpSigBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
+            "MIME-Version: 1.0",
             "Content-Type: multipart/signed; boundary=\"\(boundary)\"; protocol=\"application/pgp-signature\"; micalg=\"\(micalg)\"",
             "",
             "--\(boundary)",

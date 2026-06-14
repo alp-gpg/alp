@@ -19,23 +19,37 @@ private let log = Logger(subsystem: "app.alp.Alp.pinentry", category: "Pinentry"
 /// CR / LF / `%` survive the line-oriented protocol.
 enum Assuan {
     static func decode(_ s: String) -> String {
-        var out = ""
-        out.reserveCapacity(s.count)
-        var i = s.startIndex
-        while i < s.endIndex {
-            let c = s[i]
-            if c == "%", s.distance(from: i, to: s.endIndex) >= 3 {
-                let hex = s[s.index(after: i) ..< s.index(i, offsetBy: 3)]
-                if let v = UInt8(hex, radix: 16) {
-                    out.unicodeScalars.append(Unicode.Scalar(v))
-                    i = s.index(i, offsetBy: 3)
-                    continue
-                }
+        // Decode at the *byte* level then interpret the result as UTF-8 once.
+        // A multi-byte sequence like `%C3%A9` is two %-escapes that together
+        // form one scalar (é); decoding each escape straight to a Unicode
+        // scalar would instead yield "Ã©".
+        let utf8 = Array(s.utf8)
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(utf8.count)
+        var i = 0
+        while i < utf8.count {
+            if utf8[i] == 0x25, i + 2 < utf8.count, // '%'
+               let hi = hexDigit(utf8[i + 1]), let lo = hexDigit(utf8[i + 2])
+            {
+                bytes.append(hi << 4 | lo)
+                i += 3
+            } else {
+                bytes.append(utf8[i])
+                i += 1
             }
-            out.append(c)
-            i = s.index(after: i)
         }
-        return out
+        return String(bytes: bytes, encoding: .utf8)
+            ?? String(bytes: bytes, encoding: .isoLatin1)
+            ?? ""
+    }
+
+    private static func hexDigit(_ b: UInt8) -> UInt8? {
+        switch b {
+        case 0x30 ... 0x39: b - 0x30 // 0-9
+        case 0x41 ... 0x46: b - 0x41 + 10 // A-F
+        case 0x61 ... 0x66: b - 0x61 + 10 // a-f
+        default: nil
+        }
     }
 
     static func encode(_ s: String) -> String {

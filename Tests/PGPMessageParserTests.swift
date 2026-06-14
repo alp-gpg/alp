@@ -216,6 +216,40 @@ struct PGPMessageParserTests {
     }
 
     @Test
+    func `PGP-MIME signed body is extracted byte-for-byte including headers and CRLFs`() {
+        // RFC 3156 signs the *entire* first part — its headers, body, and
+        // exact CRLFs — up to (not including) the CRLF before the boundary.
+        // This is the byte sequence gpg hashed at sign time; any stripping or
+        // trimming here breaks verification of genuinely valid signatures.
+        // Reproduce exactly the wire format SecurityHandler.pgpMIMESigned emits:
+        // canonicalBody placed directly after the first `--boundary` line.
+        let canonicalBody = "Content-Type: text/plain; charset=utf-8\r\n" +
+            "\r\n" +
+            "Hello café — line one\r\n" +
+            "line two with trailing space \r\n"
+        let wire = "Content-Type: multipart/signed; boundary=\"b0und\"; " +
+            "protocol=\"application/pgp-signature\"; micalg=\"pgp-sha256\"\r\n" +
+            "\r\n" +
+            "--b0und\r\n" +
+            canonicalBody +
+            "\r\n--b0und\r\n" +
+            "Content-Type: application/pgp-signature; name=\"signature.asc\"\r\n" +
+            "\r\n" +
+            "-----BEGIN PGP SIGNATURE-----\r\n" +
+            "fakesig==\r\n" +
+            "-----END PGP SIGNATURE-----\r\n" +
+            "--b0und--\r\n"
+        guard case let .mimeSignature(body, sig) = parser.parse(Data(wire.utf8)) else {
+            Issue.record("Expected .mimeSignature result")
+            return
+        }
+        #expect(body == Data(canonicalBody.utf8), "Signed bytes must match canonicalBody exactly")
+        let sigStr = String(data: sig, encoding: .utf8) ?? ""
+        #expect(sigStr.hasPrefix("-----BEGIN PGP SIGNATURE-----"))
+        #expect(sigStr.hasSuffix("-----END PGP SIGNATURE-----"))
+    }
+
+    @Test
     func `Inline PGP with BEGIN but no END returns nil`() {
         // A truncated body shouldn't trigger a half-baked decrypt.
         let truncated = """

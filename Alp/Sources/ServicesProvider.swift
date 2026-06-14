@@ -57,15 +57,33 @@ final class ServicesProvider: NSObject {
         userData _: String?,
         error: AutoreleasingUnsafeMutablePointer<NSString?>,
     ) {
-        runService(input: pboard, errorOut: error, label: "Verify") { data in
-            let (valid, signer, name) = try await HelperXPCClient.shared.verify(data)
-            // Replace the selection with a one-line status banner. The
-            // caller can paste it next to the original message or discard
-            // it; we do not rewrite the source selection silently because
-            // the user almost certainly wants to keep the signed text.
+        // Verify must NOT return a pasteboard value: AppKit would replace the
+        // user's selected (signed) text with the status string, destroying the
+        // very text it just verified (§4.2). Present the result as an alert
+        // instead, like the file services, and leave the selection intact.
+        guard let text = pboard.string(forType: .string), !text.isEmpty else {
+            error.pointee = "Alp: no text selected" as NSString
+            return
+        }
+        let inputData = Data(text.utf8)
+        let result: Result<(Bool, String?, String?), Error> = blockingAwait {
+            do { return try await .success(HelperXPCClient.shared.verify(inputData)) }
+            catch { return .failure(error) }
+        }
+        switch result {
+        case let .success((valid, signer, name)):
             let who = name ?? signer ?? "unknown signer"
-            let summary = valid ? "✓ Signature valid — \(who)" : "✗ Signature invalid — \(who)"
-            return Data(summary.utf8)
+            Task { @MainActor in
+                self.presentAlert(
+                    title: valid ? "Signature valid" : "Signature invalid",
+                    message: valid
+                        ? "Signed by \(who)."
+                        : "The signature could not be verified — \(who).",
+                )
+            }
+        case let .failure(err):
+            log.error("Service Verify failed: \(err.localizedDescription, privacy: .public)")
+            error.pointee = "Alp Verify failed: \(err.localizedDescription)" as NSString
         }
     }
 

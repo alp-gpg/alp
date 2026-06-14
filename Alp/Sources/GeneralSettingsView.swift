@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @Bindable var vm: SettingsViewModel
+    @Environment(UpdateChecker.self) private var updateChecker
 
     @State private var showingGPGInstaller = false
 
@@ -52,6 +53,16 @@ struct GeneralSettingsView: View {
                         .foregroundStyle(.secondary)
                     }
                 }
+                Toggle(isOn: $vm.keyserverPresenceChecks) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Check keys.openpgp.org for each key")
+                        Text(
+                            "Shows whether each key is published. Turning this off keeps your full contact-key list private — Alp won't query the keyserver on every load.",
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             Section("Updates") {
@@ -64,15 +75,24 @@ struct GeneralSettingsView: View {
                                 .help("Recommended for security")
                         }
                         Text(
-                            "Strongly recommended. Off by default because a security tool should not phone home without consent. Turning this on lets Alp pull cert-pin rotations, helper bug fixes, and Sparkle's own CVE patches from alp-gpg.github.io as soon as they ship.",
+                            "Strongly recommended. Off by default because a security tool should not phone home without consent. Turning this on lets Alp pull cert-pin rotations and helper bug fixes from alp-gpg.github.io as soon as they ship. Alp only notifies you — it never installs anything itself; you download the notarized DMG yourself.",
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     }
                 }
-                Text("Manual check: Alp menu → Check for Updates…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .onChange(of: automaticUpdateChecks) { _, on in
+                    if on { updateChecker.startAutomaticChecks() } else { updateChecker.stopAutomaticChecks() }
+                }
+
+                updateStatusView
+
+                Button {
+                    Task { await updateChecker.check(manual: true) }
+                } label: {
+                    Text(updateChecker.isChecking ? "Checking…" : "Check Now")
+                }
+                .disabled(updateChecker.isChecking)
             }
 
             if vm.helperStatus == .enabled, let config = vm.pinentryConfig {
@@ -118,6 +138,8 @@ struct GeneralSettingsView: View {
             Section("Compose Defaults") {
                 Toggle("Sign messages by default", isOn: $vm.signByDefault)
                 Toggle("Encrypt messages by default", isOn: $vm.encryptByDefault)
+                Toggle("Encrypt to my own key", isOn: $vm.encryptToSelf)
+                    .help("Adds your own key as a recipient so you can read your sent encrypted mail.")
             }
 
             if !vm.secretKeys.isEmpty {
@@ -295,10 +317,46 @@ struct GeneralSettingsView: View {
     @AppStorage(KeyserverSession.strictPinningDefaultsKey, store: UserDefaults(suiteName: BuildConfig.appGroup))
     private var strictKeyserverPinning = false
 
-    /// Sparkle reads `SUEnableAutomaticChecks` from standard UserDefaults at
-    /// runtime; the Info.plist value seeds the default. Writing here is what
-    /// the next launch's `SPUUpdater` picks up.
-    @AppStorage("SUEnableAutomaticChecks") private var automaticUpdateChecks = false
+    /// Opt-in for the notification-only updater's background checks.
+    @AppStorage("AlpAutomaticUpdateChecks") private var automaticUpdateChecks = false
+
+    /// Renders the latest update-check outcome under the Updates toggle.
+    @ViewBuilder
+    private var updateStatusView: some View {
+        switch updateChecker.latestResult {
+        case let .updateAvailable(release):
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Version \(release.version) is available", systemImage: "arrow.down.circle.fill")
+                    .foregroundStyle(.blue)
+                if !release.notes.isEmpty {
+                    Text(release.notes).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("SHA-256: \(release.sha256)")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                HStack {
+                    if let url = URL(string: release.url) {
+                        Button("Open Download Page") { NSWorkspace.shared.open(url) }
+                            .buttonStyle(.borderedProminent)
+                    }
+                    Button("Skip This Version") { updateChecker.skip(release) }
+                }
+            }
+        case .upToDate:
+            if updateChecker.lastCheckWasManual {
+                Label("You're up to date.", systemImage: "checkmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case let .failed(message):
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        case nil:
+            EmptyView()
+        }
+    }
 
     // MARK: – Setup Checklist
 

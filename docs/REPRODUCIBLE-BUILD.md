@@ -15,10 +15,10 @@ inputs match:
 - **Source compilation.** Swift 6.3 with `-strict-concurrency=complete`
   and the project-pinned settings produces deterministic object code.
 - **Tuist project generation.** `tuist generate` is deterministic given
-  the same `Project.swift`, `Tuist/Package.swift`, and pinned package
-  resolution (`.package.resolved` is checked into git).
-- **Dependency versions.** Sparkle is pinned in `.package.resolved`.
-  No other Swift packages are used.
+  the same `Project.swift`.
+- **Dependency versions.** None — Alp has **zero** third-party Swift
+  package dependencies. Updates are handled by the in-house, notification-only
+  `UpdateChecker` (CryptoKit), not Sparkle.
 - **Assets and Info.plist.** Captured by Tuist; no per-machine variance.
 
 ## What is not reproducible (and why)

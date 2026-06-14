@@ -45,21 +45,39 @@ struct PGPMessageParser {
             }
         }
 
-        // Inline PGP encrypted
-        if text.contains(Self.beginPGPMessage) {
+        // Inline PGP — only when the message body itself *begins* with an
+        // armor block. A plain email that merely quotes
+        // "-----BEGIN PGP MESSAGE-----" (a tutorial, a forwarded thread) must
+        // not be treated as encrypted: that would run gpg, possibly pop
+        // pinentry, and show an error banner on perfectly readable mail (§3.3).
+        let body = bodyText(text)
+        if body.hasPrefix(Self.beginPGPMessage) {
             if let cipher = extractInlinePGP(from: text, marker: Self.beginPGPMessage) {
                 return .inline(ciphertext: cipher)
             }
         }
 
         // Inline clearsign
-        if text.contains(Self.beginPGPSigned) {
+        if body.hasPrefix(Self.beginPGPSigned) {
             if let body = messageData.nilIfEmpty {
                 return .inlineSigned(signedBody: body)
             }
         }
 
         return nil
+    }
+
+    /// The message body (everything after the first blank line that separates
+    /// RFC 822 headers from body), trimmed of surrounding whitespace. Used to
+    /// require that inline-PGP armor appears at the *start* of the body rather
+    /// than anywhere in it.
+    private func bodyText(_ text: String) -> String {
+        let afterHeaders: Substring = if let r = text.range(of: "\r\n\r\n") ?? text.range(of: "\n\n") {
+            text[r.upperBound...]
+        } else {
+            text[...]
+        }
+        return afterHeaders.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: – Private helpers
@@ -96,20 +114,51 @@ struct PGPMessageParser {
     private func extractPGPMIMESignature(from data: Data) -> (Data, Data)? {
         guard let text = String(data: data, encoding: .utf8) else { return nil }
         guard let boundary = extractBoundary(from: text) else { return nil }
-        let parts = text.components(separatedBy: "--\(boundary)")
-        guard parts.count >= 3 else { return nil }
 
-        func partBody(_ part: String) -> Data? {
-            let stripped: String = if let r = part.range(of: "\r\n\r\n") ?? part.range(of: "\n\n") {
-                String(part[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            } else {
-                part.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return stripped.data(using: .utf8)
-        }
-
-        guard let body = partBody(parts[1]), let sig = partBody(parts[2]) else { return nil }
+        // RFC 3156 §5: the detached signature covers the *entire* first MIME
+        // part — its headers, body, and exact CRLFs — up to (but not
+        // including) the CRLF that precedes the closing boundary delimiter.
+        // Any header stripping, whitespace trimming, or String round-tripping
+        // here changes the hashed bytes and makes genuinely valid signatures
+        // (Thunderbird, GnuPG, Proton) read as "Invalid signature". So extract
+        // the part as raw bytes, byte-for-byte.
+        guard let body = firstPartRawBytes(in: data, boundary: boundary) else { return nil }
+        guard let sig = extractArmoredBlock(from: text, begin: "-----BEGIN PGP SIGNATURE-----",
+                                            end: "-----END PGP SIGNATURE-----") else { return nil }
         return (body, sig)
+    }
+
+    /// Byte-exact bytes of the first MIME part of a multipart/signed message:
+    /// everything after the CRLF that ends the first `--boundary` delimiter
+    /// line, up to (but excluding) the CRLF that precedes the next `--boundary`.
+    private func firstPartRawBytes(in data: Data, boundary: String) -> Data? {
+        let delim = Data("--\(boundary)".utf8)
+        guard let firstDelim = data.range(of: delim) else { return nil }
+        // Skip to the end of the boundary delimiter line (its terminating LF).
+        guard let firstLF = data.range(of: Data([0x0A]), in: firstDelim.upperBound ..< data.endIndex)
+        else { return nil }
+        let partStart = firstLF.upperBound
+        guard let nextDelim = data.range(of: delim, in: partStart ..< data.endIndex) else { return nil }
+        // Exclude the CRLF (or bare LF) immediately before the boundary — it
+        // belongs to the boundary, not the signed content.
+        var partEnd = nextDelim.lowerBound
+        if partEnd > partStart, data[data.index(before: partEnd)] == 0x0A {
+            partEnd = data.index(before: partEnd)
+            if partEnd > partStart, data[data.index(before: partEnd)] == 0x0D {
+                partEnd = data.index(before: partEnd)
+            }
+        }
+        guard partEnd >= partStart else { return nil }
+        return data.subdata(in: partStart ..< partEnd)
+    }
+
+    /// Extract an ASCII-armored block (e.g. the detached signature) verbatim,
+    /// including its BEGIN/END lines. Robust to surrounding MIME headers and
+    /// transfer-encoding artifacts on the signature part.
+    private func extractArmoredBlock(from text: String, begin: String, end: String) -> Data? {
+        guard let s = text.range(of: begin),
+              let e = text.range(of: end, range: s.lowerBound ..< text.endIndex) else { return nil }
+        return String(text[s.lowerBound ..< e.upperBound]).data(using: .utf8)
     }
 
     private func extractBoundary(from text: String) -> String? {
@@ -127,13 +176,7 @@ struct PGPMessageParser {
     }
 
     private func extractInlinePGP(from text: String, marker: String) -> Data? {
-        guard let start = text.range(of: marker) else { return nil }
-        let endMarker = "-----END PGP MESSAGE-----"
-        guard let end = text.range(of: endMarker, range: start.lowerBound ..< text.endIndex) else {
-            return nil
-        }
-        let pgpText = String(text[start.lowerBound ..< end.upperBound])
-        return pgpText.data(using: .utf8)
+        extractArmoredBlock(from: text, begin: marker, end: "-----END PGP MESSAGE-----")
     }
 }
 

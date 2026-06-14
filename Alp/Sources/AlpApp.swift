@@ -1,5 +1,4 @@
 import AppKit
-import Sparkle
 import SwiftUI
 
 @main
@@ -9,37 +8,31 @@ struct AlpApp: App {
     /// implicitly-unwrapped global is still nil that early in launch.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    /// Sparkle drives auto-update for direct-DMG installs (brew users get
-    /// updates from `brew upgrade`). The controller has to be a stored
-    /// property so its lifetime spans the whole app session.
-    private let updaterController: SPUStandardUpdaterController
-
-    init() {
-        // `startingUpdater: true` schedules background checks per the cadence
-        // the user picked in the Sparkle preferences pane (or our default).
-        // Sparkle reads SUFeedURL and SUPublicEDKey from Info.plist directly.
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: nil,
-            userDriverDelegate: nil,
-        )
-    }
+    /// Notification-only updater (replaced Sparkle). Shared so the General
+    /// settings pane can show the current update state and the menu can
+    /// trigger a manual check.
+    @State private var updateChecker = UpdateChecker()
+    @AppStorage("AlpAutomaticUpdateChecks") private var automaticUpdateChecks = false
 
     var body: some Scene {
-        WindowGroup {
+        // A single `Window`, not `WindowGroup`: Alp is a settings-style app, so
+        // File ▸ New Window must not spawn independent windows each with their
+        // own SettingsViewModel and periodic health-check loop (which could
+        // then disagree about helper status). One window, one model (§4.1).
+        Window("Alp", id: "main") {
             ContentView()
+                .environment(updateChecker)
+                .task {
+                    if automaticUpdateChecks { updateChecker.startAutomaticChecks() }
+                }
         }
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(after: .appInfo) {
-                // Sparkle no-ops when a check is already in progress, so we
-                // skip the "disable while running" binding the docs suggest —
-                // the KVO key path it relies on isn't compatible with Swift 6
-                // strict-concurrency main-actor isolation, and the polish is
-                // not worth a custom NSObject observer.
                 Button("Check for Updates…") {
-                    updaterController.checkForUpdates(nil)
+                    Task { await updateChecker.check(manual: true) }
                 }
+                .disabled(updateChecker.isChecking)
             }
         }
     }

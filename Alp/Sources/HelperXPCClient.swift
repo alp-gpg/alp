@@ -398,6 +398,16 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
+    func generateRevocationCertificate(fingerprint: String) async throws -> Data {
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
+            proxy.generateRevocationCertificate(fingerprint: fingerprint) { data, error in
+                if let error { resume(.failure(error)) }
+                else if let data { resume(.success(data)) }
+                else { resume(.failure(GPGError.xpcUnavailable)) }
+            }
+        }
+    }
+
     func decrypt(_ data: Data) async throws -> (plaintext: Data, signer: String?, signerName: String?) {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.decrypt(data: data) { plain, signer, signerName, error in

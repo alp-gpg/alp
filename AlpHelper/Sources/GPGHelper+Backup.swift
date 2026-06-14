@@ -93,7 +93,10 @@ extension GPGHelper {
     /// no controlling terminal is attached (errno: "Device not
     /// configured"). The `--command-fd`/`--status-fd` pair carries
     /// every interaction we need.
-    private func _generateRevocationCert(fingerprint: String) async throws -> Data {
+    func _generateRevocationCert(fingerprint: String) async throws -> Data {
+        guard Self.isValidFingerprint(fingerprint) else {
+            throw GPGError.encodingError("invalid fingerprint")
+        }
         let commands = "y\n0\n\ny\n"
         let args = [
             "--no-tty",

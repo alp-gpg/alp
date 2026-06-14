@@ -46,6 +46,12 @@ final class SettingsViewModel {
 
     var isLoadingKeys = false
 
+    /// Set when the last key load failed (helper/XPC error). The Keys view shows
+    /// an error + Retry instead of the misleading "No Keys Found — Generate a
+    /// new pair…" state, which reads as data loss to a user with existing keys
+    /// and invites generating a duplicate (§3.2).
+    var keysLoadError: String?
+
     /// Returns the primary keys that should be shown given the "Show expired"
     /// toggle state. A primary is hidden only when its *own* expiry has
     /// passed; subkeys expiring independently do not hide their parent.
@@ -87,6 +93,31 @@ final class SettingsViewModel {
         didSet {
             UserDefaults.standard.set(encryptByDefault, forKey: "encryptByDefault")
             Self.groupDefaults?.set(encryptByDefault, forKey: "encryptByDefault")
+        }
+    }
+
+    /// When ON, the user's own key is added as a recipient on every encrypted
+    /// message so their Sent items stay readable. Defaults ON — the common
+    /// "I can't read my own sent encrypted mail" complaint for naive PGP setups.
+    var encryptToSelf: Bool = UserDefaults.standard
+        .object(forKey: BuildConfig.DefaultsKey.encryptToSelf) as? Bool ?? true
+    {
+        didSet {
+            UserDefaults.standard.set(encryptToSelf, forKey: BuildConfig.DefaultsKey.encryptToSelf)
+            Self.groupDefaults?.set(encryptToSelf, forKey: BuildConfig.DefaultsKey.encryptToSelf)
+        }
+    }
+
+    /// When ON (default), Alp HEAD-requests keys.openpgp.org for each key on
+    /// load to show publish status. That discloses the whole contact-key graph
+    /// to the keyserver, so offer an opt-out for a "no phone-home" posture
+    /// (§5.7).
+    var keyserverPresenceChecks: Bool = UserDefaults.standard
+        .object(forKey: "keyserverPresenceChecks") as? Bool ?? true
+    {
+        didSet {
+            UserDefaults.standard.set(keyserverPresenceChecks, forKey: "keyserverPresenceChecks")
+            Self.groupDefaults?.set(keyserverPresenceChecks, forKey: "keyserverPresenceChecks")
         }
     }
 
@@ -236,13 +267,18 @@ final class SettingsViewModel {
             let keys = try await HelperXPCClient.shared.listAllKeys()
             allKeys = keys
             secretKeys = keys.filter(\.hasSecretKey)
-            // Fire off keyserver checks concurrently — each updates keyserverStatus as it finishes.
-            for key in keys {
-                Task { await self.checkKeyserver(fingerprint: key.fingerprint) }
+            keysLoadError = nil
+            // Fire off keyserver checks concurrently — each updates keyserverStatus
+            // as it finishes. Skipped when the user opted out of presence checks.
+            if keyserverPresenceChecks {
+                for key in keys {
+                    Task { await self.checkKeyserver(fingerprint: key.fingerprint) }
+                }
             }
         } catch {
-            allKeys = []
-            secretKeys = []
+            // Don't wipe a previously loaded keyring on a transient error —
+            // surface the failure and let the user retry (§3.2).
+            keysLoadError = error.localizedDescription
         }
     }
 

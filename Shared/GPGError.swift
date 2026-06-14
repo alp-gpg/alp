@@ -18,7 +18,7 @@ extension GPGError: LocalizedError {
         case .gpgNotFound:
             String(localized: "gpg binary not found. Install with: brew install gnupg")
         case let .processError(code, stderr):
-            String(localized: "gpg exited with code \(code): \(stderr)")
+            GPGError.friendlyProcessError(code: code, stderr: stderr)
         case .noSigningKey:
             String(localized: "No secret key available for signing.")
         case let .missingKeys(emails):
@@ -34,6 +34,32 @@ extension GPGError: LocalizedError {
         case let .importRejected(detail):
             String(localized: "gpg refused to import the key: \(detail)")
         }
+    }
+
+    /// Map the common gpg failure modes to plain guidance for the target
+    /// audience; fall back to the raw stderr (still useful to experts) for
+    /// anything unrecognized (§5.6).
+    private static func friendlyProcessError(code: Int32, stderr: String) -> String {
+        let lower = stderr.lowercased()
+        if lower.contains("no secret key") {
+            return String(localized: "No matching secret key is available for this operation.")
+        }
+        if lower.contains("bad passphrase") || lower.contains("no passphrase") {
+            return String(localized: "Wrong or missing passphrase. Try again.")
+        }
+        if lower.contains("no pinentry") || (lower.contains("pinentry") && lower.contains("not")) {
+            return String(localized: "Couldn't show the passphrase prompt. Reinstall the Alp helper from Settings.")
+        }
+        if lower.contains("no public key") || lower.contains("unusable public key") {
+            return String(localized: "No usable public key for one or more recipients.")
+        }
+        if lower.contains("decryption failed") || lower.contains("no secret key found") {
+            return String(localized: "This message can't be decrypted with your keys.")
+        }
+        let trimmed = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty
+            ? String(localized: "gpg failed with code \(code).")
+            : String(localized: "gpg failed (code \(code)): \(trimmed)")
     }
 }
 

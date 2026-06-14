@@ -32,24 +32,61 @@ currency including the Sparkle auto-updater.
 
 ## Changes already landed on this branch
 
-Two additive, low-risk helper hardening fixes (with tests) were implemented and
-pushed, because they are well-contained and clearly correct by inspection:
+The original two helper hardening fixes plus a broad implementation pass have
+now landed and build/test green against the real macOS 26 SDK (234 Swift Testing
+cases pass; swiftformat + swiftlint clean):
 
-1. **Decompression-bomb DoS bound** — `_decrypt` now passes `--max-output` to
-   gpg so a compressed OpenPGP packet that expands to many GB aborts instead of
-   OOM-killing the helper. (Commit `afc1edd`.)
-2. **Shell-injection guard on the pinentry shim** — `_installAlpPinentry` now
-   validates `bundlePath` before interpolating it into the persisted `/bin/sh`
-   shim gpg-agent executes on every passphrase prompt. (Commit `afc1edd`.)
+**Original hardening (commit `afc1edd`):**
+1. **Decompression-bomb DoS bound** — `_decrypt` passes `--max-output`. (§2.1)
+2. **Shell-injection guard on the pinentry shim**. (§2.2)
 
-> **Everything else in this report is documented, not implemented.** This review
-> was performed in an environment without a Swift toolchain, and the repository's
-> CI builds against a real macOS 26 SDK. The remaining fixes — especially the
-> MIME-correctness changes, compose-state persistence, and Sparkle removal — need
-> compilation and (for the release items) release-infrastructure changes to land
-> safely. Pushing them blind would risk a red CI and, worse for a crypto app,
-> subtle untested behavior. They are specified precisely so they can be
-> implemented and tested directly.
+**Implementation pass (this commit):**
+- §1.1 PGP/MIME signature byte-exactness — `extractPGPMIMESignature` now extracts
+  the first part as raw bytes (no header strip/trim) + round-trip test.
+- §1.2 Compose state write-through to the app group with fail-closed recovery + test.
+- §1.3 Encrypt-to-self (default-ON "Encrypt to my own key" toggle).
+- §1.4 `annotateAddressesForSession` — live recipient key checks + inline red marks.
+- §2.3 gpg subprocess watchdog (SIGTERM→SIGKILL backstop).
+- §2.6 Assuan percent-decoder now byte-correct (`%C3%A9` → `é`).
+- §2.7 file-op output path symlink-resolved against the input.
+- §3.1 compose-handler dictionary race closed (NSLock).
+- §3.2 `keysLoadError` state + Retry (no more false "No Keys Found").
+- §3.3 inline-PGP detection restricted to body-start; `decodedMessage` returns nil
+  for non-PGP mail.
+- §3.4 live keyserver pinning canary gated behind `ALP_RUN_NETWORK_TESTS`.
+- §3.6 `RecipientPickerWindow` retain cycle broken.
+- §4.1 single `Window` instead of `WindowGroup`.
+- §4.2 "Verify with Alp" presents an alert; `NSReturnTypes` dropped (selection preserved).
+- §4.5 delete-key confirm uses the modern `.alert` modifier.
+- §5.1 revocation split into a true generate-only cert path + a clearly-labeled
+  "Revoke Key…"; new `generateRevocationCertificate` XPC method.
+- §5.3 `getEncodingStatus` consults compose state and surfaces `xpcUnavailable` distinctly.
+- §5.4 inline mode falls back to PGP/MIME for quoted-printable / base64 bodies + tests.
+- §5.5 (partial) **Bcc-leak closed** — `Bcc` is stripped from every signed/encrypted
+  payload via `OutgoingMIMEParser.removingHeader` (so the blind-copy list can't ride
+  inside the ciphertext/signed part) + tests; `MIME-Version: 1.0` added to both PGP/MIME
+  builders for parity.
+- §5.6 common gpg stderr mapped to plain guidance.
+- §5.7 keyserver-presence opt-out toggle; update-toggle relaunch hint; refresher
+  success/no-op states surfaced.
+- §6 release pipeline: version injection (`CURRENT_PROJECT_VERSION`/`MARKETING_VERSION`),
+  notarytool now submits a zip + notarizes the DMG, `-onlyUsePackageVersionsFromResolvedFile`.
+- §7 **Sparkle removed** (full removal, per the report's primary recommendation):
+  new notification-only `UpdateChecker` (CryptoKit Ed25519 verify over raw
+  release.json bytes, downgrade/replay + minOS rejection, opt-in 24h jittered
+  checks) with tests; both mach-lookup entitlement exceptions and all `SU*`
+  Info.plist keys removed; `release.json` emitted + signed in `build-release.sh`;
+  `appcast.xml` deleted. **SPM dependency count is now zero.**
+
+> **Deferred — need real-Mail.app / live-cert / runtime verification, not blind edits:**
+> §2.4 (pin the long-lived ISRG X1+X2 roots — left as-is because a wrong pin hash
+> is worse than the volatile-intermediate status quo; regenerate via the canary),
+> §2.5 (passphrase zeroization in the pinentry), §3.5 (per-call XPC invalidation),
+> §4.3 (Services main-thread blocking — needs threading verification),
+> §4.4 (extension string catalog), §5.2 (Autocrypt provenance/origin tracking),
+> §5.5 (remaining): whether Mail wants full top-level headers on the PGP/MIME
+> builders the way inline preserves them — needs an integration test capturing
+> the actual sent bytes from Mail. The Bcc leak and MIME-Version are now fixed.
 
 ## Severity legend
 

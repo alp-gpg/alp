@@ -166,11 +166,17 @@ extension GPGHelper {
             guard isValidAbsolutePath(outputPath) else {
                 throw GPGError.encodingError("invalid output path")
             }
-            // Refuse to clobber the source by accident. Path comparison is
-            // sufficient — symlink games are unlikely from a Services menu
-            // invocation and refusing equal paths catches the common case.
+            // Refuse to clobber the source by accident. Compare both the raw
+            // strings and their canonicalized (symlink-resolved) forms so a
+            // symlinked output path can't alias the input and overwrite it
+            // (§2.7).
             guard outputPath != inputPath else {
                 throw GPGError.encodingError("input and output paths must differ")
+            }
+            let resolvedOut = (outputPath as NSString).resolvingSymlinksInPath
+            let resolvedIn = (inputPath as NSString).resolvingSymlinksInPath
+            guard resolvedOut != resolvedIn else {
+                throw GPGError.encodingError("input and output paths resolve to the same file")
             }
             // Output parent directory must exist + be writable. We don't
             // create it: the caller picked the location via NSSavePanel.

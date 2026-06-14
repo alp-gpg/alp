@@ -47,15 +47,16 @@ signed by a different team cannot impersonate the helper.
 
 ## 3. Confirm Alp does not phone home on first launch
 
-Alp's Sparkle auto-update is **opt-in**. A fresh install makes zero
+Alp's update check is **opt-in**. A fresh install makes zero
 outbound network calls until you flip the switch under
-**General → Updates**.
+**General → Updates**. The updater is notification-only — it never
+installs anything; at most it tells you a newer notarized DMG exists
+and links the download page.
 
-The trade-off: leaving updates off means you also miss Alp's own
-bug fixes, cert-pin rotations, and Sparkle's CVE patches until you
-manually re-download from GitHub Releases or run `brew upgrade
---cask alp`. We recommend enabling auto-update or letting brew
-carry the load.
+The trade-off: leaving update checks off means you also miss Alp's own
+bug fixes and cert-pin rotations until you manually re-download from
+GitHub Releases or run `brew upgrade --cask alp`. We recommend enabling
+update checks or letting brew carry the load.
 
 Verify with Little Snitch, LuLu, or by tcpdump on an isolated machine:
 
@@ -137,18 +138,22 @@ Expected: `Alp-<VERSION>.dmg: OK`. Any other output means the bytes
 on disk do not match what we released — stop and re-download from the
 official GitHub Releases page.
 
-## 8. Sparkle update signing
+## 8. Update-manifest signing
 
-Auto-update DMGs are signed with an EdDSA key whose public half is
-embedded in `Alp/SupportingFiles/Info.plist` (`SUPublicEDKey`). The
-matching private key never leaves the release operator's macOS
-Keychain. An attacker who hijacks the appcast or the GitHub Releases
-URL still cannot ship a malicious update without that private key.
+The update notification is driven by a signed `release.json`. It carries an
+Ed25519 signature whose public half is embedded in
+`Alp/SupportingFiles/Info.plist` (`AlpUpdatePublicKey`); Alp verifies the
+signature over the raw manifest bytes with CryptoKit before showing any
+prompt. The matching private key never leaves the release operator's macOS
+Keychain. An attacker who hijacks the feed or the GitHub Releases URL can at
+worst show a false notification pointing at a binary that must still pass
+Gatekeeper and the Team-ID check above — there is no self-installing path to
+abuse.
 
 You can confirm the embedded public key by reading the Info.plist:
 
 ```bash
-/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' /Applications/Alp.app/Contents/Info.plist
+/usr/libexec/PlistBuddy -c 'Print :AlpUpdatePublicKey' /Applications/Alp.app/Contents/Info.plist
 ```
 
 ## 9. What Alp does not protect

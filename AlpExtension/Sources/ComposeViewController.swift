@@ -5,6 +5,12 @@ import SwiftUI
 final class ComposeViewController: MEExtensionViewController {
     private var vm: ComposeViewModel?
 
+    /// The compose session's view model, used by `ComposeHandler` to refresh
+    /// recipient key state when Mail reports an address change (§1.4).
+    var viewModel: ComposeViewModel? {
+        vm
+    }
+
     func configure(session: MEComposeSession) {
         let viewModel = ComposeViewModel(session: session)
         vm = viewModel

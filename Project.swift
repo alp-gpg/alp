@@ -14,7 +14,13 @@ let baseSettings: SettingsDictionary = [
     // properties instead of as stringly-typed keys.
     "LOCALIZED_STRING_SWIFTUI_SUPPORT": "YES",
     "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
+    // Both version keys are placeholders for local/dev builds; the release
+    // pipeline (scripts/build-release.sh) injects the real values from the git
+    // tag via CURRENT_PROJECT_VERSION and MARKETING_VERSION. Without that
+    // injection every build shipped CFBundleVersion "1", so Sparkle never saw
+    // a newer build and no update could be offered.
     "CURRENT_PROJECT_VERSION": "1",
+    "MARKETING_VERSION": "1.0",
     "VERSIONING_SYSTEM": "apple-generic",
 ]
 
@@ -24,14 +30,9 @@ let project = Project(
         defaultKnownRegions: ["en"],
         developmentRegion: "en",
     ),
-    packages: [
-        // Sparkle 2 powers auto-update for direct-DMG installs. brew users
-        // upgrade via `brew upgrade --cask`; Sparkle covers everyone else.
-        .remote(
-            url: "https://github.com/sparkle-project/Sparkle",
-            requirement: .upToNextMajor(from: "2.9.2"),
-        ),
-    ],
+    // No SPM dependencies: updates are handled by the in-house notification-only
+    // UpdateChecker (CryptoKit Ed25519 verification), not Sparkle. Keeping the
+    // dependency count at zero is part of the "small enough to audit" pitch.
     settings: .settings(base: baseSettings),
     targets: [
         // ── Main App ───────────────────────────────────────────────────
@@ -96,7 +97,6 @@ let project = Project(
                 .target(name: "AlpExtension"),
                 .target(name: "AlpHelper"),
                 .target(name: "AlpPinentry"),
-                .package(product: "Sparkle"),
             ],
             settings: .settings(
                 base: [

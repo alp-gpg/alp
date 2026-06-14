@@ -11,7 +11,16 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     private let gpgPath: String
 
     /// Maximum message payload accepted over XPC (50 MB).
-    private static let maxPayloadSize = 50 * 1024 * 1024
+    static let maxPayloadSize = 50 * 1024 * 1024
+    /// Upper bound on plaintext gpg may emit for an in-memory decrypt.
+    /// Ciphertext is already capped at `maxPayloadSize`, but an OpenPGP
+    /// message can carry a highly compressed literal packet that expands to
+    /// many gigabytes ("decompression bomb"). Because incoming mail is
+    /// attacker-controlled and decoded automatically, we pass this to gpg as
+    /// `--max-output` so it aborts instead of exhausting helper memory.
+    /// 4× the input cap leaves ample headroom for legitimately compressible
+    /// mail while still bounding the blast radius.
+    private static let maxDecryptOutput = 4 * maxPayloadSize
     /// Maximum recipients per encrypt call.
     static let maxRecipients = 100
 
@@ -36,6 +45,28 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         guard value.hasPrefix("/") else { return false }
         for scalar in value.unicodeScalars {
             if scalar.value < 0x20 || scalar.value == 0x7F { return false }
+        }
+        return true
+    }
+
+    /// Stricter validation for a path we interpolate into a `/bin/sh` script
+    /// that is persisted and later executed by gpg-agent on every passphrase
+    /// prompt. Beyond `isValidAbsolutePath`, reject any character that has
+    /// meaning inside a double-quoted shell string — a quote, `$`, or backtick
+    /// would let a caller break out and inject arbitrary commands into the
+    /// shim. The only legitimate caller passes `Bundle.main.bundlePath`, which
+    /// never contains these. We also require a `.app` bundle so a stray path
+    /// can't redirect the shim somewhere unexpected.
+    static func isValidBundlePathForShim(_ value: String) -> Bool {
+        guard isValidAbsolutePath(value) else { return false }
+        guard value.hasSuffix(".app") else { return false }
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x22, 0x24, 0x5C, 0x60: // " $ \ `
+                return false
+            default:
+                continue
+            }
         }
         return true
     }
@@ -77,9 +108,23 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     // MARK: – Core runner
 
+    /// Hard upper bound on any single gpg invocation. Set just above the
+    /// interactive XPC client timeout (300 s, for pinentry-driven calls) so the
+    /// watchdog never kills a call the client still cares about, while still
+    /// guaranteeing a wedged gpg/gpg-agent/pinentry can't orphan a process or
+    /// pin a cooperative-pool thread forever (§2.3).
+    private static let processWatchdogTimeout: TimeInterval = 310
+
+    /// Shared serial queue for the per-call watchdog timers — reused across
+    /// invocations rather than allocated per call. The timer work items stay
+    /// per-call; only the queue is shared.
+    private static let watchdogQueue = DispatchQueue(label: "app.alp.Alp.gpg-watchdog")
+
     /// Raw runner returning stdout, stderr, and exit code without throwing on non-zero exit.
     func runGPGRaw(_ args: [String],
-                   input: Data? = nil) async throws -> (stdout: Data, stderr: Data, exitCode: Int32)
+                   input: Data? = nil,
+                   timeout: TimeInterval = GPGHelper.processWatchdogTimeout)
+        async throws -> (stdout: Data, stderr: Data, exitCode: Int32)
     {
         guard !gpgPath.isEmpty, FileManager.default.isExecutableFile(atPath: gpgPath) else {
             throw GPGError.gpgNotFound
@@ -105,6 +150,21 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             try process.run()
         }
 
+        // Watchdog: SIGTERM at `timeout`, then SIGKILL 5 s later. Terminating
+        // the process closes its pipes, which unblocks the readDataToEndOfFile
+        // calls below — otherwise a gpg waiting on a stuck pinentry produces no
+        // output and the read blocks until the (never-arriving) exit.
+        let watchdogQueue = Self.watchdogQueue
+        nonisolated(unsafe) var didTimeOut = false
+        let terminateItem = DispatchWorkItem {
+            if process.isRunning { didTimeOut = true; process.terminate() }
+        }
+        let killItem = DispatchWorkItem {
+            if process.isRunning { didTimeOut = true; kill(process.processIdentifier, SIGKILL) }
+        }
+        watchdogQueue.asyncAfter(deadline: .now() + timeout, execute: terminateItem)
+        watchdogQueue.asyncAfter(deadline: .now() + timeout + 5, execute: killItem)
+
         // Read both pipes concurrently to avoid deadlock when either pipe's
         // OS buffer (~64 KB) fills while the other is still being written.
         let stderrQueue = DispatchQueue(label: "app.alp.Alp.stderr-reader")
@@ -114,6 +174,15 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         stderrQueue.sync {} // barrier — wait for stderr read to finish
 
         process.waitUntilExit()
+        terminateItem.cancel()
+        killItem.cancel()
+        // Serialize the read against the watchdog work items on their own queue.
+        if watchdogQueue.sync(execute: { didTimeOut }) {
+            throw GPGError.processError(
+                exitCode: process.terminationStatus,
+                stderr: "gpg timed out after \(Int(timeout))s and was terminated",
+            )
+        }
         return (stdoutData, stderrData, process.terminationStatus)
     }
 
@@ -158,7 +227,11 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     }
 
     func _decrypt(_ data: Data) async throws -> (Data, String?, String?) {
-        let args = ["--yes", "--decrypt", "--status-fd", "2", "--output", "-"]
+        let args = [
+            "--yes", "--decrypt", "--status-fd", "2",
+            "--max-output", String(Self.maxDecryptOutput),
+            "--output", "-",
+        ]
         // We need stderr for the status output (signer fingerprint), stdout for plaintext.
         // Run with a custom setup to capture both separately.
         return try await runGPGWithStatus(args, input: data)
@@ -793,6 +866,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     /// bundle so app moves don't break the reference), edits
     /// gpg-agent.conf, and restarts gpg-agent.
     func _installAlpPinentry(bundlePath: String) async throws {
+        guard Self.isValidBundlePathForShim(bundlePath) else {
+            throw GPGError.encodingError("invalid bundle path")
+        }
         let shimContent = """
         #!/bin/sh
         # Alp Pinentry shim. gpg-agent invokes this; we resolve the current
@@ -1123,175 +1199,8 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return (stdout, fp, name)
     }
 
-    /// Parses gpg status output for VALIDSIG (40-char fingerprint) and GOODSIG (display name).
-    /// GOODSIG format: [GNUPG:] GOODSIG <keyid> <Name <email>>
-    /// VALIDSIG format: [GNUPG:] VALIDSIG <fingerprint> <date> ...
-    func extractSignerInfo(from statusText: String) -> (fingerprint: String?, displayName: String?) {
-        var fingerprint: String?
-        var displayName: String?
-        for line in statusText.components(separatedBy: "\n") {
-            let parts = line.components(separatedBy: " ")
-            if let idx = parts.firstIndex(of: "VALIDSIG"), parts.count > idx + 1 {
-                fingerprint = parts[idx + 1]
-            }
-            if let idx = parts.firstIndex(of: "GOODSIG"), parts.count > idx + 2 {
-                let name = parts[(idx + 2)...].joined(separator: " ")
-                    .trimmingCharacters(in: .whitespaces)
-                if !name.isEmpty { displayName = name }
-                if fingerprint == nil { fingerprint = parts[idx + 1] } // key ID fallback
-            }
-        }
-        return (fingerprint, displayName)
-    }
-
-    private func parseColonKeyListing(_ text: String) -> [GPGKeyInfo] {
-        var keys: [GPGKeyInfo] = []
-
-        var primaryFingerprint: String?
-        var primaryUIDs: [String] = []
-        var primaryCapabilities = ""
-        var primaryExpiry: Date?
-        var primaryOwnerTrust: String?
-        var primaryCreated: Date?
-        var primaryAlgorithm: String?
-        var subkeys: [GPGSubkey] = []
-
-        // Staging area for the subkey we're currently filling in. We can't
-        // build the final `GPGSubkey` until its `fpr` line arrives because
-        // the subkey's full fingerprint appears on a subsequent record.
-        struct PendingSubkey {
-            var fingerprint: String = ""
-            var capabilities: String = ""
-            var expiry: Date?
-            var algorithm: String?
-            var isRevoked: Bool = false
-        }
-        var pendingSubkey: PendingSubkey?
-
-        func flushSubkey() {
-            guard let pending = pendingSubkey, !pending.fingerprint.isEmpty else {
-                pendingSubkey = nil
-                return
-            }
-            subkeys.append(GPGSubkey(
-                fingerprint: pending.fingerprint,
-                capabilities: pending.capabilities,
-                expiryDate: pending.expiry,
-                algorithm: pending.algorithm,
-                isRevoked: pending.isRevoked,
-            ))
-            pendingSubkey = nil
-        }
-
-        func flushPrimary() {
-            flushSubkey()
-            guard let fp = primaryFingerprint, !fp.isEmpty else { return }
-            keys.append(GPGKeyInfo(
-                fingerprint: fp,
-                userIDs: primaryUIDs,
-                capabilities: primaryCapabilities,
-                expiryDate: primaryExpiry,
-                subkeys: subkeys,
-                ownerTrustCode: primaryOwnerTrust,
-                creationDate: primaryCreated,
-                algorithm: primaryAlgorithm,
-            ))
-            primaryFingerprint = nil
-            primaryUIDs = []
-            primaryCapabilities = ""
-            primaryExpiry = nil
-            primaryOwnerTrust = nil
-            primaryCreated = nil
-            primaryAlgorithm = nil
-            subkeys = []
-        }
-
-        for raw in text.components(separatedBy: "\n") {
-            let fields = raw.trimmingCharacters(in: .init(charactersIn: "\r"))
-                .components(separatedBy: ":")
-            guard let recordType = fields.first, !recordType.isEmpty else { continue }
-
-            if recordType.hasPrefix("pub") || recordType.hasPrefix("sec") {
-                flushPrimary()
-                primaryCapabilities = fields.count > 11 ? fields[11] : ""
-                if fields.count > 6, let ts = TimeInterval(fields[6]), ts > 0 {
-                    primaryExpiry = Date(timeIntervalSince1970: ts)
-                } else {
-                    primaryExpiry = nil
-                }
-                // Field 9 of the pub colon record is the ownertrust code.
-                if fields.count > 8, !fields[8].isEmpty {
-                    primaryOwnerTrust = fields[8]
-                } else {
-                    primaryOwnerTrust = nil
-                }
-                // Field 6 (creation timestamp) and the bits/algo/curve
-                // triple feed the inspector view's metadata block.
-                if fields.count > 5, let ts = TimeInterval(fields[5]), ts > 0 {
-                    primaryCreated = Date(timeIntervalSince1970: ts)
-                } else {
-                    primaryCreated = nil
-                }
-                primaryAlgorithm = Self.formatAlgorithm(
-                    id: fields.count > 3 ? fields[3] : "",
-                    bits: fields.count > 2 ? fields[2] : "",
-                    curve: fields.count > 16 ? fields[16] : "",
-                )
-            } else if recordType.hasPrefix("sub") || recordType.hasPrefix("ssb") {
-                flushSubkey()
-                var pending = PendingSubkey()
-                pending.isRevoked = fields.count > 1 && fields[1] == "r"
-                pending.capabilities = fields.count > 11 ? fields[11] : ""
-                if fields.count > 6, let ts = TimeInterval(fields[6]), ts > 0 {
-                    pending.expiry = Date(timeIntervalSince1970: ts)
-                }
-                pending.algorithm = Self.formatAlgorithm(
-                    id: fields.count > 3 ? fields[3] : "",
-                    bits: fields.count > 2 ? fields[2] : "",
-                    curve: fields.count > 16 ? fields[16] : "",
-                )
-                pendingSubkey = pending
-            } else if recordType == "fpr" {
-                if pendingSubkey != nil {
-                    if fields.count > 9 { pendingSubkey?.fingerprint = fields[9] }
-                } else if primaryFingerprint == nil, fields.count > 9 {
-                    primaryFingerprint = fields[9]
-                }
-            } else if recordType == "uid" {
-                if fields.count > 9, !fields[9].isEmpty {
-                    primaryUIDs.append(fields[9])
-                }
-            }
-        }
-        flushPrimary()
-        return keys
-    }
-
-    /// Maps gpg's numeric algorithm id + bit size + curve name to a
-    /// human-readable label, e.g. "RSA 3072" or "Ed25519".
-    ///
-    /// Algorithm ids come from RFC 4880 + gpg extensions:
-    ///   1 = RSA, 16 = ElGamal, 17 = DSA, 18 = ECDH, 19 = ECDSA, 22 = EdDSA.
-    static func formatAlgorithm(id: String, bits: String, curve: String) -> String? {
-        guard let algoId = Int(id) else { return nil }
-        let name: String
-        switch algoId {
-        case 1: name = "RSA"
-        case 16: name = "ElGamal"
-        case 17: name = "DSA"
-        case 18: name = "ECDH"
-        case 19: name = "ECDSA"
-        case 22: name = "EdDSA"
-        default: return nil
-        }
-        // ECC keys prefer the curve name when it's present — "Ed25519" is
-        // more useful than "EdDSA 255".
-        if [18, 19, 22].contains(algoId), !curve.isEmpty {
-            return curve.capitalized
-        }
-        if !bits.isEmpty { return "\(name) \(bits)" }
-        return name
-    }
+    // Pure parsers (extractSignerInfo / parseColonKeyListing / formatAlgorithm)
+    // live in GPGHelper+Parsing.swift.
 
     // MARK: – nonisolated XPC bridge methods
 
@@ -1856,6 +1765,22 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                     reasonCode: reasonCode,
                     description: description,
                 )
+                reply(cert, nil)
+            } catch let e as GPGError {
+                reply(nil, e.asNSError)
+            } catch {
+                reply(nil, error as NSError)
+            }
+        }
+    }
+
+    nonisolated func generateRevocationCertificate(
+        fingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    ) {
+        Task {
+            do {
+                let cert = try await self._generateRevocationCert(fingerprint: fingerprint)
                 reply(cert, nil)
             } catch let e as GPGError {
                 reply(nil, e.asNSError)

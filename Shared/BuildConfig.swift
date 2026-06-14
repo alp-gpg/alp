@@ -13,6 +13,13 @@ enum BuildConfig {
     static let extensionBundleID = "app.alp.Alp.extension"
     static let helperBundleID = "app.alp.Alp.helper"
 
+    /// UserDefaults keys read across target boundaries (app writes, extension
+    /// reads). Kept here so the literal can't drift between the two targets.
+    enum DefaultsKey {
+        /// "Encrypt to my own key" toggle (default ON).
+        static let encryptToSelf = "encryptToMyOwnKey"
+    }
+
     private static let teamAnchor =
         "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""
 

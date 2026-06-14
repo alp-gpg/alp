@@ -37,19 +37,27 @@ enum RecipientPickerWindow {
             window.center()
 
             let resumed = ResumeOnce()
-            let view = RecipientPickerView(viewModel: viewModel) { selection in
+            /// Single completion path. Tearing down contentViewController and the
+            /// associated observer here breaks the window → hosting controller →
+            /// hosted view → completion-closure → window retain cycle, so the
+            /// window (isReleasedWhenClosed = false) doesn't survive every
+            /// Encrypt-File service invocation (§3.6).
+            func finish(_ selection: RecipientPickerWindow.Selection?) {
                 guard resumed.claim() else { return }
                 window.orderOut(nil)
+                window.contentViewController = nil
+                window.delegate = nil
+                objc_setAssociatedObject(window, &Self.observerKey, nil, .OBJC_ASSOCIATION_RETAIN)
                 cont.resume(returning: selection)
+            }
+            let view = RecipientPickerView(viewModel: viewModel) { selection in
+                finish(selection)
             }
             window.contentViewController = NSHostingController(rootView: view)
             // A window close button (Cmd-W or the red dot) is a cancel. We
-            // forward it through the same continuation as the explicit
-            // Cancel button so the caller doesn't dangle.
-            let closeObserver = WindowCloseObserver {
-                guard resumed.claim() else { return }
-                cont.resume(returning: nil)
-            }
+            // forward it through the same completion as the explicit Cancel
+            // button so the caller doesn't dangle.
+            let closeObserver = WindowCloseObserver { finish(nil) }
             window.delegate = closeObserver
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
@@ -145,10 +153,11 @@ private struct RecipientPickerView: View {
 /// Bridges an NSWindow `windowWillClose` into a one-shot callback. Used so
 /// the Service flow can resume its continuation when the user dismisses
 /// the picker without clicking Cancel or Encrypt.
+@MainActor
 private final class WindowCloseObserver: NSObject, NSWindowDelegate {
-    private let onClose: @Sendable () -> Void
+    private let onClose: () -> Void
 
-    init(_ onClose: @escaping @Sendable () -> Void) {
+    init(_ onClose: @escaping () -> Void) {
         self.onClose = onClose
     }
 

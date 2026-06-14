@@ -89,6 +89,44 @@ struct ComposeSessionStoreTests {
     }
 
     @Test
+    func `state survives extension teardown via app-group write-through`() throws {
+        // §1.2: if the extension is torn down (jetsam/crash/relaunch) between
+        // the user enabling Encrypt and pressing Send, a fresh process must
+        // recover the persisted choice — NOT fall open to the plaintext
+        // global defaults (sign=false, encrypt=false here).
+        let suite = "ComposeSessionStoreTests-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            throw TestFailure.couldNotCreateDefaults
+        }
+        defaults.set(false, forKey: "signByDefault")
+        defaults.set(false, forKey: "encryptByDefault")
+        let ctx = UUID()
+
+        let original = ComposeSessionStore(defaults: defaults)
+        original.register(
+            contextID: ctx, sessionID: UUID(),
+            sign: true, encrypt: true,
+            signer: "BEEFBEEFBEEFBEEFBEEFBEEFBEEFBEEFBEEFBEEF",
+        )
+
+        // Simulate a process restart: a brand-new store with empty in-memory
+        // state, backed by the same app-group suite.
+        let restarted = ComposeSessionStore(defaults: defaults)
+        let (sign, encrypt, signer, _) = restarted.state(forContextID: ctx)
+        #expect(sign == true, "Recovered sign state, not plaintext default")
+        #expect(encrypt == true, "Recovered encrypt state, not plaintext default")
+        #expect(signer == "BEEFBEEFBEEFBEEFBEEFBEEFBEEFBEEFBEEFBEEF")
+
+        // After unregister the persisted record is gone and a later restart
+        // falls back to defaults.
+        restarted.unregister(contextID: ctx, sessionID: UUID())
+        let afterUnregister = ComposeSessionStore(defaults: defaults)
+        let (sign2, encrypt2, _, _) = afterUnregister.state(forContextID: ctx)
+        #expect(sign2 == false)
+        #expect(encrypt2 == false)
+    }
+
+    @Test
     func `fallback honors UserDefaults values`() throws {
         let store = try makeStore(
             signDefault: true,

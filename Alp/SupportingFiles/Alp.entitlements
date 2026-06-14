@@ -12,10 +12,8 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
-	<array>
-		<string>$(TeamIdentifierPrefix)org.sparkle-project.InstallerLauncher</string>
-		<string>$(TeamIdentifierPrefix)org.sparkle-project.Downloader</string>
-	</array>
+	<!-- No mach-lookup exceptions: the notification-only updater runs entirely
+	     in-process (URLSession + CryptoKit) and never launches a privileged
+	     installer, so Sparkle's InstallerLauncher/Downloader services are gone. -->
 </dict>
 </plist>

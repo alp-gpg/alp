@@ -5,7 +5,12 @@ struct KeyserverPinningTests {
     /// Connects to keys.openpgp.org and verifies that at least one certificate
     /// in the chain matches a pinned SPKI hash. Fails with actionable output
     /// if the server's certificate chain has rotated to an unpinned intermediate.
-    @Test
+    ///
+    /// Gated behind `ALP_RUN_NETWORK_TESTS` so it does not perform a live TLS
+    /// handshake inside every `xcodebuild test` run — that made the unit suite
+    /// flaky in CI and a remote dependency (§3.4). Run the canary explicitly:
+    /// `ALP_RUN_NETWORK_TESTS=1 xcodebuild test ...`.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["ALP_RUN_NETWORK_TESTS"] != nil))
     func `Server certificate chain contains a pinned intermediate`() async throws {
         let url = try #require(URL(string: "https://keys.openpgp.org"))
         let collector = CertificateCollector()

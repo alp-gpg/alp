@@ -343,4 +343,15 @@ import Foundation
         description: String?,
         reply: @escaping @Sendable (Data?, NSError?) -> Void,
     )
+
+    /// Generate a revocation certificate WITHOUT importing it, so the local
+    /// key stays valid. This is the standard "make an offline revocation
+    /// backup right after key creation" workflow — the caller saves the
+    /// returned cert to disk. Distinct from `revokePrimaryKey`, which revokes
+    /// on the spot.
+    /// reply: (armoredRevocationCert?, error?).
+    func generateRevocationCertificate(
+        fingerprint: String,
+        reply: @escaping @Sendable (Data?, NSError?) -> Void,
+    )
 }

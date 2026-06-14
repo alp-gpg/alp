@@ -75,6 +75,17 @@ struct KeySettingsView: View {
             if vm.isLoadingKeys {
                 ProgressView("Loading keys…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let loadError = vm.keysLoadError, vm.allKeys.isEmpty {
+                // A helper/XPC error must not masquerade as "No Keys Found" —
+                // that reads as data loss and invites a duplicate key (§3.2).
+                ContentUnavailableView {
+                    Label("Couldn't Load Keys", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(loadError)
+                } actions: {
+                    Button("Retry") { Task { await vm.refreshKeys() } }
+                        .buttonStyle(.borderedProminent)
+                }
             } else if vm.allKeys.isEmpty {
                 ContentUnavailableView {
                     Label("No Keys Found", systemImage: "key.slash")
@@ -322,20 +333,18 @@ struct KeySettingsView: View {
                 }
             }
         }
-        .alert(item: $keyToDelete) { request in
-            Alert(
-                title: Text(request.secretOnly
-                    ? "Delete Secret Key Only?"
-                    : "Delete Key?"),
-                message: Text(request.secretOnly
-                    ? "Removes the secret half of \(request.key.displayName). The public key stays in the keyring. This cannot be undone."
-                    :
-                    "Removes both the secret and public halves of \(request.key.displayName) from the local keyring. This cannot be undone."),
-                primaryButton: .destructive(Text("Delete")) {
-                    Task { await deleteKey(request) }
-                },
-                secondaryButton: .cancel(),
-            )
+        .alert(
+            Text(keyToDelete?.secretOnly == true ? "Delete Secret Key Only?" : "Delete Key?"),
+            isPresented: deleteConfirmBinding,
+            presenting: keyToDelete,
+        ) { request in
+            Button("Delete", role: .destructive) { Task { await deleteKey(request) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { request in
+            Text(request.secretOnly
+                ? "Removes the secret half of \(request.key.displayName). The public key stays in the keyring. This cannot be undone."
+                :
+                "Removes both the secret and public halves of \(request.key.displayName) from the local keyring. This cannot be undone.")
         }
         .alert("Operation failed", isPresented: actionErrorBinding) {
             Button("OK", role: .cancel) { actionError = nil }
@@ -348,6 +357,10 @@ struct KeySettingsView: View {
 
     private var actionErrorBinding: Binding<Bool> {
         Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
+    }
+
+    private var deleteConfirmBinding: Binding<Bool> {
+        Binding(get: { keyToDelete != nil }, set: { if !$0 { keyToDelete = nil } })
     }
 
     private func startBatchRefresh() {
@@ -414,13 +427,19 @@ struct KeySettingsView: View {
             if key.hasSecretKey {
                 Button("Add User ID…") { keyForAddUID = key }
                 Button("Add Subkey…") { keyForAddSubkey = key }
-                Button("Generate Revocation Certificate…") { keyForRevoke = key }
+                // Generate-only: saves an offline revocation cert WITHOUT
+                // revoking — the standard "make a backup after key creation"
+                // workflow. Separate from the destructive "Revoke Key…" below
+                // so the safe action is no longer mislabeled as the dangerous
+                // one (§5.1).
+                Button("Generate Revocation Certificate…") { generateRevocationCert(for: key) }
                 Button("Publish to keys.openpgp.org…") { keyForUpload = key }
             }
 
             Divider()
 
             if key.hasSecretKey {
+                Button("Revoke Key…", role: .destructive) { keyForRevoke = key }
                 Button("Delete Secret Key Only…", role: .destructive) {
                     keyToDelete = .init(key: key, secretOnly: true)
                 }
@@ -442,6 +461,18 @@ struct KeySettingsView: View {
             switch vm.expiredRefresher.rowState[key.fingerprint] {
             case .fetching:
                 ProgressView().controlSize(.mini)
+            case .updated:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .help("Refreshed from keyserver — newer key data imported.")
+            case .alreadyCurrent:
+                Image(systemName: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+                    .help("Already up to date on the keyserver.")
+            case .notPublished:
+                Image(systemName: "icloud.slash")
+                    .foregroundStyle(.secondary)
+                    .help("Not published on keys.openpgp.org — nothing to refresh.")
             case let .failed(message):
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)
@@ -655,6 +686,19 @@ struct KeySettingsView: View {
             try await work()
         } catch {
             actionError = "\(label) failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Generate-only revocation cert: produces the cert and saves it to disk
+    /// without touching the local key's validity (§5.1).
+    private func generateRevocationCert(for key: GPGKeyInfo) {
+        Task {
+            await runHelperAction("Generate revocation certificate") {
+                let cert = try await HelperXPCClient.shared.generateRevocationCertificate(
+                    fingerprint: key.fingerprint,
+                )
+                await saveExportedKey(cert, suggested: "\(key.fingerprint)-revoke.asc")
+            }
         }
     }
 
@@ -886,7 +930,7 @@ private struct RevokeKeySheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Generate Revocation Certificate")
+            Text("Revoke Key")
                 .font(.title2.weight(.semibold))
             Text(key.displayName)
                 .font(.callout)

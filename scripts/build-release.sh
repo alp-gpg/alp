@@ -29,12 +29,22 @@ mkdir -p build
 tuist generate --no-open
 
 # Archive
+#
+# Inject the real version into both CFBundleVersion (CURRENT_PROJECT_VERSION —
+# the value Sparkle compares) and CFBundleShortVersionString (MARKETING_VERSION).
+# The committed defaults are "1"/"1.0"; without this injection every release
+# shipped build "1" and Sparkle would never see a newer build to offer.
+# -onlyUsePackageVersionsFromResolvedFile forces the audited Sparkle pin from
+# .package.resolved instead of re-resolving a newer version on the runner.
 xcodebuild archive \
     -workspace Alp.xcworkspace \
     -scheme Alp \
     -configuration Release \
     -archivePath "$ARCHIVE_PATH" \
     -destination 'generic/platform=macOS' \
+    -onlyUsePackageVersionsFromResolvedFile \
+    CURRENT_PROJECT_VERSION="$VERSION" \
+    MARKETING_VERSION="$VERSION" \
     CODE_SIGN_IDENTITY="${DEVELOPER_ID_APPLICATION}" \
     CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM="${APPLE_TEAM_ID}"
@@ -48,8 +58,14 @@ xcodebuild -exportArchive \
 APP_PATH="$EXPORT_PATH/Alp.app"
 
 # Notarize
-echo "==> Notarizing..."
-xcrun notarytool submit "$APP_PATH" \
+#
+# notarytool only accepts .zip/.dmg/.pkg — never a bare .app. Zip the app
+# (keeping the parent so the bundle structure is preserved), submit the zip,
+# then staple the original .app. The DMG is notarized+stapled separately below.
+echo "==> Notarizing app..."
+APP_ZIP="build/Alp-app.zip"
+ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP"
+xcrun notarytool submit "$APP_ZIP" \
     --apple-id "$APPLE_ID" \
     --team-id "$APPLE_TEAM_ID" \
     --password "$APPLE_ID_PASSWORD" \
@@ -75,29 +91,65 @@ create-dmg \
 # Sign DMG
 codesign --force --sign "${DEVELOPER_ID_APPLICATION}" "$DMG_PATH"
 
-# SHA256 manifest. Lets users verify download integrity independently of
-# the Sparkle EdDSA signature — useful when fetching via curl/wget or
-# when comparing the DMG against the GitHub release page checksum.
+# Notarize and staple the DMG itself so Gatekeeper clears it offline (the
+# common case: a user downloads the DMG directly rather than via Sparkle).
+echo "==> Notarizing DMG..."
+xcrun notarytool submit "$DMG_PATH" \
+    --apple-id "$APPLE_ID" \
+    --team-id "$APPLE_TEAM_ID" \
+    --password "$APPLE_ID_PASSWORD" \
+    --wait
+xcrun stapler staple "$DMG_PATH"
+
+# SHA256 manifest. Lets users verify download integrity independently — useful
+# when fetching via curl/wget or comparing against the GitHub release page.
 SHASUM_PATH="build/Alp-${VERSION}.SHA256SUMS"
-shasum -a 256 "$DMG_PATH" | sed "s|build/||" > "$SHASUM_PATH"
+( cd build && shasum -a 256 "Alp-${VERSION}.dmg" ) > "$SHASUM_PATH"
 echo "==> SHA256 manifest at $SHASUM_PATH"
 cat "$SHASUM_PATH"
+DMG_SHA="$(awk '{print $1}' "$SHASUM_PATH")"
 
-# Sparkle signature for the appcast. `sign_update` reads the EdDSA private
-# key from the login Keychain (created once via `generate_keys`). Output is
-# `sparkle:edSignature="..." length=...` ready to drop into appcast.xml.
-SIGN_UPDATE="$(xcrun --find sign_update 2>/dev/null || true)"
-if [[ -z "${SIGN_UPDATE}" ]]; then
-    SIGN_UPDATE="$(command -v sign_update || true)"
-fi
-if [[ -n "${SIGN_UPDATE}" ]]; then
-    echo "==> Generating Sparkle signature..."
-    SPARKLE_LINE="$("$SIGN_UPDATE" "$DMG_PATH")"
-    echo "$SPARKLE_LINE" | tee "build/Alp-${VERSION}.sparkle.txt"
-    echo "==> Paste the line above into docs/appcast.xml as the <enclosure> attributes."
+# Detached GPG signature on the checksums. Unlike a bare SHA256SUMS (which only
+# defends against corruption, not substitution), a detached GPG signature lets
+# users confirm the checksums came from us — fitting for a GPG app. Best-effort:
+# set GPG_SIGNING_KEY (a key id/fingerprint in the runner keyring) to enable.
+if [[ -n "${GPG_SIGNING_KEY:-}" ]]; then
+    gpg --local-user "$GPG_SIGNING_KEY" --armor --detach-sign \
+        --output "${SHASUM_PATH}.asc" "$SHASUM_PATH"
+    echo "==> Signed checksums at ${SHASUM_PATH}.asc"
 else
-    echo "Warning: sign_update not found on PATH — appcast signature step skipped." >&2
-    echo "         Install Sparkle CLI tools or run sign_update manually on $DMG_PATH." >&2
+    echo "Note: GPG_SIGNING_KEY not set — SHA256SUMS left unsigned." >&2
+fi
+
+# release.json — the manifest the in-app notification-only updater fetches and
+# verifies (Ed25519 over the raw JSON bytes). Emitted with python3 so the JSON
+# is well-formed and stable; do NOT reformat it after signing.
+RELEASE_JSON="build/release.json"
+DOWNLOAD_URL="${RELEASE_DOWNLOAD_URL:-https://github.com/alp-gpg/alp/releases/tag/v${VERSION}}"
+RELEASE_NOTES="${RELEASE_NOTES:-Bug fixes and improvements.}"
+MIN_OS="${MIN_OS:-26.0}"
+python3 - "$VERSION" "$MIN_OS" "$DOWNLOAD_URL" "$DMG_SHA" "$RELEASE_NOTES" > "$RELEASE_JSON" <<'PY'
+import json, sys
+version, min_os, url, sha, notes = sys.argv[1:6]
+json.dump({"version": version, "minOS": min_os, "url": url, "sha256": sha, "notes": notes}, sys.stdout)
+PY
+echo "==> Wrote $RELEASE_JSON"
+cat "$RELEASE_JSON"; echo
+
+# Sign release.json with the Ed25519 key. `sign_update` is just an Ed25519
+# file signer; the matching public key is embedded in the app as
+# AlpUpdatePublicKey, and UpdateChecker verifies this base64 signature over the
+# raw release.json bytes with CryptoKit. (Same keypair as the old Sparkle
+# appcast — generate_keys put the private key in the login Keychain.)
+SIGN_UPDATE="$(xcrun --find sign_update 2>/dev/null || command -v sign_update || true)"
+if [[ -n "${SIGN_UPDATE}" ]]; then
+    SIG_LINE="$("$SIGN_UPDATE" "$RELEASE_JSON")"
+    echo "$SIG_LINE" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' > "build/release.json.sig"
+    echo "==> release.json.sig:"; cat "build/release.json.sig"
+    echo "==> Commit build/release.json + build/release.json.sig to /docs and push (GitHub Pages serves the feed)."
+else
+    echo "Warning: sign_update not found — release.json.sig not produced." >&2
+    echo "         brew install --cask sparkle (provides sign_update), then re-sign $RELEASE_JSON." >&2
 fi
 
 echo "==> Done: $DMG_PATH"

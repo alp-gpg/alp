@@ -65,6 +65,24 @@ enum Assuan {
         }
         return out
     }
+
+    /// Encode `s` for Assuan directly into a mutable byte buffer so the
+    /// caller can zero it after writing — avoiding a second String copy
+    /// of the passphrase lingering on the heap.
+    static func encodeToBytes(_ s: String) -> [UInt8] {
+        var out: [UInt8] = []
+        out.reserveCapacity(s.count + 16)
+        for scalar in s.unicodeScalars {
+            switch scalar.value {
+            case 0x25, 0x0A, 0x0D: // % LF CR
+                let hex = String(format: "%%%02X", scalar.value)
+                out.append(contentsOf: hex.utf8)
+            default:
+                out.append(contentsOf: String(scalar).utf8)
+            }
+        }
+        return out
+    }
 }
 
 // MARK: – State
@@ -277,7 +295,15 @@ private func runAssuanLoop() {
             var pin: String?
             DispatchQueue.main.sync { pin = Prompt.passphrase(state: snapshot) }
             if let pin {
-                send("D \(Assuan.encode(pin))")
+                // Build the D line as bytes and zero after writing so the
+                // encoded passphrase doesn't linger in a second String on
+                // the heap. The source String from NSSecureTextField is
+                // still immutable/interred, but this limits the spread.
+                var bytes: [UInt8] = Array("D ".utf8)
+                bytes.append(contentsOf: Assuan.encodeToBytes(pin))
+                bytes.append(0x0A) // \n
+                stdoutHandle.write(Data(bytes))
+                bytes.resetBytes(in: 0 ..< bytes.count)
                 sendOK()
             } else {
                 sendErr(83_886_179, "Operation cancelled")

@@ -15,14 +15,25 @@ cask "alp" do
 
   app "Alp.app"
 
+  # Reject any build not signed by the official Team ID. A mismatched
+  # Team ID means the DMG was tampered with or substituted.
+  preflight do
+    output = `codesign -dvv "#{staged_path}/Alp.app" 2>&1`
+    team_id = output[/TeamIdentifier=(\S+)/, 1]
+    raise "Alp Team ID mismatch: expected 3G6WR6H4M5, got #{team_id}" unless team_id == "3G6WR6H4M5"
+  end
+
   postflight do
     ohai "Run Alp and click 'Install Helper' to register the background agent."
     ohai "Then enable the extension in Mail → Settings → Extensions."
   end
 
+  # Before uninstalling via brew, run Alp → General → Pinentry → Uninstall
+  # to remove the pinentry-program line from ~/.gnupg/gpg-agent.conf.
   zap trash: [
     "~/Library/Containers/app.alp.Alp",
     "~/Library/Containers/app.alp.Alp.extension",
     "~/Library/Group Containers/group.app.alp.Alp",
+    "~/Library/Application Support/Alp",
   ]
 end

@@ -62,7 +62,7 @@ else
 fi
 
 bold "Generating the Xcode project…"
-(cd "$(dirname "$0")/.." && tuist install && tuist generate --no-open)
+(cd "$(dirname "$0")/.." && tuist generate --no-open)
 
 bold "Done."
 cat <<EOF

@@ -129,42 +129,6 @@ final class SettingsViewModel {
     var helperUnresponsive = false
     private var healthCheckTask: Task<Void, Never>?
 
-    // MARK: – Smartcard
-
-    /// Most recent smartcard read; nil when no card is inserted or the
-    /// helper hasn't been queried yet. The General settings view hides
-    /// the Smartcard section based on this value.
-    var cardStatus: GPGCardStatus?
-
-    /// Surface for the most recent card-edit failure. Cleared on every
-    /// successful refresh so stale messages don't linger.
-    var cardError: String?
-
-    func refreshCardStatus() async {
-        do {
-            cardStatus = try await HelperXPCClient.shared.cardStatus()
-            cardError = nil
-        } catch {
-            cardStatus = nil
-            cardError = nil
-        }
-    }
-
-    /// Triggers the smartcard user-PIN change flow via the helper. The
-    /// helper drives `gpg --card-edit` while gpg-agent prompts the user
-    /// via pinentry for the old and new PINs. After the flow finishes
-    /// we refresh card status so the visible PIN-retries count reflects
-    /// any change.
-    func changeCardPIN() async {
-        cardError = nil
-        do {
-            try await HelperXPCClient.shared.changeCardPIN()
-        } catch {
-            cardError = error.localizedDescription
-        }
-        await refreshCardStatus()
-    }
-
     // MARK: – Pinentry
 
     /// Latest pinentry configuration read from `~/.gnupg/gpg-agent.conf`.
@@ -254,7 +218,6 @@ final class SettingsViewModel {
         if helperStatus == .enabled {
             await refreshKeys()
             await refreshHealth()
-            await refreshCardStatus()
             await refreshPinentryConfig()
         }
     }

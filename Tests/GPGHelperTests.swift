@@ -33,8 +33,12 @@ struct GPGHelperTests {
 
     @Test
     func `Public key lookup — self`() async throws {
-        let fp = try await firstSecretKeyFingerprint()
-        let (found, resultFP) = try await helper._publicKeyExists(email: fp)
+        let keys = try await helper._listSecretKeys()
+        guard let key = keys.first, let email = key.emails.first else {
+            Issue.record("No secret keys with an email — skipping")
+            throw GPGError.noSigningKey
+        }
+        let (found, resultFP) = try await helper._publicKeyExists(email: email)
         #expect(found)
         #expect(resultFP != nil)
     }

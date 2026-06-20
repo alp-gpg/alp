@@ -92,21 +92,21 @@ Ed25519 signature with CryptoKit, and (on a newer version) points the user at
 the notarized DMG download. Gatekeeper enforces install authenticity. brew
 users get updates from `brew upgrade --cask alp`.
 
-**Once per machine** that ships releases:
+**Once per project** — generate an Ed25519 keypair using CryptoKit (no
+external dependencies):
 
 ```bash
-brew install --cask sparkle      # provides generate_keys + sign_update
-                                 # (used purely as an Ed25519 file signer)
-generate_keys                    # writes the Ed25519 private key to the login
-                                 # Keychain, prints the public key on stdout
+swift -e 'import CryptoKit; let k = Curve25519.Signing.PrivateKey(); print("Private:", k.rawRepresentation.base64EncodedString()); print("Public: ", k.publicKey.rawRepresentation.base64EncodedString())'
 ```
 
-Copy the printed `Public key:` value (a base64 string, ~44 chars) into
-`Alp/SupportingFiles/Info.plist` as the `AlpUpdatePublicKey` value. Commit it.
-The matching private key never leaves the Keychain.
+1. Copy the **Private** value (base64, ~44 chars) into a GitHub secret
+   named `ALP_UPDATE_PRIVATE_KEY`. This is what `scripts/build-release.sh`
+   uses to sign `release.json` via `scripts/sign-release.swift`.
+2. Copy the **Public** value into `Alp/SupportingFiles/Info.plist` as the
+   `AlpUpdatePublicKey` value. Commit it.
 
-Lose the Keychain entry, lose the ability to sign updates — back it up
-(File → Export Items in Keychain Access) somewhere safe.
+The private key never leaves GitHub secrets. Lose it, lose the ability to
+sign updates — store a backup somewhere safe (not in the repo).
 
 **On every release**, `scripts/build-release.sh` writes `build/release.json`
 (version / minOS / download URL / DMG sha256 / notes) and signs it into

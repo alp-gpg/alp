@@ -126,6 +126,9 @@ final class UpdateChecker {
         guard let release = Self.decode(manifest) else {
             return .failed("Update manifest was malformed.")
         }
+        guard Self.isAllowedDownloadURL(release.url) else {
+            return .failed("Update manifest points at an unexpected download URL.")
+        }
         guard Self.isVersion(release.version, newerThan: currentVersion) else {
             return .upToDate
         }
@@ -133,6 +136,20 @@ final class UpdateChecker {
             return .upToDate // newer version exists but needs a newer macOS
         }
         return .updateAvailable(release)
+    }
+
+    /// Defense-in-depth: even with a valid Ed25519 signature, constrain the
+    /// download URL to HTTPS on the official hosts. A compromised signing key
+    /// could otherwise redirect to a phishing page.
+    static func isAllowedDownloadURL(_ urlString: String) -> Bool {
+        guard let url = URL(string: urlString),
+              url.scheme == "https",
+              let host = url.host?.lowercased()
+        else { return false }
+        return host == "github.com"
+            || host == "alp-gpg.github.io"
+            || host.hasSuffix(".github.com")
+            || host.hasSuffix(".github.io")
     }
 
     // MARK: – Network

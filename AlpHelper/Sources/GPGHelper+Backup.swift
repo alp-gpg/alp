@@ -73,11 +73,20 @@ extension GPGHelper {
         //    archive passphrase. AES-256 matches gpg's modern default
         //    but pinning it here keeps the bundle decryptable across
         //    gpg versions that change defaults.
-        let args = [
+        //
+        //    On gpg ≥ 2.3 we pass `--aead` so the outer layer uses AEAD
+        //    (OCB or EAX) instead of RFC 4880 CFB — giving tamper
+        //    detection at the cipher layer. gpg < 2.3 falls back to CFB
+        //    (still passphrase-protected; packet validation still catches
+        //    most tampering).
+        var args = [
             "--yes", "--armor",
             "--symmetric", "--cipher-algo", "AES256",
             "--output", "-",
         ]
+        if let version = try? await gpgVersion(), compareVersion(version, isAtLeast: "2.3") {
+            args.append("--aead")
+        }
         return try await runGPG(args, input: Data(plaintext.utf8))
     }
 
@@ -127,9 +136,11 @@ extension GPGHelper {
         )
         // 1. Decrypt — no `--batch` so pinentry can prompt for the
         //    archive passphrase. `--output -` so we get the plaintext
-        //    in-process rather than spilling it to disk.
+        //    in-process rather than spilling it to disk. `--max-output`
+        //    bounds a decompression-bomb backup (parity with `_decrypt`).
         let plaintext = try await runGPG(
-            ["--yes", "--decrypt", "--output", "-", "--", bundlePath],
+            ["--yes", "--decrypt", "--max-output", String(Self.maxDecryptOutput),
+             "--output", "-", "--", bundlePath],
         )
 
         // 2. Import every armored block in the plaintext. gpg reads

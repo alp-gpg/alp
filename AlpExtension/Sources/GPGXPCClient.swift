@@ -12,6 +12,12 @@ final class GPGXPCClient: @unchecked Sendable {
     /// continuation from leaking when the helper crashes mid-reply.
     static let callTimeout: TimeInterval = 60
 
+    /// Longer bound for calls that route through pinentry — the user may take
+    /// several minutes to type a passphrase. Matches the app-side
+    /// `interactiveCallTimeout` so decrypt of incoming mail doesn't time out
+    /// while the user is still typing.
+    static let interactiveCallTimeout: TimeInterval = 300
+
     private var connection: NSXPCConnection
     private let lock = NSLock()
     private var connectionInvalidated = false
@@ -45,7 +51,7 @@ final class GPGXPCClient: @unchecked Sendable {
     }
 
     func decrypt(_ data: Data) async throws -> (plaintext: Data, signer: String?, signerName: String?) {
-        try await call { proxy, resume in
+        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.decrypt(data: data) { plain, signer, signerName, error in
                 if let error { resume(.failure(error)) }
                 else if let plain { resume(.success((plain, signer, signerName))) }
@@ -60,16 +66,6 @@ final class GPGXPCClient: @unchecked Sendable {
                 if let error { resume(.failure(error)) }
                 else if let result { resume(.success((result, micalg ?? "pgp-sha256"))) }
                 else { resume(.failure(GPGError.encodingError("nil signature"))) }
-            }
-        }
-    }
-
-    func clearsign(_ data: Data, signer: String) async throws -> Data {
-        try await call { proxy, resume in
-            proxy.clearsign(data: data, signingFingerprint: signer) { result, error in
-                if let error { resume(.failure(error)) }
-                else if let result { resume(.success(result)) }
-                else { resume(.failure(GPGError.encodingError("nil clearsigned output"))) }
             }
         }
     }
@@ -147,6 +143,7 @@ final class GPGXPCClient: @unchecked Sendable {
     /// continuation is resumed after `callTimeout`. `resumedGuard` ensures that
     /// exactly one of reply / error / timeout wins the race.
     private func call<T: Sendable>(
+        timeout: TimeInterval = GPGXPCClient.callTimeout,
         _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
     ) async throws -> T {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, any Error>) in
@@ -160,7 +157,7 @@ final class GPGXPCClient: @unchecked Sendable {
             }
 
             let timer = DispatchSource.makeTimerSource()
-            timer.schedule(deadline: .now() + Self.callTimeout)
+            timer.schedule(deadline: .now() + timeout)
             timer.setEventHandler {
                 resume(.failure(GPGError.xpcUnavailable))
                 timer.cancel()

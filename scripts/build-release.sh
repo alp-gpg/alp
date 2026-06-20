@@ -125,7 +125,7 @@ fi
 # verifies (Ed25519 over the raw JSON bytes). Emitted with python3 so the JSON
 # is well-formed and stable; do NOT reformat it after signing.
 RELEASE_JSON="build/release.json"
-DOWNLOAD_URL="${RELEASE_DOWNLOAD_URL:-https://github.com/alp-gpg/alp/releases/tag/v${VERSION}}"
+DOWNLOAD_URL="${RELEASE_DOWNLOAD_URL:-https://github.com/alp-gpg/alp/releases/download/v${VERSION}/Alp-${VERSION}.dmg}"
 RELEASE_NOTES="${RELEASE_NOTES:-Bug fixes and improvements.}"
 MIN_OS="${MIN_OS:-26.0}"
 python3 - "$VERSION" "$MIN_OS" "$DOWNLOAD_URL" "$DMG_SHA" "$RELEASE_NOTES" > "$RELEASE_JSON" <<'PY'
@@ -136,20 +136,18 @@ PY
 echo "==> Wrote $RELEASE_JSON"
 cat "$RELEASE_JSON"; echo
 
-# Sign release.json with the Ed25519 key. `sign_update` is just an Ed25519
-# file signer; the matching public key is embedded in the app as
-# AlpUpdatePublicKey, and UpdateChecker verifies this base64 signature over the
-# raw release.json bytes with CryptoKit. (Same keypair as the old Sparkle
-# appcast — generate_keys put the private key in the login Keychain.)
-SIGN_UPDATE="$(xcrun --find sign_update 2>/dev/null || command -v sign_update || true)"
-if [[ -n "${SIGN_UPDATE}" ]]; then
-    SIG_LINE="$("$SIGN_UPDATE" "$RELEASE_JSON")"
-    echo "$SIG_LINE" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' > "build/release.json.sig"
+# Sign release.json with Ed25519 using CryptoKit (no Sparkle dependency).
+# The private key is a base64-encoded 32-byte raw Ed25519 seed, provided
+# via the ALP_UPDATE_PRIVATE_KEY env var. The matching public key is
+# embedded in the app as AlpUpdatePublicKey in Info.plist; UpdateChecker
+# verifies this base64 signature over the raw release.json bytes.
+if [[ -n "${ALP_UPDATE_PRIVATE_KEY:-}" ]]; then
+    swift scripts/sign-release.swift "$RELEASE_JSON" > "build/release.json.sig"
     echo "==> release.json.sig:"; cat "build/release.json.sig"
     echo "==> Commit build/release.json + build/release.json.sig to /docs and push (GitHub Pages serves the feed)."
 else
-    echo "Warning: sign_update not found — release.json.sig not produced." >&2
-    echo "         brew install --cask sparkle (provides sign_update), then re-sign $RELEASE_JSON." >&2
+    echo "Warning: ALP_UPDATE_PRIVATE_KEY not set — release.json.sig not produced." >&2
+    echo "         Generate a keypair (see BUILDING.md) and store the private key as a GitHub secret." >&2
 fi
 
 echo "==> Done: $DMG_PATH"

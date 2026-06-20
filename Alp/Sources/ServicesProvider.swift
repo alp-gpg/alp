@@ -7,7 +7,6 @@ private let log = Logger(subsystem: "app.alp.Alp", category: "Services")
 /// Provides macOS Services menu entries:
 ///   * Decrypt with Alp
 ///   * Verify with Alp
-///   * Sign with Alp
 ///
 /// All entries operate on the current text selection: read it from the
 /// pasteboard, route through the helper, write the result back. No new
@@ -84,19 +83,6 @@ final class ServicesProvider: NSObject {
         case let .failure(err):
             log.error("Service Verify failed: \(err.localizedDescription, privacy: .public)")
             error.pointee = "Alp Verify failed: \(err.localizedDescription)" as NSString
-        }
-    }
-
-    @objc func signSelection(
-        _ pboard: NSPasteboard,
-        userData _: String?,
-        error: AutoreleasingUnsafeMutablePointer<NSString?>,
-    ) {
-        runService(input: pboard, errorOut: error, label: "Sign") { data in
-            guard let signer = UserDefaults.standard.string(forKey: "defaultSignerFingerprint") else {
-                throw GPGError.noSigningKey
-            }
-            return try await HelperXPCClient.shared.clearsign(data, signer: signer)
         }
     }
 

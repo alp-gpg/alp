@@ -710,7 +710,14 @@ struct KeySettingsView: View {
         panel.allowedContentTypes = [UTType(filenameExtension: "asc")].compactMap(\.self)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
+            // 0600: secret-key material, backup bundles, and revocation certs
+            // are owner-only. Atomic write then explicit chmod — String.write
+            // does not guarantee the umask doesn't leave these group/world
+            // readable on a misconfigured machine.
             try armored.write(to: url, options: [.atomic])
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: url.path,
+            )
         } catch {
             actionError = "Could not write exported key: \(error.localizedDescription)"
         }

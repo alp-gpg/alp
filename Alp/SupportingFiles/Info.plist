@@ -73,25 +73,6 @@
             <key>NSMenuItem</key>
             <dict>
                 <key>default</key>
-                <string>Sign with Alp</string>
-            </dict>
-            <key>NSMessage</key>
-            <string>signSelection</string>
-            <key>NSPortName</key>
-            <string>Alp</string>
-            <key>NSSendTypes</key>
-            <array>
-                <string>NSStringPboardType</string>
-            </array>
-            <key>NSReturnTypes</key>
-            <array>
-                <string>NSStringPboardType</string>
-            </array>
-        </dict>
-        <dict>
-            <key>NSMenuItem</key>
-            <dict>
-                <key>default</key>
                 <string>Decrypt File with Alp</string>
             </dict>
             <key>NSMessage</key>

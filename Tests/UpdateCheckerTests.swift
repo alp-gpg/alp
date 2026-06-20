@@ -17,7 +17,7 @@ struct UpdateCheckerTests {
         )
     }
 
-    private let manifest = Data(#"{"version":"1.2.0","minOS":"26.0","url":"https://example.com","sha256":"abc","notes":"hi"}"#
+    private let manifest = Data(#"{"version":"1.2.0","minOS":"26.0","url":"https://github.com/alp-gpg/alp/releases/download/v1.2.0/Alp-1.2.0.dmg","sha256":"abc","notes":"hi"}"#
         .utf8)
 
     @Test
@@ -122,5 +122,36 @@ struct UpdateCheckerTests {
                          os: OperatingSystemVersion(majorVersion: 25, minorVersion: 0, patchVersion: 0),
                          pubKey: s.pubB64)
         #expect(vm.evaluate(manifest: manifest, signatureBase64: s.sig) == .upToDate)
+    }
+
+    @Test
+    func `isAllowedDownloadURL accepts github and github.io https URLs`() {
+        #expect(UpdateChecker.isAllowedDownloadURL("https://github.com/alp-gpg/alp/releases/tag/v1.0.0"))
+        #expect(UpdateChecker.isAllowedDownloadURL("https://alp-gpg.github.io/alp/"))
+        #expect(UpdateChecker
+            .isAllowedDownloadURL("https://github.com/alp-gpg/alp/releases/download/v1.0.0/Alp-1.0.0.dmg"))
+    }
+
+    @Test
+    func `isAllowedDownloadURL rejects http, non-github hosts, and malformed URLs`() {
+        #expect(!UpdateChecker.isAllowedDownloadURL("http://github.com/alp-gpg/alp"))
+        #expect(!UpdateChecker.isAllowedDownloadURL("https://evil.com/phish"))
+        #expect(!UpdateChecker.isAllowedDownloadURL("https://github.evil.com/"))
+        #expect(!UpdateChecker.isAllowedDownloadURL("not-a-url"))
+        #expect(!UpdateChecker.isAllowedDownloadURL(""))
+    }
+
+    @Test
+    func `evaluate fails closed on a signed manifest with a disallowed URL`() {
+        let badManifest = Data(#"{"version":"9.9.9","minOS":"26.0","url":"https://evil.com","sha256":"abc","notes":"hi"}"#
+            .utf8)
+        let s = signed(badManifest)
+        let vm = checker(version: "1.0.0",
+                         os: OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0),
+                         pubKey: s.pubB64)
+        guard case .failed = vm.evaluate(manifest: badManifest, signatureBase64: s.sig) else {
+            Issue.record("Expected failed for disallowed URL")
+            return
+        }
     }
 }

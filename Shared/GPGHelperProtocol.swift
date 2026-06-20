@@ -25,17 +25,6 @@ import Foundation
         reply: @escaping @Sendable (Data?, String?, NSError?) -> Void,
     )
 
-    /// Inline ASCII-armored signature wrapping the body in
-    /// `-----BEGIN PGP SIGNED MESSAGE-----` markers (`gpg --clearsign`).
-    /// Use for inline-PGP outgoing messages where recipients expect to read
-    /// the body as readable text.
-    /// reply: (clearsignedData?, error?)
-    func clearsign(
-        data: Data,
-        signingFingerprint: String,
-        reply: @escaping @Sendable (Data?, NSError?) -> Void,
-    )
-
     /// reply: (valid, signerFingerprint?, signerDisplayName?, error?)
     func verify(
         data: Data,
@@ -113,17 +102,6 @@ import Foundation
 
     /// Check GPG environment health. reply: JSON-encoded GPGHealthStatus or error
     func checkHealth(reply: @escaping @Sendable (Data?, NSError?) -> Void)
-
-    /// Run `gpg --card-status --with-colons` and return a parsed
-    /// `GPGCardStatus`. The reply data is nil when no card is present;
-    /// the error path is reserved for genuine helper failures.
-    func cardStatus(reply: @escaping @Sendable (Data?, NSError?) -> Void)
-
-    /// Drive `gpg --card-edit` → `passwd` → option 1 to change the
-    /// OpenPGP user PIN. gpg-agent prompts the user via pinentry for the
-    /// current PIN and then the new PIN twice; the helper never sees the
-    /// PIN material. reply: (error?)
-    func changeCardPIN(reply: @escaping @Sendable (NSError?) -> Void)
 
     /// Produce a passphrase-encrypted backup bundle for `fingerprint`
     /// containing the public key, secret key, a fresh revocation

@@ -103,6 +103,10 @@ enum HelperInstaller {
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: "/bin/launchctl")
             proc.arguments = arguments
+            // Minimal environment — absolute binary, no user input in args,
+            // but keep consistent with the helper's sanitizedEnvironment()
+            // hygiene even in DEBUG.
+            proc.environment = ["HOME": NSHomeDirectory(), "PATH": "/bin:/usr/bin"]
             let errPipe = Pipe()
             proc.standardError = errPipe
             proc.standardOutput = nil

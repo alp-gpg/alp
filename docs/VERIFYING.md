@@ -105,6 +105,30 @@ Every file path passed to a file-op call is validated as absolute and
 non-empty by `GPGHelper.validateFileOpPaths`. Input must exist and
 output cannot equal input.
 
+### The pinentry shim
+
+If you enabled "Use Alp Pinentry" (General → Pinentry), Alp writes a
+shell script at `~/Library/Application Support/Alp/pinentry` and points
+`~/.gnupg/gpg-agent.conf`'s `pinentry-program` directive at it. gpg-agent
+execs this shim on every passphrase prompt; the shim resolves the
+current Alp.app bundle (via Spotlight if the app was moved) and execs
+the embedded `AlpPinentry` binary.
+
+This file is **user-writable** (0755, owned by your user) — any process
+running as you could in principle replace it. This is a deliberate
+trade-off so app updates and moves don't break the pinentry reference.
+The shim itself only execs a code-signed binary inside the app bundle;
+it never handles passphrases directly (that's `AlpPinentry`'s job, via
+`NSSecureTextField`). To verify the shim hasn't been tampered with:
+
+```bash
+cat ~/Library/Application\ Support/Alp/pinentry
+```
+
+It should be a short `/bin/sh` script that execs
+`$APP_BUNDLE/Contents/Helpers/AlpPinentry`. If it contains anything
+else, delete it and re-run "Use Alp Pinentry" from Alp's settings.
+
 ## 6. Build it yourself
 
 The most reliable verification is to build Alp from source and compare

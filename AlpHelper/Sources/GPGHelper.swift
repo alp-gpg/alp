@@ -20,7 +20,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     /// `--max-output` so it aborts instead of exhausting helper memory.
     /// 4× the input cap leaves ample headroom for legitimately compressible
     /// mail while still bounding the blast radius.
-    private static let maxDecryptOutput = 4 * maxPayloadSize
+    static let maxDecryptOutput = 4 * maxPayloadSize
     /// Maximum recipients per encrypt call.
     static let maxRecipients = 100
 
@@ -260,18 +260,6 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return (stdout, micalg)
     }
 
-    func _clearsign(_ data: Data, signer: String) async throws -> Data {
-        guard Self.isValidFingerprint(signer) else {
-            throw GPGError.encodingError("invalid signer fingerprint")
-        }
-        let args = [
-            "--batch", "--yes", "--armor",
-            "--clearsign", "--local-user", signer,
-            "--output", "-",
-        ]
-        return try await runGPG(args, input: data)
-    }
-
     /// Parses the RFC 4880 hash algorithm number from gpg's SIG_CREATED status line
     /// and maps it to the RFC 3156 micalg name. Format:
     ///   [GNUPG:] SIG_CREATED <type> <pubkey_algo> <hash_algo> <class> <timestamp> <keyfpr>
@@ -481,13 +469,19 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         }
         let expire = expiryDays == 0 ? "0" : "\(expiryDays)d"
 
-        // `--quick-gen-key` with both algo args = "default" produces an Ed25519
-        // sign primary plus a Cv25519 encrypt subkey on gpg ≥ 2.4. Older 2.2/2.3
-        // builds default to RSA — version is checked elsewhere by the health
-        // check. gpg-agent handles passphrase pinentry; we only read status.
+        // Require gpg ≥ 2.4 and use `future-default` so the generated key is
+        // always Ed25519 primary + Cv25519 subkey — matching what the UI
+        // promises. The old `default default` args silently produced RSA on
+        // gpg 2.2/2.3, contradicting the "Ed25519 + Cv25519" label.
+        let version = try await gpgVersion()
+        guard compareVersion(version, isAtLeast: "2.4") else {
+            throw GPGError.encodingError(
+                "Alp requires gpg ≥ 2.4 to generate Ed25519 keys. Your gpg is \(version). Run `brew upgrade gnupg`.",
+            )
+        }
         let args = [
             "--batch", "--status-fd", "2",
-            "--quick-gen-key", userID, "default", "default", expire,
+            "--quick-gen-key", userID, "future-default", "default", expire,
         ]
         let (_, stderr, exitCode) = try await runGPGRaw(args)
         let stderrText = String(data: stderr, encoding: .utf8) ?? ""
@@ -813,6 +807,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     }
 
     func _publicKeyExists(email: String) async throws -> (Bool, String?) {
+        guard Self.isValidEmail(email) else {
+            throw GPGError.encodingError("invalid email")
+        }
         let args = ["--list-keys", "--with-colons", "--", email]
         do {
             let output = try await runGPG(args)
@@ -823,8 +820,6 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             return (false, nil)
         }
     }
-
-    // MARK: – Health check
 
     // MARK: – Pinentry installer
 
@@ -970,109 +965,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         // will spawn a fresh one with the new conf.
     }
 
-    /// Drive `gpg --card-edit` → `passwd` → option 1, which triggers a
-    /// pinentry prompt for the current user PIN and then the new PIN
-    /// (twice). The helper feeds only menu commands — the PIN material
-    /// itself never traverses our process.
-    func _changeCardPIN() async throws {
-        let commands = "admin\npasswd\n1\nq\nquit\n"
-        let args = [
-            "--no-tty",
-            "--card-edit", "--command-fd", "0", "--status-fd", "2",
-        ]
-        _ = try await runGPG(args, input: Data(commands.utf8))
-    }
-
-    /// Returns nil when no card is present rather than throwing — the UI
-    /// uses presence as a hide/show signal, so a "no card" outcome is
-    /// expected and not an error condition.
-    func _cardStatus() async -> GPGCardStatus? {
-        let args = ["--card-status", "--with-colons"]
-        guard let result = try? await runGPGRaw(args), result.exitCode == 0 else {
-            return nil
-        }
-        guard let text = String(data: result.stdout, encoding: .utf8) else { return nil }
-        let parsed = Self.parseCardStatusColons(text)
-        return parsed.isPresent ? parsed : nil
-    }
-
-    /// Parses the colon-prefixed output of `gpg --card-status --with-colons`.
-    /// Public on the type so tests can exercise it without invoking gpg.
-    static func parseCardStatusColons(_ text: String) -> GPGCardStatus {
-        var manufacturer: String?
-        var serial: String?
-        var cardholder: String?
-        var version: String?
-        var pinRetries: [Int] = []
-        var fingerprints: [String] = ["", "", ""]
-        var algorithms: [String] = ["", "", ""]
-
-        for rawLine in text.components(separatedBy: "\n") {
-            let parts = rawLine.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-            guard let key = parts.first else { continue }
-            switch key {
-            case "vendor":
-                // vendor:<id>:<name>:
-                if parts.count >= 3, !parts[2].isEmpty { manufacturer = parts[2] }
-            case "serial":
-                if parts.count >= 2, !parts[1].isEmpty { serial = parts[1] }
-            case "name":
-                if parts.count >= 2, !parts[1].isEmpty {
-                    cardholder = parts[1].replacingOccurrences(of: "<<", with: " ")
-                }
-            case "version":
-                // 0303 → "3.3"
-                if parts.count >= 2, !parts[1].isEmpty {
-                    version = formatCardVersion(parts[1])
-                }
-            case "pinretry":
-                // pinretry:<user>:<reset>:<admin>:::
-                pinRetries = parts.dropFirst().compactMap { Int($0) }
-            case "fpr":
-                // fpr:<sig>:<dec>:<auth>:::
-                let raw = Array(parts.dropFirst().prefix(3))
-                for (i, fp) in raw.enumerated() where i < 3 {
-                    fingerprints[i] = fp
-                }
-            case "keyattr":
-                // keyattr:<slot>:<algoId>:<bits-or-curve>:...
-                if parts.count >= 4, let slot = Int(parts[1]), (1 ... 3).contains(slot) {
-                    algorithms[slot - 1] = formatKeyAttr(algoId: parts[2], curveOrBits: parts[3])
-                }
-            default:
-                continue
-            }
-        }
-
-        return GPGCardStatus(
-            manufacturer: manufacturer,
-            serial: serial,
-            cardholderName: cardholder,
-            version: version,
-            pinRetriesLeft: pinRetries,
-            keyFingerprints: fingerprints,
-            keyAlgorithms: algorithms,
-        )
-    }
-
-    private static func formatCardVersion(_ raw: String) -> String {
-        // gpg pads to 4 hex chars: "0303" → "3.3", "0304" → "3.4".
-        let padded = raw.count == 4 ? raw : raw.padding(toLength: 4, withPad: "0", startingAt: 0)
-        let major = Int(padded.prefix(2)) ?? 0
-        let minor = Int(padded.suffix(2)) ?? 0
-        return "\(major).\(minor)"
-    }
-
-    private static func formatKeyAttr(algoId: String, curveOrBits: String) -> String {
-        // RFC 4880 algorithm IDs the card status surface ever produces.
-        switch Int(algoId) {
-        case 1: curveOrBits.isEmpty ? "RSA" : "RSA \(curveOrBits)"
-        case 18, 19, 22:
-            curveOrBits.capitalized.isEmpty ? "ECC" : curveOrBits.capitalized
-        default:
-            curveOrBits
-        }
-    }
+    // MARK: – Health check
 
     func _checkHealth() async -> GPGHealthStatus {
         var status = GPGHealthStatus()
@@ -1155,7 +1048,7 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
     }
 
     /// Simple semver comparison: "2.4.7" isAtLeast "2.2.14" → true
-    private func compareVersion(_ version: String, isAtLeast minimum: String) -> Bool {
+    func compareVersion(_ version: String, isAtLeast minimum: String) -> Bool {
         let v = version.split(separator: ".").compactMap { Int($0) }
         let m = minimum.split(separator: ".").compactMap { Int($0) }
         for i in 0 ..< max(v.count, m.count) {
@@ -1167,6 +1060,20 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         return true // equal
     }
 
+    /// Returns the gpg version string ("2.4.7") by parsing `gpg --version`.
+    /// Used by key generation to refuse Ed25519 creation on gpg < 2.4, and
+    /// by backup to decide whether to use AEAD.
+    func gpgVersion() async throws -> String {
+        let (stdout, _, _) = try await runGPGRaw(["--version"])
+        guard let text = String(data: stdout, encoding: .utf8),
+              let firstLine = text.components(separatedBy: "\n").first,
+              let match = firstLine.range(of: #"\d+\.\d+(\.\d+)?"#, options: .regularExpression)
+        else {
+            throw GPGError.gpgNotFound
+        }
+        return String(firstLine[match])
+    }
+
     /// Run an arbitrary process and return stdout.
     private func runProcess(_ path: String, args: [String]) async throws -> Data {
         let process = Process()
@@ -1175,9 +1082,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         process.environment = Self.sanitizedEnvironment()
         let pipe = Pipe()
         process.standardOutput = pipe
+        // Drain stderr to /dev/null so a full 64 KB buffer can't block the
+        // process while we're still reading stdout.
         process.standardError = Pipe()
         try process.run()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if let errPipe = process.standardError as? Pipe {
+            _ = errPipe.fileHandleForReading.readDataToEndOfFile()
+        }
         process.waitUntilExit()
         return data
     }
@@ -1263,26 +1175,6 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                 reply(nil, nil, e.asNSError)
             } catch {
                 reply(nil, nil, error as NSError)
-            }
-        }
-    }
-
-    nonisolated func clearsign(
-        data: Data,
-        signingFingerprint: String,
-        reply: @escaping @Sendable (Data?, NSError?) -> Void,
-    ) {
-        guard data.count <= Self.maxPayloadSize else {
-            reply(nil, GPGError.encodingError("payload too large").asNSError); return
-        }
-        Task {
-            do {
-                let signed = try await self._clearsign(data, signer: signingFingerprint)
-                reply(signed, nil)
-            } catch let e as GPGError {
-                reply(nil, e.asNSError)
-            } catch {
-                reply(nil, error as NSError)
             }
         }
     }
@@ -1436,33 +1328,6 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         Task {
             do {
                 try await self._uninstallAlpPinentry()
-                reply(nil)
-            } catch let e as GPGError {
-                reply(e.asNSError)
-            } catch {
-                reply(error as NSError)
-            }
-        }
-    }
-
-    nonisolated func cardStatus(reply: @escaping @Sendable (Data?, NSError?) -> Void) {
-        Task {
-            guard let status = await self._cardStatus() else {
-                reply(nil, nil) // no card present — not an error
-                return
-            }
-            do {
-                try reply(JSONEncoder().encode(status), nil)
-            } catch {
-                reply(nil, error as NSError)
-            }
-        }
-    }
-
-    nonisolated func changeCardPIN(reply: @escaping @Sendable (NSError?) -> Void) {
-        Task {
-            do {
-                try await self._changeCardPIN()
                 reply(nil)
             } catch let e as GPGError {
                 reply(e.asNSError)

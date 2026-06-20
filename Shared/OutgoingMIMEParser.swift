@@ -29,7 +29,7 @@ enum OutgoingMIMEParser {
 
         // Only inline a body that is already in a raw, armor-safe encoding. If
         // Mail encoded it quoted-printable or base64, these bytes are NOT the
-        // literal text — clearsigning/encrypting them and relabeling "7bit"
+        // literal text — encrypting them and relabeling "7bit"
         // would ship `caf=C3=A9` (or base64 soup) to the recipient. Fall back
         // to PGP/MIME, which carries the encoded body intact (§5.4).
         guard bodyIsRawText(headers: headers) else { return nil }

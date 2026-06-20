@@ -102,39 +102,6 @@ final class HelperXPCClient: @unchecked Sendable {
         }
     }
 
-    /// Trigger the smartcard user-PIN change flow. gpg-agent prompts via
-    /// pinentry for the current and new PINs — the helper itself never
-    /// sees PIN material. Long timeout because the user may take a while
-    /// to type two PINs into pinentry.
-    func changeCardPIN() async throws {
-        let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
-            proxy.changeCardPIN { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
-            }
-        }
-    }
-
-    /// Returns nil when no smartcard is present. Errors propagate as
-    /// thrown errors only for genuine helper failures.
-    func cardStatus() async throws -> GPGCardStatus? {
-        try await call { proxy, resume in
-            proxy.cardStatus { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data {
-                    do {
-                        let status = try JSONDecoder().decode(GPGCardStatus.self, from: data)
-                        resume(.success(Optional(status)))
-                    } catch {
-                        resume(.failure(error))
-                    }
-                } else {
-                    resume(.success(nil))
-                }
-            }
-        }
-    }
-
     func checkHealth() async throws -> GPGHealthStatus {
         try await call { proxy, resume in
             proxy.checkHealth { data, error in
@@ -414,16 +381,6 @@ final class HelperXPCClient: @unchecked Sendable {
                 if let error { resume(.failure(error)) }
                 else if let plain { resume(.success((plain, signer, signerName))) }
                 else { resume(.failure(GPGError.decryptionFailed("nil plaintext"))) }
-            }
-        }
-    }
-
-    func clearsign(_ data: Data, signer: String) async throws -> Data {
-        try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
-            proxy.clearsign(data: data, signingFingerprint: signer) { result, error in
-                if let error { resume(.failure(error)) }
-                else if let result { resume(.success(result)) }
-                else { resume(.failure(GPGError.encodingError("nil clearsigned output"))) }
             }
         }
     }

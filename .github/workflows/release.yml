@@ -17,7 +17,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
 
@@ -79,12 +79,26 @@ jobs:
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          ALP_UPDATE_PRIVATE_KEY: ${{ secrets.ALP_UPDATE_PRIVATE_KEY }}
         run: bash scripts/build-release.sh "$RELEASE_VERSION"
 
-      - name: Upload DMG and SHA256SUMS
-        uses: softprops/action-gh-release@v2
+      - name: Verify notarization
+        run: |
+          APP_PATH="build/export/Alp.app"
+          DMG_PATH="build/Alp-${{ steps.version.outputs.version }}.dmg"
+          echo "==> Validating app staple + Gatekeeper..."
+          xcrun stapler validate "$APP_PATH"
+          spctl --assess --type execute --verbose "$APP_PATH"
+          echo "==> Validating DMG staple + Gatekeeper..."
+          xcrun stapler validate "$DMG_PATH"
+          spctl --assess --type execute --verbose "$DMG_PATH"
+
+      - name: Upload DMG, SHA256SUMS, and signed checksums
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             build/Alp-${{ steps.version.outputs.version }}.dmg
             build/Alp-${{ steps.version.outputs.version }}.SHA256SUMS
+            build/Alp-${{ steps.version.outputs.version }}.SHA256SUMS.asc
           generate_release_notes: true

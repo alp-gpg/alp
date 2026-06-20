@@ -1,0 +1,66 @@
+import ServiceManagement
+import SwiftUI
+
+struct HelperStatusView: View {
+    @Bindable var vm: SettingsViewModel
+
+    var body: some View {
+        Form {
+            Section("Helper Daemon") {
+                LabeledContent("Status") {
+                    statusBadge
+                }
+
+                if let error = vm.helperError {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                }
+
+                HStack {
+                    Button("Install Helper") {
+                        vm.installHelper()
+                    }
+                    .disabled(vm.helperStatus == .enabled)
+
+                    Button("Uninstall Helper") {
+                        vm.uninstallHelper()
+                    }
+                    .disabled(vm.helperStatus != .enabled)
+                }
+            }
+
+            Section("About") {
+                Text(
+                    "The Alp helper runs as a background daemon outside the sandbox so it can invoke the gpg binary. It only accepts connections from the Alp extension (same Team ID).",
+                )
+                .foregroundStyle(.secondary)
+                .font(.callout)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Helper")
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        switch vm.helperStatus {
+        case .enabled:
+            Label("Running", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .accessibilityLabel("Helper status: running")
+        case .requiresApproval:
+            Label("Requires Approval", systemImage: "exclamationmark.circle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Helper status: requires approval")
+        case .notRegistered:
+            Label("Not Installed", systemImage: "xmark.circle.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Helper status: not installed")
+        default:
+            Label("Unknown", systemImage: "questionmark.circle")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Helper status: unknown")
+        }
+    }
+}

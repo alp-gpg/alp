@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Rounded square background -->
+  <rect fill="#7C3AED" x="16" y="16" width="224" height="224" rx="48" />
+
+  <!-- Monster face - simplified -->
+  <!-- Body circle -->
+  <circle fill="#A78BFA" cx="128" cy="108" r="62" />
+
+  <!-- Horns -->
+  <polygon fill="#F59E0B" points="82,58 95,22 105,62" />
+  <polygon fill="#F59E0B" points="174,58 161,22 151,62" />
+
+  <!-- Left Eye -->
+  <ellipse fill="#FFFFFF" cx="108" cy="98" rx="18" ry="20" />
+  <ellipse fill="#1E1B4B" cx="112" cy="101" rx="9" ry="11" />
+  <circle fill="#FFFFFF" cx="116" cy="96" r="3.5" />
+
+  <!-- Right Eye -->
+  <ellipse fill="#FFFFFF" cx="148" cy="98" rx="18" ry="20" />
+  <ellipse fill="#1E1B4B" cx="152" cy="101" rx="9" ry="11" />
+  <circle fill="#FFFFFF" cx="156" cy="96" r="3.5" />
+
+  <!-- Grin -->
+  <path fill="#4C1D95" d="M107,125 Q118,140 128,140 Q138,140 149,125 Q138,133 128,133 Q118,133 107,125 Z" />
+  <!-- Teeth -->
+  <polygon fill="#FFFFFF" points="113,125 117,132 121,125" />
+  <polygon fill="#FFFFFF" points="135,125 139,132 143,125" />
+
+  <!-- Left claw -->
+  <path fill="#A78BFA" d="M60,130 Q45,155 52,178 L70,182 Q58,158 72,142 Z" />
+  <path fill="#8B5CF6" d="M50,175 L42,190 L58,184 Z" />
+  <path fill="#8B5CF6" d="M58,179 L54,195 L70,186 Z" />
+
+  <!-- Right claw -->
+  <path fill="#A78BFA" d="M196,130 Q211,155 204,178 L186,182 Q198,158 184,142 Z" />
+  <path fill="#8B5CF6" d="M206,175 L214,190 L198,184 Z" />
+  <path fill="#8B5CF6" d="M198,179 L202,195 L186,186 Z" />
+
+  <!-- Envelope -->
+  <rect fill="#F8FAFC" x="58" y="185" width="140" height="48" rx="4" />
+  <polygon fill="#E2E8F0" points="58,185 128,215 198,185" />
+  <line x1="58" y1="233" x2="105" y2="205" stroke="#CBD5E1" stroke-width="1" />
+  <line x1="198" y1="233" x2="151" y2="205" stroke="#CBD5E1" stroke-width="1" />
+</svg>

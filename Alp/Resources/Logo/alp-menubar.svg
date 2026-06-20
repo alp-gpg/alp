@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="22" height="22">
+  <!-- Optimized for macOS menu bar at 22x22 -->
+  <!-- Monster head -->
+  <circle fill="currentColor" cx="11" cy="8.5" r="5.5" />
+
+  <!-- Horns -->
+  <polygon fill="currentColor" points="7,4 8,1 9.5,4.5" />
+  <polygon fill="currentColor" points="15,4 14,1 12.5,4.5" />
+
+  <!-- Eyes (cut out) -->
+  <ellipse fill="white" cx="9.2" cy="7.8" rx="1.5" ry="1.7" />
+  <ellipse fill="white" cx="12.8" cy="7.8" rx="1.5" ry="1.7" />
+  <circle fill="currentColor" cx="9.7" cy="8" r="0.8" />
+  <circle fill="currentColor" cx="13.3" cy="8" r="0.8" />
+
+  <!-- Teeth -->
+  <polygon fill="white" points="9.5,11.5 10.2,12.8 10.9,11.5" />
+  <polygon fill="white" points="11.1,11.5 11.8,12.8 12.5,11.5" />
+
+  <!-- Claws left -->
+  <path fill="currentColor" d="M5,11 Q3.5,13.5 4,16 L5.8,16.3 Q4.5,14 6,12 Z" />
+  <!-- Claws right -->
+  <path fill="currentColor" d="M17,11 Q18.5,13.5 18,16 L16.2,16.3 Q17.5,14 16,12 Z" />
+
+  <!-- Envelope -->
+  <rect fill="currentColor" x="4.5" y="16" width="13" height="4.5" rx="0.8" />
+  <polygon fill="white" points="4.5,16 11,19 17.5,16" opacity="0.3" />
+  <!-- Flap line -->
+  <line x1="4.5" y1="16" x2="11" y2="19" stroke="white" stroke-width="0.4" opacity="0.5" />
+  <line x1="17.5" y1="16" x2="11" y2="19" stroke="white" stroke-width="0.4" opacity="0.5" />
+</svg>

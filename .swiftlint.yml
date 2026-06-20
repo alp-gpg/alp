@@ -1,0 +1,70 @@
+excluded:
+  - Derived
+  - .build
+  - Alp.xcworkspace
+  - Alp.xcodeproj
+
+disabled_rules:
+  - todo                       # TODOs are tracked in issues, not flagged as linter errors
+  - line_length                # enforced by swiftformat
+  # Layout rules below conflict with swiftformat; swiftformat is authoritative.
+  - trailing_comma             # swiftformat --enable trailingCommas
+  - opening_brace              # swiftformat wraps multiline statement braces onto next line
+  - statement_position         # swiftformat puts else/catch on next line for wrapped statements
+  - multiline_arguments        # swiftformat owns argument wrapping
+  - multiline_function_chains  # swiftformat owns function-chain wrapping
+
+opt_in_rules:
+  - array_init
+  - closure_spacing
+  - contains_over_filter_count
+  - discouraged_optional_boolean
+  - empty_collection_literal
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - force_try
+  - identical_operands
+  - implicit_return
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - literal_expression_end_indentation
+  - operator_usage_whitespace
+  - prefer_self_type_over_type_of_self
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - vertical_parameter_alignment_on_call
+  - force_unwrapping
+  - yoda_condition
+
+force_cast: error
+force_unwrapping: error
+
+# Underscore-prefixed names are an intentional convention for the async
+# internals behind the GPGHelperProtocol XPC bridge (e.g. `_encrypt` →
+# `encrypt`). Test functions also use Swift Testing's backtick-quoted
+# natural-language names. Both legitimately fail the lowercase check.
+identifier_name:
+  min_length: 1
+  validates_start_with_lowercase: off
+
+# These limits flag the helper actor and a handful of GPG colon-output
+# parsers. The cohesive single-file layout is preferred over premature
+# extraction, so raise the thresholds rather than churn the structure.
+type_body_length:
+  warning: 1600
+  error: 1800
+file_length:
+  warning: 1900
+  error: 2200
+function_body_length:
+  warning: 110
+  error: 140
+cyclomatic_complexity:
+  warning: 25
+  error: 35
+large_tuple:
+  warning: 4
+  error: 5

@@ -1,0 +1,60 @@
+name: Bug Report
+description: Report a non-security bug in Alp
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **For security issues, do NOT use this template.**
+        See [SECURITY.md](../SECURITY.md) for coordinated disclosure.
+
+        Alp never logs passphrases, fingerprints, or email addresses.
+        It is safe to share `os_log` output — see step 3 below.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to trigger the bug.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Alp version
+      description: Found in Alp → Settings → About, or `defaults read /Applications/Alp.app/Contents/Info.plist CFBundleShortVersionString`
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: Apple menu → About This Mac
+    validations:
+      required: true
+  - type: input
+    id: gpg
+    attributes:
+      label: GnuPG version
+      description: Output of `gpg --version | head -1`
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Run this and paste the output. No passphrase or key material
+        will appear — Alp's logging is privacy-annotated.
+
+        ```bash
+        log show --predicate 'subsystem == "app.alp.Alp"' --last 1h --style compact
+        ```
+    validations:
+      required: false

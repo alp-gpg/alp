@@ -1,0 +1,165 @@
+import Foundation
+import Testing
+
+@Suite("Colon listing parser — subkeys")
+struct ColonParserSubkeyTests {
+    @Test
+    func `Owner trust code is read from field 9 of the pub record`() async {
+        let helper = await GPGHelper()
+        // Trailing trust char varies per fixture: `u` ultimate, `f` full,
+        // `m` marginal, `n` never, `-` unknown.
+        let cases: [(String, String?)] = [
+            ("pub:u:3072:1:AAAA:1700000000:0::u:::scESC::::::23::0:", "u"),
+            ("pub:f:3072:1:BBBB:1700000000:0::f:::scESC::::::23::0:", "f"),
+            ("pub:m:3072:1:CCCC:1700000000:0::m:::scESC::::::23::0:", "m"),
+            ("pub:-:3072:1:DDDD:1700000000:0::-:::scESC::::::23::0:", "-"),
+        ]
+        for (pubLine, expected) in cases {
+            let text = """
+            \(pubLine)
+            fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+            uid:u::::1700000000::DEADBEEF::Alice <a@x>::::::::::0:
+            """
+            let keys = await helper.testParseColonKeyListing(text)
+            #expect(keys.first?.ownerTrustCode == expected)
+        }
+    }
+
+    @Test
+    func `OwnerTrust enum collapses unknown variants to .unknown`() {
+        #expect(OwnerTrust(rawCode: "-") == .unknown)
+        #expect(OwnerTrust(rawCode: "q") == .unknown)
+        #expect(OwnerTrust(rawCode: "o") == .unknown)
+        #expect(OwnerTrust(rawCode: nil) == .unknown)
+        #expect(OwnerTrust(rawCode: "n") == .never)
+        #expect(OwnerTrust(rawCode: "m") == .marginal)
+        #expect(OwnerTrust(rawCode: "f") == .full)
+        #expect(OwnerTrust(rawCode: "u") == .ultimate)
+    }
+
+    @Test
+    func `Primary with no subkeys has empty subkeys array`() async {
+        let helper = await GPGHelper()
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        uid:u::::1700000000::DEADBEEF::Alice <a@x>::::::::::0:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys.count == 1)
+        #expect(keys[0].subkeys.isEmpty)
+    }
+
+    @Test
+    func `Primary with one encrypt subkey captures fingerprint, caps, expiry, algo`() async {
+        let helper = await GPGHelper()
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        uid:u::::1700000000::DEADBEEF::Alice <a@x>::::::::::0:
+        sub:u:3072:1:BBBB2222CCCC3333:1700000000:1900000000:::::e::::::23:
+        fpr:::::::::BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys.count == 1)
+        #expect(keys[0].subkeys.count == 1)
+        let sub = keys[0].subkeys[0]
+        #expect(sub.fingerprint == "BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666")
+        #expect(sub.capabilities == "e")
+        #expect(sub.isRevoked == false)
+        #expect(sub.algorithm == "RSA 3072")
+        #expect(sub.expiryDate != nil)
+    }
+
+    @Test
+    func `Revoked subkey is marked isRevoked`() async {
+        let helper = await GPGHelper()
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        sub:r:3072:1:BBBB2222CCCC3333:1700000000:1900000000:::::e::::::23:
+        fpr:::::::::BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys[0].subkeys.first?.isRevoked == true)
+    }
+
+    @Test
+    func `Expired subkey under valid primary — primary stays valid`() async {
+        let helper = await GPGHelper()
+        let pastTs = String(Int(Date(timeIntervalSinceNow: -86400).timeIntervalSince1970))
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        sub:u:3072:1:BBBB2222CCCC3333:1700000000:\(pastTs):::::e::::::23:
+        fpr:::::::::BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys[0].isExpired == false)
+        #expect(keys[0].subkeys[0].isExpired == true)
+    }
+
+    @Test
+    func `Expired primary with a fresh subkey — both statuses preserved`() async {
+        let helper = await GPGHelper()
+        let pastTs = String(Int(Date(timeIntervalSinceNow: -86400).timeIntervalSince1970))
+        let futureTs = String(Int(Date(timeIntervalSinceNow: 86400).timeIntervalSince1970))
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:\(pastTs)::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        sub:u:3072:1:BBBB2222CCCC3333:1700000000:\(futureTs):::::e::::::23:
+        fpr:::::::::BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys.count == 1)
+        #expect(keys[0].isExpired == true)
+        #expect(keys[0].subkeys.first?.isExpired == false)
+    }
+
+    @Test
+    func `Multiple subkeys captured in order`() async {
+        let helper = await GPGHelper()
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        sub:u:3072:1:BBBB2222CCCC3333:1700000000:1900000000:::::e::::::23:
+        fpr:::::::::1111111111111111111111111111111111111111:
+        sub:u:255:22:CCCC3333DDDD4444:1700000000:1900000000:::::s:::::ed25519::
+        fpr:::::::::2222222222222222222222222222222222222222:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys[0].subkeys.count == 2)
+        #expect(keys[0].subkeys[0].fingerprint == "1111111111111111111111111111111111111111")
+        #expect(keys[0].subkeys[1].fingerprint == "2222222222222222222222222222222222222222")
+        #expect(keys[0].subkeys[1].capabilities == "s")
+    }
+
+    @Test
+    func `Ed25519 subkey uses curve name as algorithm`() async {
+        let helper = await GPGHelper()
+        let text = """
+        pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        sub:u:255:22:CCCC3333DDDD4444:1700000000:1900000000:::::s:::::ed25519::
+        fpr:::::::::2222222222222222222222222222222222222222:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        let algo = keys[0].subkeys.first?.algorithm ?? ""
+        #expect(algo.localizedCaseInsensitiveContains("ed25519"))
+    }
+
+    @Test
+    func `Stub secret key (sec#) still produces a primary`() async {
+        let helper = await GPGHelper()
+        let text = """
+        sec:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
+        fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
+        uid:u::::1700000000::DEADBEEF::Alice <a@x>::::::::::0:
+        ssb:u:3072:1:BBBB2222CCCC3333:1700000000:1900000000:::::e::::::23:
+        fpr:::::::::1111111111111111111111111111111111111111:
+        """
+        let keys = await helper.testParseColonKeyListing(text)
+        #expect(keys.count == 1)
+        #expect(keys[0].subkeys.count == 1)
+    }
+}

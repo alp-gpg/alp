@@ -313,6 +313,10 @@ struct GeneralSettingsView: View {
                     }
                     Button("Skip This Version") { updateChecker.skip(release) }
                 }
+                Text("Installed with Homebrew? Run `brew upgrade --cask alp` instead of downloading.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
         case .upToDate:
             if updateChecker.lastCheckWasManual {

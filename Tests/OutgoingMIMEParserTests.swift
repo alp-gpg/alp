@@ -68,6 +68,55 @@ struct OutgoingMIMEParserSplitTests {
     }
 }
 
+@Suite("OutgoingMIMEParser envelope split")
+struct OutgoingMIMEParserEnvelopeTests {
+    private func text(_ data: Data) -> String {
+        String(data: data, encoding: .utf8) ?? ""
+    }
+
+    @Test
+    func `envelope keeps routing headers, entity keeps content + body`() throws {
+        let raw = Data(
+            "To: c@d.co\r\nFrom: a@b.co\r\nSubject: hi\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello body\r\n"
+                .utf8,
+        )
+        let env = try #require(OutgoingMIMEParser.splitEnvelope(raw))
+        let outer = text(env.outerHeaders)
+        let entity = text(env.contentEntity)
+
+        // Envelope carries routing headers, not the content type, not MIME-Version.
+        #expect(outer.contains("To: c@d.co"))
+        #expect(outer.contains("From: a@b.co"))
+        #expect(outer.contains("Subject: hi"))
+        #expect(!outer.lowercased().contains("content-type"))
+        #expect(!outer.lowercased().contains("mime-version"))
+
+        // Entity carries the content type + body, never the envelope addresses.
+        #expect(entity.contains("Content-Type: text/plain; charset=utf-8"))
+        #expect(entity.contains("Hello body"))
+        #expect(!entity.contains("c@d.co"))
+        #expect(!entity.contains("Subject: hi"))
+    }
+
+    @Test
+    func `multipart body survives as the content entity`() throws {
+        let raw = Data(
+            "To: c@d.co\r\nContent-Type: multipart/mixed; boundary=\"X\"\r\n\r\n--X\r\nContent-Type: text/plain\r\n\r\npart\r\n--X--\r\n"
+                .utf8,
+        )
+        let env = try #require(OutgoingMIMEParser.splitEnvelope(raw))
+        let entity = text(env.contentEntity)
+        #expect(entity.contains("multipart/mixed; boundary=\"X\""))
+        #expect(entity.contains("--X--"))
+        #expect(text(env.outerHeaders).contains("To: c@d.co"))
+    }
+
+    @Test
+    func `nil when no header separator`() {
+        #expect(OutgoingMIMEParser.splitEnvelope(Data("To: x\r\nno body".utf8)) == nil)
+    }
+}
+
 @Suite("OutgoingMIMEParser Bcc stripping")
 struct OutgoingMIMEParserBccTests {
     private func text(_ data: Data) -> String {

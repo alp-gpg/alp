@@ -162,12 +162,18 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     encodedMessage: encoded, signingError: nil, encryptionError: nil,
                 ))
             } catch {
+                // Log the error TYPE only — never its message, which can carry a
+                // recipient address or key detail. This is the one place we learn
+                // why an encode failed.
+                log.error("encode failed: \(String(describing: type(of: error)), privacy: .public)")
                 let nsError = Self.mailKitError(for: error, isEncoding: true)
-                let isSigningError = if case GPGError.noSigningKey = error { true } else { false }
+                // Classify by intent: a sign-only message has no encryption step,
+                // so its failure must surface as a signing error — otherwise Mail
+                // shows the misleading "couldn't encrypt" alert on a sign action.
                 handler(MEMessageEncodingResult(
                     encodedMessage: nil,
-                    signingError: isSigningError ? nsError : nil,
-                    encryptionError: isSigningError ? nil : nsError,
+                    signingError: shouldEncrypt ? nil : nsError,
+                    encryptionError: shouldEncrypt ? nsError : nil,
                 ))
             }
         }
@@ -290,22 +296,34 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     isSigned: shouldSign, isEncrypted: true,
                 )
             }
+            // PGP/MIME: the original envelope (To/From/Subject/Date/…) stays on
+            // the outer message; only the content entity is encrypted (RFC 3156).
+            guard let envelope = OutgoingMIMEParser.splitEnvelope(payload) else {
+                throw GPGError.encodingError("could not split outgoing message headers")
+            }
             let ciphertext = try await GPGXPCClient.shared.encrypt(
-                payload,
+                envelope.contentEntity,
                 recipients: fingerprints,
                 signer: shouldSign ? signerFingerprint : nil,
             )
             return MEEncodedOutgoingMessage(
-                rawData: pgpMIMEEncrypted(ciphertext), isSigned: shouldSign, isEncrypted: true,
+                rawData: pgpMIMEEncrypted(ciphertext, envelopeHeaders: envelope.outerHeaders),
+                isSigned: shouldSign, isEncrypted: true,
             )
         }
 
         if shouldSign {
             guard let fp = signerFingerprint else { throw GPGError.noSigningKey }
-            let canonicalBody = canonicalizeForSigning(payload)
+            guard let envelope = OutgoingMIMEParser.splitEnvelope(payload) else {
+                throw GPGError.encodingError("could not split outgoing message headers")
+            }
+            let canonicalBody = canonicalizeForSigning(envelope.contentEntity)
             let (signature, micalg) = try await GPGXPCClient.shared.sign(canonicalBody, signer: fp)
             return MEEncodedOutgoingMessage(
-                rawData: pgpMIMESigned(canonicalBody, signature: signature, micalg: micalg),
+                rawData: pgpMIMESigned(
+                    canonicalBody, signature: signature, micalg: micalg,
+                    envelopeHeaders: envelope.outerHeaders,
+                ),
                 isSigned: true, isEncrypted: false,
             )
         }
@@ -331,7 +349,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     /// Ciphertext is appended as bytes — never round-tripped through String —
     /// so ASCII-armored output is preserved exactly and binary ciphertext is
     /// never silently replaced with an empty string.
-    private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data) -> Data {
+    private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data, envelopeHeaders: Data) -> Data {
         let boundary = "AlpBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
             "MIME-Version: 1.0",
@@ -350,7 +368,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             "",
             "", // trailing empty = extra CRLF before body
         ].joined(separator: "\r\n")
-        var out = Data(header.utf8)
+        var out = Data()
+        out.append(envelopeHeaders)
+        out.appendUTF8("\r\n")
+        out.append(Data(header.utf8))
         out.append(ciphertext)
         out.appendUTF8("\r\n--\(boundary)--\r\n")
         return out
@@ -361,7 +382,9 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     ///   bytes are hashed by gpg for the signature.
     /// - `micalg` must match the actual hash algorithm used by gpg; we pass it
     ///   through from the SIG_CREATED status line rather than hardcoding it.
-    private nonisolated static func pgpMIMESigned(_ body: Data, signature: Data, micalg: String) -> Data {
+    private nonisolated static func pgpMIMESigned(
+        _ body: Data, signature: Data, micalg: String, envelopeHeaders: Data,
+    ) -> Data {
         let boundary = "AlpSigBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
             "MIME-Version: 1.0",
@@ -370,7 +393,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             "--\(boundary)",
             "",
         ].joined(separator: "\r\n")
-        var out = Data(header.utf8)
+        var out = Data()
+        out.append(envelopeHeaders)
+        out.appendUTF8("\r\n")
+        out.append(Data(header.utf8))
         out.append(body)
         let sigHeader = [
             "",

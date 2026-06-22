@@ -37,6 +37,64 @@ enum OutgoingMIMEParser {
         return Parsed(headers: headers, body: body)
     }
 
+    /// Envelope headers that stay on the *outer* PGP/MIME message, plus the
+    /// inner MIME entity that actually gets signed or encrypted.
+    struct Envelope {
+        /// Outer-message headers (To, From, Subject, Date, Message-ID, …)
+        /// **without** a trailing separator. The caller emits the new
+        /// MIME-Version / multipart Content-Type and the blank line itself.
+        let outerHeaders: Data
+        /// `Content-*` headers + CRLFCRLF + body: the MIME entity to sign or
+        /// encrypt per RFC 3156.
+        let contentEntity: Data
+    }
+
+    /// Splits a full outgoing RFC 822 message into its routing envelope and its
+    /// content entity. Apple requires the bytes returned from `encode` to be a
+    /// "full RFC822 message including headers and body" — an envelope-less
+    /// wrapper makes Mail abort building an empty recipient set on send. So the
+    /// envelope (everything that isn't `MIME-Version`/`Content-*`) rides on the
+    /// outer message, while only the content entity (`Content-*` + body) is
+    /// signed/encrypted. The original `MIME-Version` is dropped so the rebuilt
+    /// outer message carries exactly one. Returns nil when there's no
+    /// header/body separator.
+    static func splitEnvelope(_ data: Data) -> Envelope? {
+        guard let (headerEnd, bodyStart) = findHeaderBoundary(in: data) else { return nil }
+        let headerData = data.subdata(in: 0 ..< headerEnd)
+        let body = data.subdata(in: bodyStart ..< data.count)
+        guard let text = String(data: headerData, encoding: .utf8)
+            ?? String(data: headerData, encoding: .isoLatin1)
+        else { return nil }
+
+        let separator = text.contains("\r\n") ? "\r\n" : "\n"
+        var outer: [String] = []
+        var content: [String] = []
+        // Which bucket the current header (and its folded continuations) lands
+        // in. A line starting with whitespace continues the previous header.
+        var routingToContent = false
+        var droppingMIMEVersion = false
+        for line in text.components(separatedBy: separator) {
+            let folded = line.first == " " || line.first == "\t"
+            if folded {
+                if droppingMIMEVersion { continue }
+            } else {
+                let lower = line.lowercased()
+                if lower.hasPrefix("mime-version:") {
+                    droppingMIMEVersion = true
+                    continue
+                }
+                droppingMIMEVersion = false
+                routingToContent = lower.hasPrefix("content-")
+            }
+            if routingToContent { content.append(line) } else { outer.append(line) }
+        }
+
+        var entity = Data(content.joined(separator: "\r\n").utf8)
+        entity.append(Data("\r\n\r\n".utf8))
+        entity.append(body)
+        return Envelope(outerHeaders: Data(outer.joined(separator: "\r\n").utf8), contentEntity: entity)
+    }
+
     /// True when the body's Content-Transfer-Encoding is one we can wrap inline
     /// without decoding (7bit/8bit/binary). Absent header defaults to 7bit.
     static func bodyIsRawText(headers: Data) -> Bool {

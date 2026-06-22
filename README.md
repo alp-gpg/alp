@@ -4,7 +4,7 @@
 
 <h1 align="center">Alp</h1>
 
-<p align="center">GPG for Apple Mail on macOS 26.</p>
+<p align="center">GPG for Apple Mail on macOS 26+.</p>
 
 <p align="center">
   <a href="https://github.com/alp-gpg/alp/actions/workflows/ci.yml"><img src="https://github.com/alp-gpg/alp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
@@ -32,7 +32,7 @@ Pre-built binaries aren't published yet — see [BUILDING.md](BUILDING.md) to bu
 
 On first launch, **General → Setup** walks you through four steps: install the background helper, check your GnuPG install, enable the Mail extension in System Settings, and pick a default signing key. Each step has a button.
 
-You need macOS 26 (Tahoe) and GnuPG. The Setup checklist offers a one-click Homebrew install; if you'd rather, grab GnuPG from <https://gnupg.org/download/>.
+You need macOS 26 (Tahoe) or later and GnuPG. The Setup checklist offers a one-click Homebrew install; if you'd rather, grab GnuPG from <https://gnupg.org/download/>.
 
 Alp ships its own passphrase prompt — no `pinentry-mac` install required. Tap **General → Pinentry → "Use Alp Pinentry"** once and it's wired up.
 

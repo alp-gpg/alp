@@ -5,7 +5,7 @@ anything. This file is the short version plus the things agents most often get w
 
 ## What Alp is
 
-GPG for Apple Mail on macOS 26 — a **security tool** that handles private keys and
+GPG for Apple Mail on macOS 26+ — a **security tool** that handles private keys and
 passphrases. Scope is deliberately narrow: if a change doesn't serve a Mail-PGP user,
 it probably doesn't belong. When unsure, open an issue before writing code.
 

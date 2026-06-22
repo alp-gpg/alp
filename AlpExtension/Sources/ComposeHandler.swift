@@ -12,13 +12,23 @@ import MailKit
 /// race with multiple compose windows (§3.1).
 final class ComposeHandler: NSObject, MEComposeSessionHandler {
     private let lock = NSLock()
-    private var controllers: [UUID: ComposeViewController] = [:]
+    // nonisolated(unsafe): the class is @MainActor (MEComposeSessionHandler is
+    // NS_SWIFT_UI_ACTOR), yet MailKit drives the lifecycle callbacks off its XPC
+    // queue, so this map is read and written across isolation domains. The NSLock
+    // provides the actual mutual exclusion; nonisolated(unsafe) only tells the
+    // type system we take responsibility for it. Both are required — the lock
+    // alone doesn't satisfy Swift 6 isolation, the opt-out alone would race.
+    private nonisolated(unsafe) var controllers: [UUID: ComposeViewController] = [:]
 
     override nonisolated init() {
         super.init()
     }
 
-    private func controller(forSessionID id: UUID) -> ComposeViewController? {
+    // nonisolated: lock-guarded dictionary access with no main-actor state, so
+    // the nonisolated lifecycle callbacks (annotate/didEnd) can call it without
+    // an isolation check. Leaving it main-actor-isolated traps (SIGTRAP) when
+    // Mail drives annotateAddressesForSession off its XPC queue.
+    private nonisolated func controller(forSessionID id: UUID) -> ComposeViewController? {
         lock.withLock { controllers[id] }
     }
 
@@ -62,7 +72,7 @@ final class ComposeHandler: NSObject, MEComposeSessionHandler {
         completion: @escaping ([MEEmailAddress: MEAddressAnnotation]) -> Void,
     ) {
         let sessionID = session.sessionID
-        nonisolated(unsafe) let vc = controller(forSessionID: sessionID)
+        let vc = controller(forSessionID: sessionID)
         let message = session.mailMessage
         nonisolated(unsafe) let recipients = message.toAddresses + message.ccAddresses + message.bccAddresses
         nonisolated(unsafe) let completion = completion

@@ -39,7 +39,7 @@ struct ComposeView: View {
             .accessibilityValue(vm.shouldEncrypt ? "On" : "Off")
 
             if !vm.shouldSign, !vm.shouldEncrypt, vm.missingKeyEmails.isEmpty {
-                Text("No GPG")
+                Text("Plaintext")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

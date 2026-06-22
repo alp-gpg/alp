@@ -28,12 +28,12 @@ Run tests before submitting (`⌘U` in Xcode or `xcodebuild test`).
 
 Understanding the target boundaries helps when deciding where code belongs:
 
-| Target | Sandbox | Can access |
-|--------|---------|------------|
-| `Alp` | Yes | SwiftUI, ServiceManagement, XPC to helper |
-| `AlpExtension` | Yes | MailKit, SwiftUI, XPC to helper, HTTPS (keyserver) |
-| `AlpHelper` | **No** | Foundation, Process (gpg binary), filesystem |
-| `Shared/` | — | Compiled into all targets above |
+| Target         | Sandbox | Can access                                         |
+| -------------- | ------- | -------------------------------------------------- |
+| `Alp`          | Yes     | SwiftUI, ServiceManagement, XPC to helper          |
+| `AlpExtension` | Yes     | MailKit, SwiftUI, XPC to helper, HTTPS (keyserver) |
+| `AlpHelper`    | **No**  | Foundation, Process (gpg binary), filesystem       |
+| `Shared/`      | —       | Compiled into all targets above                    |
 
 - Code that both the extension and helper need goes in `Shared/`.
 - The extension **cannot** call `Process()` or access the filesystem — all gpg operations must go through the XPC helper.

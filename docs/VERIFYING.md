@@ -17,7 +17,7 @@ codesign -dvv /Applications/Alp.app 2>&1 | grep -E 'Authority|TeamIdentifier'
 
 Expected:
 
-```
+```yaml
 Authority=Developer ID Application: Robert Haist (3G6WR6H4M5)
 Authority=Developer ID Certification Authority
 Authority=Apple Root CA
@@ -67,7 +67,7 @@ sudo tcpdump -i any -nn 'tcp and not port 22'
 ```
 
 Keyserver lookups (`keys.openpgp.org`, WKD, HKPS pool) are only made
-when you explicitly click *Find Key* or refresh a key. Typing a
+when you explicitly click _Find Key_ or refresh a key. Typing a
 recipient address triggers a **local** keyring lookup, not a network
 call.
 
@@ -76,15 +76,15 @@ call.
 Alp is intentionally small. The whole codebase is ~10,000 lines of
 Swift that map cleanly to the surface area documented in `README.md`.
 
-| Where to look | What it does |
-|---------------|--------------|
-| `AlpHelper/Sources/GPGHelper.swift` | Drives the `gpg` binary via `Process`. All gpg invocations are constructed here — read this file to know exactly which gpg flags Alp can call. |
-| `AlpHelper/Sources/GPGHelper+FileOps.swift` | File-level encrypt/decrypt/sign/verify. Streams gpg via `--output <path>`. |
-| `Shared/GPGHelperProtocol.swift` | The XPC API exposed to the sandboxed app and Mail extension. Nothing outside this protocol can be called over XPC. |
-| `Alp/Sources/ServicesProvider.swift` | The macOS Services menu entry points (`Decrypt with Alp`, `Decrypt File with Alp`, etc.). |
-| `AlpExtension/Sources/SecurityHandler.swift` | MailKit's hook for incoming/outgoing messages. |
-| `Alp/Sources/HelperXPCClient.swift` / `AlpExtension/Sources/GPGXPCClient.swift` | The two XPC clients (app + Mail extension) that talk to the helper. |
-| `Alp/Sources/KeyserverSession.swift` | The only outbound HTTPS code path. Uses SPKI pinning for `keys.openpgp.org`. |
+| Where to look                                                                   | What it does                                                                                                                                   |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AlpHelper/Sources/GPGHelper.swift`                                             | Drives the `gpg` binary via `Process`. All gpg invocations are constructed here — read this file to know exactly which gpg flags Alp can call. |
+| `AlpHelper/Sources/GPGHelper+FileOps.swift`                                     | File-level encrypt/decrypt/sign/verify. Streams gpg via `--output <path>`.                                                                     |
+| `Shared/GPGHelperProtocol.swift`                                                | The XPC API exposed to the sandboxed app and Mail extension. Nothing outside this protocol can be called over XPC.                             |
+| `Alp/Sources/ServicesProvider.swift`                                            | The macOS Services menu entry points (`Decrypt with Alp`, `Decrypt File with Alp`, etc.).                                                      |
+| `AlpExtension/Sources/SecurityHandler.swift`                                    | MailKit's hook for incoming/outgoing messages.                                                                                                 |
+| `Alp/Sources/HelperXPCClient.swift` / `AlpExtension/Sources/GPGXPCClient.swift` | The two XPC clients (app + Mail extension) that talk to the helper.                                                                            |
+| `Alp/Sources/KeyserverSession.swift`                                            | The only outbound HTTPS code path. Uses SPKI pinning for `keys.openpgp.org`.                                                                   |
 
 Read those files (a few thousand lines total) and you have read every
 moving part of Alp.

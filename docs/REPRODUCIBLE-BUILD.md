@@ -4,8 +4,8 @@ Alp aims for builds that anyone with the same tag, Xcode version, and
 toolchain produces a binary that runs identically to the released DMG.
 Bit-for-bit reproducibility on Apple platforms is partially out of our
 hands (signed timestamps, provisioning profiles, build UUIDs change
-between machines), so this document is honest about what *is* and what
-*is not* reproducible.
+between machines), so this document is honest about what _is_ and what
+_is not_ reproducible.
 
 ## What is reproducible
 

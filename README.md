@@ -37,9 +37,9 @@ Alp ships its own passphrase prompt — no `pinentry-mac` install required. Tap 
 
 - **No phone-home.** Zero analytics, zero crash reporting. A fresh install makes no network calls.
 - **Updates are opt-in.** Flip the switch in General → Updates and Alp pulls security patches from `alp-gpg.github.io`. (Off by default; we still recommend turning it on so you don't miss fixes.)
-- **Keyserver lookups happen only when you ask** — clicking *Find Key*, refreshing a key. Just typing a recipient does a local keyring lookup; no traffic.
+- **Keyserver lookups happen only when you ask** — clicking _Find Key_, refreshing a key. Just typing a recipient does a local keyring lookup; no traffic.
 
-## What encryption *doesn't* protect
+## What encryption _doesn't_ protect
 
 Two limits worth knowing about PGP-on-Mail. Alp also warns you about these inside the app:
 

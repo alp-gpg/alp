@@ -1,0 +1,5 @@
+# Xcode owns the asset-catalog JSON format — don't let prettier fight it.
+*.xcassets/
+
+# SwiftLint config; comment alignment is intentional, prettier adds nothing.
+.swiftlint.yml

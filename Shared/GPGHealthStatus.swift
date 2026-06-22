@@ -50,7 +50,7 @@ struct GPGHealthStatus: Codable {
             result.append("gpg-agent is not running. Run: gpgconf --launch gpg-agent")
         }
         if !pinentryConfigured {
-            result.append("pinentry-mac is not configured in ~/.gnupg/gpg-agent.conf")
+            result.append("No pinentry program is configured in ~/.gnupg/gpg-agent.conf")
         }
         if !hasSecretKeys {
             result.append("No secret keys found. Import or generate a key with: gpg --full-generate-key")

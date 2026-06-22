@@ -1030,11 +1030,17 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             for line in confText.components(separatedBy: "\n") {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if trimmed.hasPrefix("pinentry-program") {
-                    let parts = trimmed.components(separatedBy: .whitespaces)
-                    if parts.count >= 2 {
-                        status.pinentryPath = parts[1]
-                        // Accept any GUI pinentry (pinentry-mac, pinentry-gnome3, pinentry-qt, etc.)
-                        status.pinentryConfigured = FileManager.default.isExecutableFile(atPath: parts[1])
+                    // Split once on the first space (same as _readPinentryProgram)
+                    // so a path containing spaces isn't truncated. Alp's own shim
+                    // lives under "Application Support"; the old
+                    // components(separatedBy:)[1] parse cut it at the space and
+                    // falsely reported pinentry as unconfigured.
+                    let parts = trimmed.split(separator: " ", maxSplits: 1)
+                    if parts.count == 2 {
+                        let path = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                        status.pinentryPath = path
+                        // Accept any executable pinentry (pinentry-mac, Alp's shim, …).
+                        status.pinentryConfigured = FileManager.default.isExecutableFile(atPath: path)
                     }
                 }
             }

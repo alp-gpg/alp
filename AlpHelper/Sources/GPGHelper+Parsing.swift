@@ -4,22 +4,78 @@ import Foundation
 /// GPGHelper.swift to keep that file within the lint length budget.
 /// These touch no actor state — they transform gpg output into value types.
 extension GPGHelper {
-    func extractSignerInfo(from statusText: String) -> (fingerprint: String?, displayName: String?) {
-        var fingerprint: String?
+    /// Parses gpg's `--status-fd` output for a single signature.
+    ///
+    /// `isValid` is true ONLY for a `GOODSIG` — a cryptographically-good
+    /// signature from a key that is neither expired nor revoked. This is the
+    /// crux of the fix: gpg also emits a `VALIDSIG` line for expired-key
+    /// (`EXPKEYSIG`), revoked-key (`REVKEYSIG`), and expired-signature
+    /// (`EXPSIG`) cases, so validity must NEVER be inferred from `VALIDSIG`
+    /// presence — doing so reports a revoked-key signature as "valid", which
+    /// is exactly the forgery a verifying mail client must not accept.
+    ///
+    /// Exactly one of GOODSIG / EXPSIG / EXPKEYSIG / REVKEYSIG / BADSIG / ERRSIG
+    /// accompanies each checked signature (GnuPG doc/DETAILS).
+    func signatureVerdict(from statusText: String) -> (isValid: Bool, fingerprint: String?, displayName: String?) {
+        var validSigFingerprint: String? // full 40-hex fingerprint from VALIDSIG
+        var signerKeyID: String? // long key-id from the status keyword line
         var displayName: String?
+        var sawGood = false
+        var sawBadOrError = false // BADSIG / ERRSIG / EXP*SIG / REVKEYSIG
+
         for line in statusText.components(separatedBy: "\n") {
             let parts = line.components(separatedBy: " ")
+            // VALIDSIG <fpr> ... — only trust it as a fingerprint when it is a
+            // real 40-hex value, never as a proxy for validity.
             if let idx = parts.firstIndex(of: "VALIDSIG"), parts.count > idx + 1 {
-                fingerprint = parts[idx + 1]
+                let candidate = parts[idx + 1]
+                if candidate.count == 40, candidate.allSatisfy(\.isHexDigit) {
+                    validSigFingerprint = candidate
+                }
             }
-            if let idx = parts.firstIndex(of: "GOODSIG"), parts.count > idx + 2 {
-                let name = parts[(idx + 2)...].joined(separator: " ")
-                    .trimmingCharacters(in: .whitespaces)
-                if !name.isEmpty { displayName = name }
-                if fingerprint == nil { fingerprint = parts[idx + 1] } // key ID fallback
+            // <KEYWORD> <long_keyid> <username...>
+            for keyword in ["GOODSIG", "EXPSIG", "EXPKEYSIG", "REVKEYSIG", "BADSIG"] {
+                guard let idx = parts.firstIndex(of: keyword) else { continue }
+                if parts.count > idx + 1 { signerKeyID = parts[idx + 1] }
+                if parts.count > idx + 2 {
+                    let name = parts[(idx + 2)...].joined(separator: " ")
+                        .trimmingCharacters(in: .whitespaces)
+                    if !name.isEmpty { displayName = name }
+                }
+                if keyword == "GOODSIG" { sawGood = true } else { sawBadOrError = true }
+            }
+            // ERRSIG carries no username (key missing / unsupported algo).
+            if parts.contains("ERRSIG") { sawBadOrError = true }
+        }
+
+        let isValid = sawGood && !sawBadOrError
+        return (isValid, validSigFingerprint ?? signerKeyID, displayName)
+    }
+
+    /// Decodes gpg `--with-colons` field escaping. gpg escapes `:`, `\`, and
+    /// control / non-printable bytes as `\xNN`. Without decoding, a UID with an
+    /// escaped colon renders as literal `\x3a`, and a crafted UID can embed
+    /// `\x0a`/`\x0d`/`\x3e` text that the downstream `<…>`-email extraction
+    /// mis-parses. Escapes are decoded to raw bytes then read back as UTF-8 so
+    /// multi-byte sequences (e.g. `\xc3\xa9` → "é") survive.
+    static func decodeColonField(_ field: String) -> String {
+        guard field.contains("\\x") else { return field }
+        var bytes: [UInt8] = []
+        let scalars = Array(field.unicodeScalars)
+        var i = 0
+        while i < scalars.count {
+            if scalars[i] == "\\", i + 3 < scalars.count, scalars[i + 1] == "x",
+               let hi = Character(scalars[i + 2]).hexDigitValue,
+               let lo = Character(scalars[i + 3]).hexDigitValue
+            {
+                bytes.append(UInt8(hi * 16 + lo))
+                i += 4
+            } else {
+                bytes.append(contentsOf: Array(String(scalars[i]).utf8))
+                i += 1
             }
         }
-        return (fingerprint, displayName)
+        return String(bytes: bytes, encoding: .utf8) ?? field
     }
 
     func parseColonKeyListing(_ text: String) -> [GPGKeyInfo] {
@@ -137,7 +193,7 @@ extension GPGHelper {
                 }
             } else if recordType == "uid" {
                 if fields.count > 9, !fields[9].isEmpty {
-                    primaryUIDs.append(fields[9])
+                    primaryUIDs.append(Self.decodeColonField(fields[9]))
                 }
             }
         }

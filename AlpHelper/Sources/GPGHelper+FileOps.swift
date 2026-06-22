@@ -26,8 +26,11 @@ extension GPGHelper {
         guard exitCode == 0 else {
             throw GPGError.processError(exitCode: exitCode, stderr: statusText)
         }
-        let (fp, name) = extractSignerInfo(from: statusText)
-        return (fp, name)
+        // Only report a signer for a fully-valid (GOODSIG) signature; a
+        // revoked/expired-key signature must not surface as an authenticated
+        // signer on the decrypted file.
+        let verdict = signatureVerdict(from: statusText)
+        return (verdict.isValid ? verdict.fingerprint : nil, verdict.isValid ? verdict.displayName : nil)
     }
 
     /// Verify a signature on disk. When `signaturePath` is nil, gpg is
@@ -55,9 +58,9 @@ extension GPGHelper {
         // a valid outcome rather than a hard error. Mirror _verify(data:).
         let (_, stderr, _) = try await runGPGRaw(args)
         let statusText = String(data: stderr, encoding: .utf8) ?? ""
-        let (fp, name) = extractSignerInfo(from: statusText)
+        let verdict = signatureVerdict(from: statusText)
         let trust = Self.parseTrustLevel(from: statusText)
-        return (fp != nil, fp, name, trust)
+        return (verdict.isValid, verdict.fingerprint, verdict.displayName, trust)
     }
 
     /// Map gpg's `TRUST_*` status line to a lowercase label. Returns nil

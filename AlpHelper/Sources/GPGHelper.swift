@@ -341,14 +341,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             let args = ["--batch", "--verify", "--status-fd", "2", sigURL.path, "-"]
             let (_, stderr, _) = try await runGPGRaw(args, input: data)
             let statusText = String(data: stderr, encoding: .utf8) ?? ""
-            let (fp, name) = extractSignerInfo(from: statusText)
-            return (fp != nil, fp, name)
+            let verdict = signatureVerdict(from: statusText)
+            return (verdict.isValid, verdict.fingerprint, verdict.displayName)
         } else {
             let args = ["--batch", "--verify", "--status-fd", "2"]
             let (_, stderr, _) = try await runGPGRaw(args, input: data)
             let statusText = String(data: stderr, encoding: .utf8) ?? ""
-            let (fp, name) = extractSignerInfo(from: statusText)
-            return (fp != nil, fp, name)
+            let verdict = signatureVerdict(from: statusText)
+            return (verdict.isValid, verdict.fingerprint, verdict.displayName)
         }
     }
 
@@ -443,10 +443,16 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         expiryDays: Int,
     ) async throws -> String {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Reject a leading "-": the name is the first token of the positional
+        // `userID` argument to `--quick-gen-key`, which has no `--` terminator,
+        // so a name like "--homedir" is defense-in-depth-risky as a smuggled
+        // option even though gpg currently rejects the malformed token.
         guard (1 ... 100).contains(trimmedName.count),
+              !trimmedName.hasPrefix("-"),
               Self.isValidUserIDComponent(trimmedName)
         else {
-            throw GPGError.encodingError("name must be 1..100 chars without <>() or control characters")
+            throw GPGError
+                .encodingError("name must be 1..100 chars, not start with '-', and omit <>() or control characters")
         }
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard Self.isValidEmail(trimmedEmail) else {
@@ -815,7 +821,16 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             let output = try await runGPG(args)
             let text = String(data: output, encoding: .utf8) ?? ""
             let keys = parseColonKeyListing(text)
-            return (!keys.isEmpty, keys.first?.fingerprint)
+            // gpg `--list-keys <email>` matches UID SUBSTRINGS, so a query for
+            // "bob@x.com" also matches a key whose UID is "bob@x.com.evil". Pick
+            // only a key that carries an EXACT (case-insensitive) UID address —
+            // otherwise we would silently encrypt to an attacker's look-alike
+            // key. `GPGKeyInfo.emails` is already lowercased.
+            let target = email.lowercased()
+            guard let match = keys.first(where: { $0.emails.contains(target) }) else {
+                return (false, nil)
+            }
+            return (true, match.fingerprint)
         } catch GPGError.processError {
             return (false, nil)
         }
@@ -1107,11 +1122,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
             throw GPGError.processError(exitCode: exitCode, stderr: stderrText)
         }
 
-        let (fp, name) = extractSignerInfo(from: stderrText)
-        return (stdout, fp, name)
+        // Only surface a signer for a fully-valid (GOODSIG) inner signature.
+        // A decrypted-but-signed message whose signature is from a revoked or
+        // expired key must not present that signer as authenticated.
+        let verdict = signatureVerdict(from: stderrText)
+        return (stdout, verdict.isValid ? verdict.fingerprint : nil, verdict.isValid ? verdict.displayName : nil)
     }
 
-    // Pure parsers (extractSignerInfo / parseColonKeyListing / formatAlgorithm)
+    // Pure parsers (signatureVerdict / parseColonKeyListing / formatAlgorithm)
     // live in GPGHelper+Parsing.swift.
 
     // MARK: – nonisolated XPC bridge methods
@@ -1662,6 +1680,16 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         /// so it does not ship in Release builds.
         func testParseColonKeyListing(_ text: String) -> [GPGKeyInfo] {
             parseColonKeyListing(text)
+        }
+
+        /// Test-only hook into the signature status parser.
+        func testSignatureVerdict(_ statusText: String) -> (isValid: Bool, fingerprint: String?, displayName: String?) {
+            signatureVerdict(from: statusText)
+        }
+
+        /// Test-only hook into the colon-field escape decoder.
+        static func testDecodeColonField(_ field: String) -> String {
+            decodeColonField(field)
         }
     }
 #endif

@@ -99,9 +99,17 @@ struct PGPMessageParser {
         // Find boundary
         guard let boundary = extractBoundary(from: text) else { return nil }
         let parts = text.components(separatedBy: "--\(boundary)")
-        // parts[0] = preamble, parts[1] = version part, parts[2] = ciphertext part
+        // RFC 3156: a multipart/encrypted message carries the version part
+        // (application/pgp-encrypted) and the ciphertext part
+        // (application/octet-stream). Select the ciphertext part BY CONTENT-TYPE
+        // rather than by a fixed index — a crafted preamble or an extra boundary
+        // token in the version part shifts positional indices (boundary
+        // confusion), which would otherwise hand back the wrong bytes. Falls
+        // back to the legacy parts[2] position when no octet-stream part is found.
         guard parts.count >= 3 else { return nil }
-        let cipherPart = parts[2]
+        let cipherPart = parts.dropFirst().first {
+            $0.localizedCaseInsensitiveContains("application/octet-stream")
+        } ?? parts[2]
         // Strip MIME headers from the part
         if let bodyStart = cipherPart.range(of: "\r\n\r\n") ?? cipherPart.range(of: "\n\n") {
             let body = String(cipherPart[bodyStart.upperBound...])

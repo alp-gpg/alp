@@ -44,10 +44,17 @@ enum RecipientPickerWindow {
             /// Encrypt-File service invocation (§3.6).
             func finish(_ selection: RecipientPickerWindow.Selection?) {
                 guard resumed.claim() else { return }
-                window.orderOut(nil)
-                window.contentViewController = nil
-                window.delegate = nil
-                objc_setAssociatedObject(window, &Self.observerKey, nil, .OBJC_ASSOCIATION_RETAIN)
+                // `finish` is always invoked on the main thread — from the
+                // SwiftUI selection callback and from the NSWindowDelegate close
+                // handler — but `withCheckedContinuation`'s closure is
+                // nonisolated, so the compiler can't see that. Assert it to
+                // mutate the main-actor `NSWindow` without a hop.
+                MainActor.assumeIsolated {
+                    window.orderOut(nil)
+                    window.contentViewController = nil
+                    window.delegate = nil
+                    objc_setAssociatedObject(window, &Self.observerKey, nil, .OBJC_ASSOCIATION_RETAIN)
+                }
                 cont.resume(returning: selection)
             }
             let view = RecipientPickerView(viewModel: viewModel) { selection in

@@ -30,19 +30,16 @@ tuist generate --no-open
 
 # Archive
 #
-# Inject the real version into both CFBundleVersion (CURRENT_PROJECT_VERSION —
-# the value Sparkle compares) and CFBundleShortVersionString (MARKETING_VERSION).
-# The committed defaults are "1"/"1.0"; without this injection every release
-# shipped build "1" and Sparkle would never see a newer build to offer.
-# -onlyUsePackageVersionsFromResolvedFile forces the audited Sparkle pin from
-# .package.resolved instead of re-resolving a newer version on the runner.
+# Inject the real version into both CFBundleVersion (CURRENT_PROJECT_VERSION)
+# and CFBundleShortVersionString (MARKETING_VERSION). The committed defaults are
+# "1"/"1.0"; without this injection every release would ship build "1" and the
+# update checker would never see a newer build to offer.
 xcodebuild archive \
     -workspace Alp.xcworkspace \
     -scheme Alp \
     -configuration Release \
     -archivePath "$ARCHIVE_PATH" \
     -destination 'generic/platform=macOS' \
-    -onlyUsePackageVersionsFromResolvedFile \
     CURRENT_PROJECT_VERSION="$VERSION" \
     MARKETING_VERSION="$VERSION" \
     CODE_SIGN_IDENTITY="${DEVELOPER_ID_APPLICATION}" \

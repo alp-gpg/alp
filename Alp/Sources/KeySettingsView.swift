@@ -719,6 +719,11 @@ struct KeySettingsView: View {
                 [.posixPermissions: 0o600], ofItemAtPath: url.path,
             )
         } catch {
+            // If the write landed but the chmod failed, the file is sitting at
+            // umask permissions with secret-key material in it. Remove it so a
+            // "could not write" error never leaves group/world-readable secrets
+            // behind.
+            try? FileManager.default.removeItem(at: url)
             actionError = "Could not write exported key: \(error.localizedDescription)"
         }
     }

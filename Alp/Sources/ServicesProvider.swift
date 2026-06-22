@@ -36,7 +36,12 @@ final class ServicesProvider: NSObject {
     // error pointer surfaces a small system alert; otherwise the result
     // overwrites the original selection.
 
-    @objc func decryptSelection(
+    /// `nonisolated` is load-bearing: AppKit invokes Services methods on the
+    /// main thread, and `runService`/`blockingAwait` below block the calling
+    /// thread on a semaphore. Without `nonisolated` these inherit the type's
+    /// @MainActor isolation and freeze the UI for the whole helper round-trip
+    /// (the file-service methods are nonisolated for the same reason).
+    @objc nonisolated func decryptSelection(
         _ pboard: NSPasteboard,
         userData _: String?,
         error: AutoreleasingUnsafeMutablePointer<NSString?>,
@@ -51,7 +56,7 @@ final class ServicesProvider: NSObject {
         }
     }
 
-    @objc func verifySelection(
+    @objc nonisolated func verifySelection(
         _ pboard: NSPasteboard,
         userData _: String?,
         error: AutoreleasingUnsafeMutablePointer<NSString?>,

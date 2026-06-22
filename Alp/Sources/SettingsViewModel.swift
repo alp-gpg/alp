@@ -33,6 +33,28 @@ final class SettingsViewModel {
     /// True when a keyserver connection succeeded but no certificate pin matched.
     var pinningDegraded = false
 
+    /// Retained token for the pinning-degraded observer so it is registered
+    /// exactly once and removed on teardown. `load()` can run again when the
+    /// settings view re-appears, which would otherwise stack duplicate
+    /// observers (and the block-based token would be unrecoverable).
+    /// `@ObservationIgnored` (internal bookkeeping, not UI state) + nonisolated
+    /// so `deinit` — which is nonisolated on a @MainActor class — can read it to
+    /// remove the observer. Written only on the main actor (in `load()`) and
+    /// read only from `deinit`, when no other reference survives, so the two
+    /// accesses can never race.
+    @ObservationIgnored private nonisolated(unsafe) var pinningObserver: NSObjectProtocol?
+
+    /// In-flight per-key keyserver presence checks, retained so a fresh refresh
+    /// or an uninstall can cancel the previous batch instead of leaving N
+    /// unbounded network tasks racing writes into `keyserverStatus`.
+    private var keyserverChecks: [Task<Void, Never>] = []
+
+    deinit {
+        if let pinningObserver {
+            NotificationCenter.default.removeObserver(pinningObserver)
+        }
+    }
+
     // MARK: – Keys
 
     /// All keys in the local public keyring, with hasSecretKey set where a secret key exists.
@@ -207,12 +229,14 @@ final class SettingsViewModel {
         #else
             helperStatus = helperService.status
         #endif
-        NotificationCenter.default.addObserver(
-            forName: KeyserverSession.pinningDegradedNotification,
-            object: nil, queue: nil,
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.pinningDegraded = true
+        if pinningObserver == nil {
+            pinningObserver = NotificationCenter.default.addObserver(
+                forName: KeyserverSession.pinningDegradedNotification,
+                object: nil, queue: nil,
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.pinningDegraded = true
+                }
             }
         }
         if helperStatus == .enabled {
@@ -225,6 +249,10 @@ final class SettingsViewModel {
     func refreshKeys() async {
         isLoadingKeys = true
         keyserverStatus = [:]
+        // Cancel any presence checks still running from a previous refresh so
+        // their late writes can't repopulate the status map we just cleared.
+        keyserverChecks.forEach { $0.cancel() }
+        keyserverChecks = []
         defer { isLoadingKeys = false }
         do {
             let keys = try await HelperXPCClient.shared.listAllKeys()
@@ -234,7 +262,7 @@ final class SettingsViewModel {
             // Fire off keyserver checks concurrently — each updates keyserverStatus
             // as it finishes. Skipped when the user opted out of presence checks.
             if keyserverPresenceChecks {
-                for key in keys {
+                keyserverChecks = keys.map { key in
                     Task { await self.checkKeyserver(fingerprint: key.fingerprint) }
                 }
             }
@@ -273,6 +301,8 @@ final class SettingsViewModel {
             #else
                 helperStatus = helperService.status
             #endif
+            keyserverChecks.forEach { $0.cancel() }
+            keyserverChecks = []
             allKeys = []
             secretKeys = []
             keyserverStatus = [:]
@@ -295,12 +325,16 @@ final class SettingsViewModel {
             var req = URLRequest(url: url)
             req.httpMethod = "HEAD"
             let (_, response) = try await KeyserverSession.shared.data(for: req)
+            // A cancelled batch (refresh/uninstall) must not write a stale
+            // result back into the freshly-cleared status map.
+            guard !Task.isCancelled else { return }
             if let http = response as? HTTPURLResponse {
                 keyserverStatus[fingerprint] = http.statusCode == 200 ? .found : .notFound
             } else {
                 keyserverStatus[fingerprint] = .unreachable
             }
         } catch {
+            guard !Task.isCancelled else { return }
             keyserverStatus[fingerprint] = .unreachable
         }
     }

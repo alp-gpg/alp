@@ -22,14 +22,22 @@ final class ComposeHandler: NSObject, MEComposeSessionHandler {
         lock.withLock { controllers[id] }
     }
 
-    func mailComposeSessionDidBegin(_: MEComposeSession) {
+    nonisolated func mailComposeSessionDidBegin(_: MEComposeSession) {
         // Nothing to do — view controller is created on demand in viewController(for:)
     }
 
-    func mailComposeSessionDidEnd(_ session: MEComposeSession) {
-        lock.withLock { _ = controllers.removeValue(forKey: session.sessionID) }
+    nonisolated func mailComposeSessionDidEnd(_ session: MEComposeSession) {
+        // MailKit invokes this from its private XPC queue, not the main actor,
+        // even though MEComposeSessionHandler is NS_SWIFT_UI_ACTOR — so this
+        // MUST be nonisolated, or the @objc thunk's main-actor assertion traps
+        // (SIGTRAP) on every session end. (SecurityHandler guards the same way.)
+        // Extract the Sendable IDs here; hop to the main actor only for the
+        // store mutation, never capturing the non-Sendable session.
+        let sessionID = session.sessionID
+        let contextID = session.composeContext.contextID
+        lock.withLock { _ = controllers.removeValue(forKey: sessionID) }
         Task { @MainActor in
-            ComposeSessionStore.shared.unregister(session: session)
+            ComposeSessionStore.shared.unregister(contextID: contextID, sessionID: sessionID)
         }
     }
 
@@ -43,25 +51,28 @@ final class ComposeHandler: NSObject, MEComposeSessionHandler {
 
     /// Mail invokes this as the user edits To/Cc/Bcc. Recompute recipient key
     /// availability live — the toolbar panel's `.task` only fires when the
-    /// panel (re)appears, so without this `canEncrypt`/`missingKeyEmails` go
-    /// stale (§1.4) — and mark key-less recipients inline.
-    /// @MainActor (not nonisolated): `MEComposeSessionHandler` is NS_SWIFT_UI_ACTOR
-    /// and Mail invokes this on the main actor, so the session can be touched
-    /// directly without a Sendable hop.
-    @MainActor
-    func annotateAddressesForSession(
+    /// panel (re)appears, so without this `missingKeyEmails` goes stale (§1.4)
+    /// — and mark key-less recipients inline.
+    /// nonisolated: despite `MEComposeSessionHandler` being NS_SWIFT_UI_ACTOR,
+    /// Mail also calls this from its private XPC queue (it crashed here with a
+    /// main-actor SIGTRAP). Resolve the controller + recipients on the calling
+    /// thread, then hop to the main actor for the view-model work.
+    nonisolated func annotateAddressesForSession(
         _ session: MEComposeSession,
         completion: @escaping ([MEEmailAddress: MEAddressAnnotation]) -> Void,
     ) {
-        guard let vm = controller(forSessionID: session.sessionID)?.viewModel else {
-            completion([:])
-            return
-        }
+        let sessionID = session.sessionID
+        nonisolated(unsafe) let vc = controller(forSessionID: sessionID)
+        let message = session.mailMessage
+        nonisolated(unsafe) let recipients = message.toAddresses + message.ccAddresses + message.bccAddresses
+        nonisolated(unsafe) let completion = completion
         Task { @MainActor in
+            guard let vm = vc?.viewModel else {
+                completion([:])
+                return
+            }
             await vm.refresh()
             let missing = Set(vm.missingKeyEmails)
-            let message = session.mailMessage
-            let recipients = message.toAddresses + message.ccAddresses + message.bccAddresses
             var annotations: [MEEmailAddress: MEAddressAnnotation] = [:]
             for address in recipients {
                 let email = address.addressString ?? address.rawString

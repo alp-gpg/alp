@@ -382,7 +382,30 @@ private func applySetCommand(_ command: String, argument: String, state: inout P
 
 // MARK: – Entry point
 
+/// gpg-agent launches us with no main menu, so the standard editing key
+/// equivalents (⌘X/⌘C/⌘V/⌘A) are never routed to the passphrase field's
+/// editor — pasting a passphrase from a password manager silently fails.
+/// Install a minimal Edit menu so those shortcuts reach the first responder
+/// during the modal prompt. Cut/Copy stay harmless: NSSecureTextField's
+/// field editor refuses to copy or cut its contents.
+@MainActor
+private func installEditMenu() {
+    let mainMenu = NSMenu()
+    let editItem = NSMenuItem()
+    mainMenu.addItem(editItem)
+
+    let editMenu = NSMenu(title: "Edit")
+    editItem.submenu = editMenu
+    editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+    NSApp.mainMenu = mainMenu
+}
+
 NSApplication.shared.setActivationPolicy(.accessory)
+installEditMenu()
 DispatchQueue.global(qos: .userInitiated).async {
     runAssuanLoop()
 }

@@ -286,6 +286,10 @@ final class SettingsViewModel {
                 try? await Task.sleep(for: .milliseconds(500))
                 await refreshKeys()
                 await refreshHealth()
+                // Without this, the "Use Alp Pinentry" section never appears
+                // after a fresh install — pinentryConfig stays nil until the
+                // next app launch. Every other path to .enabled refreshes it.
+                await refreshPinentryConfig()
             }
         } catch {
             helperError = error.localizedDescription

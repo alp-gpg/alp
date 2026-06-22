@@ -88,7 +88,9 @@ enum WKDClient {
             throw e
         } catch {
             let host = url.host ?? "?"
-            log.warning("WKD fetch \(host, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            // host is the correspondent's email domain — keep it .private so it
+            // is redacted in shareable `log show` output (e.g. bug reports).
+            log.warning("WKD fetch \(host, privacy: .private) failed: \(error.localizedDescription, privacy: .public)")
             throw Error.networkError(error)
         }
     }

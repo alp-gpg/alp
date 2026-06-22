@@ -5,56 +5,22 @@ body:
   - type: markdown
     attributes:
       value: |
-        **For security issues, do NOT use this template.**
-        See [SECURITY.md](../SECURITY.md) for coordinated disclosure.
+        **Security issue? Don't use this template** — see [SECURITY.md](../SECURITY.md).
 
-        Alp never logs passphrases, fingerprints, or email addresses.
-        It is safe to share `os_log` output — see step 3 below.
+        Public tracker: don't paste logs, keys, passphrases, message contents,
+        or email addresses. We'll ask privately if we need diagnostics.
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What happened, and what did you expect?
-    validations:
-      required: true
-  - type: textarea
-    id: reproduce
-    attributes:
-      label: Steps to reproduce
-      description: Minimal steps to trigger the bug.
+      label: What happened?
+      description: What went wrong, what you expected, and how to reproduce it if you can.
     validations:
       required: true
   - type: input
-    id: version
+    id: versions
     attributes:
-      label: Alp version
-      description: Found in Alp → Settings → About, or `defaults read /Applications/Alp.app/Contents/Info.plist CFBundleShortVersionString`
+      label: Versions
+      description: Alp (bottom of Settings → General), macOS, and GnuPG (`gpg --version`).
+      placeholder: Alp 0.9.0 · macOS 26.1 · gpg 2.5.20
     validations:
       required: true
-  - type: input
-    id: macos
-    attributes:
-      label: macOS version
-      description: Apple menu → About This Mac
-    validations:
-      required: true
-  - type: input
-    id: gpg
-    attributes:
-      label: GnuPG version
-      description: Output of `gpg --version | head -1`
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Relevant logs
-      description: |
-        Run this and paste the output. No passphrase or key material
-        will appear — Alp's logging is privacy-annotated.
-
-        ```bash
-        log show --predicate 'subsystem == "app.alp.Alp"' --last 1h --style compact
-        ```
-    validations:
-      required: false

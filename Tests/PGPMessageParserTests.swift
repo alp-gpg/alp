@@ -32,6 +32,51 @@ struct PGPMessageParserTests {
     }
 
     @Test
+    func `Round-trips the exact bytes Alp emits (CRLF framing, LF armor, envelope)`() {
+        // Mirror SecurityHandler.pgpMIMEEncrypted byte-for-byte: envelope headers
+        // + CRLF MIME framing, with a gpg armor block that uses LF line endings
+        // inside the CRLF-framed octet-stream part. This is what the recipient
+        // actually receives; if the parser can't pull the ciphertext back out,
+        // the message is malformed. If it can, a ciphertext-on-screen render
+        // means decryption failed, not a bad structure.
+        let b = "AlpBoundaryF62AF20DAAAA469C9F627FC3F253EF1A"
+        let armor = "-----BEGIN PGP MESSAGE-----\n\nhQIMA4kKxYGd1lu9ARAA==\n=Oi1p\n-----END PGP MESSAGE-----\n"
+        let framing = [
+            "To: rha@debian.org",
+            "From: Robert Haist <r@h.co>",
+            "Subject: TEST4",
+            "Message-ID: <abc@h>",
+            "MIME-Version: 1.0",
+            "Content-Type: multipart/encrypted; boundary=\"\(b)\"; protocol=\"application/pgp-encrypted\"",
+            "",
+            "--\(b)",
+            "Content-Type: application/pgp-encrypted",
+            "Content-Description: PGP/MIME version identification",
+            "",
+            "Version: 1",
+            "",
+            "--\(b)",
+            "Content-Type: application/octet-stream; name=\"encrypted.asc\"",
+            "Content-Description: OpenPGP encrypted message",
+            "Content-Disposition: inline; filename=\"encrypted.asc\"",
+            "",
+            "", // header/body separator
+        ].joined(separator: "\r\n")
+        var data = Data(framing.utf8)
+        data.append(Data(armor.utf8)) // LF-only armor, as gpg emits
+        data.append(Data("\r\n--\(b)--\r\n".utf8))
+
+        guard case let .mime(cipher) = parser.parse(data) else {
+            Issue.record("Expected .mime; structure is malformed")
+            return
+        }
+        let recovered = String(data: cipher, encoding: .utf8) ?? ""
+        #expect(recovered.hasPrefix("-----BEGIN PGP MESSAGE-----"))
+        #expect(recovered.contains("hQIMA4kKxYGd1lu9ARAA=="))
+        #expect(recovered.hasSuffix("-----END PGP MESSAGE-----"))
+    }
+
+    @Test
     func `Detects inline PGP message`() {
         let inline = """
         Subject: Test

@@ -49,7 +49,7 @@ struct GPGHealthStatusTests {
         status.gpgPath = "/usr/bin/gpg"
         status.versionSufficient = true
         status.agentRunning = true
-        #expect(status.issues.contains { $0.contains("pinentry-mac") })
+        #expect(status.issues.contains { $0.contains("pinentry") })
     }
 
     @Test

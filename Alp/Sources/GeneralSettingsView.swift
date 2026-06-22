@@ -160,12 +160,50 @@ struct GeneralSettingsView: View {
                     }
                 }
             }
+
+            aboutSection
         }
         .formStyle(.grouped)
         .navigationTitle("General")
         .sheet(isPresented: $showingGPGInstaller) {
             GPGInstallerSheet { Task { await vm.refreshHealth() } }
         }
+    }
+
+    // MARK: – About
+
+    private var aboutSection: some View {
+        Section {
+            HStack {
+                Text("Alp")
+                if Self.isBeta {
+                    Text("BETA")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.orange, in: Capsule())
+                }
+                Spacer()
+                Text("Version \(Self.appVersion)")
+                    .foregroundStyle(.secondary)
+            }
+        } footer: {
+            if Self.isBeta {
+                Text(
+                    "Beta software. Alp handles your private keys and passphrases — keep independent backups and report problems at github.com/alp-gpg/alp/issues.",
+                )
+            }
+        }
+    }
+
+    private static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    /// Pre-1.0 releases are betas; the badge self-removes once a 1.x ships.
+    private static var isBeta: Bool {
+        (Int(appVersion.split(separator: ".").first ?? "") ?? 0) < 1
     }
 
     // MARK: – Keys

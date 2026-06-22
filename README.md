@@ -13,6 +13,9 @@
 
 ---
 
+> [!WARNING]
+> **Alp is beta software (pre-1.0).** It's feature-complete but hasn't been field-tested at scale, and it handles your private keys and passphrases. Keep independent backups of your keys, expect rough edges, and report anything that looks wrong at [github.com/alp-gpg/alp/issues](https://github.com/alp-gpg/alp/issues).
+
 Sign, encrypt, decrypt, and verify mail in Apple Mail using your existing GnuPG keys. Alp doesn't replace Mail and doesn't store your keys — `gpg-agent` keeps doing that.
 
 ## What you get

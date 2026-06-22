@@ -228,20 +228,3 @@ enum OutgoingMIMEParser {
         return Data(keptLines.joined(separator: "\r\n").utf8)
     }
 }
-
-private extension [UInt8] {
-    /// Linear scan; outgoing RFC 822 headers are typically a few KB so big-O
-    /// optimisation isn't worth the complexity of Boyer-Moore.
-    func firstRange(of needle: [UInt8]) -> Range<Int>? {
-        guard !needle.isEmpty, needle.count <= count else { return nil }
-        let limit = count - needle.count
-        var i = 0
-        while i <= limit {
-            if self[i] == needle[0], Array(self[i ..< i + needle.count]) == needle {
-                return i ..< (i + needle.count)
-            }
-            i += 1
-        }
-        return nil
-    }
-}

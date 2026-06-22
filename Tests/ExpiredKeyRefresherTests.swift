@@ -7,12 +7,12 @@ struct ExpiredKeyRefresherTests {
     final class SlowStubImporter: KeyPreviewImporter, @unchecked Sendable {
         var delayNanos: UInt64 = 50_000_000
         let peak = AtomicCounter()
-        func preview(_ data: Data) async throws -> [GPGKeyInfo] {
+        func previewKey(_ data: Data) async throws -> [GPGKeyInfo] {
             let fp = String(data: data, encoding: .utf8) ?? ""
             return [GPGKeyInfo(fingerprint: fp, userIDs: [], capabilities: "")]
         }
 
-        func `import`(_ data: Data) async throws -> GPGImportResult {
+        func importKey(_ data: Data) async throws -> GPGImportResult {
             await peak.enter()
             defer { Task { await peak.leave() } }
             try await Task.sleep(nanoseconds: delayNanos)

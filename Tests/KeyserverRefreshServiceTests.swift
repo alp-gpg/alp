@@ -17,11 +17,11 @@ struct KeyserverRefreshServiceTests {
                             updatedSignatures: false, newSubkeys: false),
         )
         private(set) var importCalled = false
-        func preview(_: Data) async throws -> [GPGKeyInfo] {
+        func previewKey(_: Data) async throws -> [GPGKeyInfo] {
             try previewResult.get()
         }
 
-        func `import`(_: Data) async throws -> GPGImportResult {
+        func importKey(_: Data) async throws -> GPGImportResult {
             importCalled = true
             return try importResult.get()
         }

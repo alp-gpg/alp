@@ -7,28 +7,20 @@ import Foundation
 final class HelperXPCClient: @unchecked Sendable {
     static let shared = HelperXPCClient()
 
-    /// Upper bound on any single helper call; see `GPGXPCClient.callTimeout`.
-    static let callTimeout: TimeInterval = 60
+    /// Re-exported so the wrappers below can request the longer pinentry
+    /// timeout without naming `HelperConnection` at every call site.
+    static let interactiveCallTimeout = HelperConnection.interactiveCallTimeout
 
-    /// Longer bound for calls that route through pinentry — the user may take
-    /// several minutes to type a passphrase. 5 minutes is enough for any
-    /// realistic prompt without leaking forever on a wedged pinentry.
-    static let interactiveCallTimeout: TimeInterval = 300
+    private let conn = HelperConnection()
 
-    private var connection: NSXPCConnection
-    private let lock = NSLock()
-    private var connectionInvalidated = false
+    private init() {}
 
-    private init() {
-        connection = Self.makeConnection()
-    }
-
-    private static func makeConnection() -> NSXPCConnection {
-        let conn = NSXPCConnection(machServiceName: BuildConfig.helperMachService)
-        conn.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
-        conn.setCodeSigningRequirement(BuildConfig.helperRequirement)
-        conn.resume()
-        return conn
+    /// Forwards to the shared connection. See `HelperConnection.call`.
+    private func call<T: Sendable>(
+        timeout: TimeInterval = HelperConnection.callTimeout,
+        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
+    ) async throws -> T {
+        try await conn.call(timeout: timeout, body)
     }
 
     func listAllKeys() async throws -> [GPGKeyInfo] {
@@ -472,68 +464,7 @@ final class HelperXPCClient: @unchecked Sendable {
 
     // MARK: – Private
 
-    /// Shared timeout + single-resume guard pattern. See `GPGXPCClient.call`
-    /// for rationale — both clients implement the same contract.
-    private func call<T: Sendable>(
-        timeout: TimeInterval = HelperXPCClient.callTimeout,
-        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
-    ) async throws -> T {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, any Error>) in
-            let resumedGuard = ResumeGuard()
-            let resume: @Sendable (Result<T, any Error>) -> Void = { result in
-                guard resumedGuard.claim() else { return }
-                switch result {
-                case let .success(value): cont.resume(returning: value)
-                case let .failure(error): cont.resume(throwing: error)
-                }
-            }
-
-            let timer = DispatchSource.makeTimerSource()
-            timer.schedule(deadline: .now() + timeout)
-            timer.setEventHandler {
-                resume(.failure(GPGError.xpcUnavailable))
-                timer.cancel()
-            }
-            timer.resume()
-
-            lock.lock()
-            if connectionInvalidated {
-                connection = Self.makeConnection()
-                connectionInvalidated = false
-            }
-            connection.invalidationHandler = { [weak self] in
-                self?.lock.withLock { self?.connectionInvalidated = true }
-                resume(.failure(GPGError.xpcUnavailable))
-            }
-            // swiftlint:disable force_cast
-            let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] _ in
-                self?.lock.withLock { self?.connectionInvalidated = true }
-                resume(.failure(GPGError.xpcUnavailable))
-            } as! any GPGHelperProtocol
-            // swiftlint:enable force_cast
-            lock.unlock()
-
-            body(proxy) { result in
-                timer.cancel()
-                resume(result)
-            }
-        }
-    }
-
     private static func decodeKeys(_ dataList: [Data]?) -> [GPGKeyInfo] {
         (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
-    }
-}
-
-/// Single-shot guard; duplicated from GPGXPCClient because the two clients
-/// live in different targets and shouldn't share private implementation types.
-private final class ResumeGuard: @unchecked Sendable {
-    private let lock = NSLock()
-    private var claimed = false
-    func claim() -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        if claimed { return false }
-        claimed = true
-        return true
     }
 }

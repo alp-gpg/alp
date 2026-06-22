@@ -51,22 +51,15 @@ struct LiveKeyserverFetcher: KeyserverFetcher {
     }
 }
 
-/// Thin wrapper over the helper's preview + import calls. A protocol so we
-/// can inject a fake in unit tests without spinning up real gpg.
+/// Seam for the helper's preview + import calls, so tests can inject a fake
+/// without spinning up real gpg. `HelperXPCClient` satisfies it directly — its
+/// `previewKey`/`importKey` already have these signatures, so no wrapper.
 protocol KeyPreviewImporter: Sendable {
-    func preview(_ data: Data) async throws -> [GPGKeyInfo]
-    func `import`(_ data: Data) async throws -> GPGImportResult
+    func previewKey(_ data: Data) async throws -> [GPGKeyInfo]
+    func importKey(_ data: Data) async throws -> GPGImportResult
 }
 
-struct LiveKeyPreviewImporter: KeyPreviewImporter {
-    func preview(_ data: Data) async throws -> [GPGKeyInfo] {
-        try await HelperXPCClient.shared.previewKey(data)
-    }
-
-    func `import`(_ data: Data) async throws -> GPGImportResult {
-        try await HelperXPCClient.shared.importKey(data)
-    }
-}
+extension HelperXPCClient: KeyPreviewImporter {}
 
 /// Orchestrates: fetch → preview verify → import.
 ///
@@ -79,7 +72,7 @@ struct KeyserverRefreshService {
 
     init(
         fetcher: KeyserverFetcher = LiveKeyserverFetcher(),
-        importer: KeyPreviewImporter = LiveKeyPreviewImporter(),
+        importer: KeyPreviewImporter = HelperXPCClient.shared,
     ) {
         self.fetcher = fetcher
         self.importer = importer
@@ -91,14 +84,14 @@ struct KeyserverRefreshService {
         case .notPublished:
             return .notPublished
         case let .found(data):
-            let previewed = try await importer.preview(data)
+            let previewed = try await importer.previewKey(data)
             guard previewed.first?.fingerprint == expected else {
                 throw KeyserverRefreshError.fingerprintMismatch(
                     requested: expected,
                     got: previewed.first?.fingerprint,
                 )
             }
-            let result = try await importer.import(data)
+            let result = try await importer.importKey(data)
             if result.updatedSignatures || result.newSubkeys || result.newUserIDs {
                 return .updated
             }

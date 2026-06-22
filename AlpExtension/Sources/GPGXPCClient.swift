@@ -1,37 +1,25 @@
 import Foundation
 
 /// Sandboxed extension-side async wrapper around the XPC helper connection.
-/// NSXPCConnection is thread-safe for proxy calls; no actor isolation needed.
-/// @unchecked Sendable because NSXPCConnection does not conform to Sendable
-/// but its proxy API is documented as safe to call from any thread.
+/// The connection + timeout machinery lives in `HelperConnection` (Shared);
+/// this type only maps helper methods to async calls.
 final class GPGXPCClient: @unchecked Sendable {
     static let shared = GPGXPCClient()
 
-    /// Upper bound on any single helper call. gpg + gpg-agent pinentry can take
-    /// a few seconds; 60s is generous but still prevents an indefinitely hung
-    /// continuation from leaking when the helper crashes mid-reply.
-    static let callTimeout: TimeInterval = 60
+    /// Re-exported so wrappers can request the longer pinentry timeout without
+    /// naming `HelperConnection` at each call site.
+    static let interactiveCallTimeout = HelperConnection.interactiveCallTimeout
 
-    /// Longer bound for calls that route through pinentry — the user may take
-    /// several minutes to type a passphrase. Matches the app-side
-    /// `interactiveCallTimeout` so decrypt of incoming mail doesn't time out
-    /// while the user is still typing.
-    static let interactiveCallTimeout: TimeInterval = 300
+    private let conn = HelperConnection()
 
-    private var connection: NSXPCConnection
-    private let lock = NSLock()
-    private var connectionInvalidated = false
+    private init() {}
 
-    private init() {
-        connection = Self.makeConnection()
-    }
-
-    private static func makeConnection() -> NSXPCConnection {
-        let conn = NSXPCConnection(machServiceName: BuildConfig.helperMachService)
-        conn.remoteObjectInterface = NSXPCInterface(with: GPGHelperProtocol.self)
-        conn.setCodeSigningRequirement(BuildConfig.helperRequirement)
-        conn.resume()
-        return conn
+    /// Forwards to the shared connection. See `HelperConnection.call`.
+    private func call<T: Sendable>(
+        timeout: TimeInterval = HelperConnection.callTimeout,
+        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
+    ) async throws -> T {
+        try await conn.call(timeout: timeout, body)
     }
 
     // MARK: – Async wrappers
@@ -132,79 +120,5 @@ final class GPGXPCClient: @unchecked Sendable {
                 else { resume(.success((found, fp))) }
             }
         }
-    }
-
-    // MARK: – Private
-
-    /// Makes an XPC call with a hard timeout and continuation-leak protection.
-    ///
-    /// If the helper crashes mid-call and neither the reply block nor the
-    /// connection error handler ever fires, the timer guarantees the
-    /// continuation is resumed after `callTimeout`. `resumedGuard` ensures that
-    /// exactly one of reply / error / timeout wins the race.
-    private func call<T: Sendable>(
-        timeout: TimeInterval = GPGXPCClient.callTimeout,
-        _ body: @Sendable (any GPGHelperProtocol, @escaping @Sendable (Result<T, any Error>) -> Void) -> Void,
-    ) async throws -> T {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, any Error>) in
-            let resumedGuard = ResumeGuard()
-            let resume: @Sendable (Result<T, any Error>) -> Void = { result in
-                guard resumedGuard.claim() else { return }
-                switch result {
-                case let .success(value): cont.resume(returning: value)
-                case let .failure(error): cont.resume(throwing: error)
-                }
-            }
-
-            let timer = DispatchSource.makeTimerSource()
-            timer.schedule(deadline: .now() + timeout)
-            timer.setEventHandler {
-                resume(.failure(GPGError.xpcUnavailable))
-                timer.cancel()
-            }
-            timer.resume()
-
-            // Hold the lock across the full connection + invalidation handler
-            // + proxy acquisition so that a concurrent invalidation cannot
-            // race us to a stale proxy. body() is called outside the lock
-            // because it initiates an async XPC call.
-            lock.lock()
-            if connectionInvalidated {
-                connection = Self.makeConnection()
-                connectionInvalidated = false
-            }
-            connection.invalidationHandler = { [weak self] in
-                self?.lock.withLock { self?.connectionInvalidated = true }
-                resume(.failure(GPGError.xpcUnavailable))
-            }
-            // NSXPCConnection.remoteObjectProxy... is typed `Any`; casting to
-            // the protocol is the supported pattern. swiftlint can't see that
-            // the Objective-C bridge guarantees the type, so suppress here.
-            // swiftlint:disable force_cast
-            let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] _ in
-                self?.lock.withLock { self?.connectionInvalidated = true }
-                resume(.failure(GPGError.xpcUnavailable))
-            } as! any GPGHelperProtocol
-            // swiftlint:enable force_cast
-            lock.unlock()
-
-            body(proxy) { result in
-                timer.cancel()
-                resume(result)
-            }
-        }
-    }
-}
-
-/// Tiny single-shot guard used by `GPGXPCClient.call` to ensure exactly one
-/// of reply / error / timeout wins the race to resume a CheckedContinuation.
-private final class ResumeGuard: @unchecked Sendable {
-    private let lock = NSLock()
-    private var claimed = false
-    func claim() -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        if claimed { return false }
-        claimed = true
-        return true
     }
 }

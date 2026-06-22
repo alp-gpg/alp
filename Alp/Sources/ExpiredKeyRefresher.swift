@@ -50,14 +50,16 @@ final class ExpiredKeyRefresher {
     }
 
     private func run(keys: [GPGKeyInfo]) async {
-        let semaphore = AsyncSemaphore(value: maxConcurrent)
         await withTaskGroup(of: Void.self) { group in
-            for key in keys {
+            // Windowed TaskGroup: seed maxConcurrent tasks, then add one more
+            // each time a slot frees. Caps concurrency without a semaphore.
+            var iterator = keys.makeIterator()
+            @discardableResult
+            func addNext() -> Bool {
+                guard let key = iterator.next() else { return false }
                 let service = self.service
                 let fp = key.fingerprint
                 group.addTask { [weak self] in
-                    await semaphore.wait()
-                    defer { Task { await semaphore.signal() } }
                     guard !Task.isCancelled else { return }
                     await MainActor.run { self?.rowState[fp] = .fetching }
                     do {
@@ -76,6 +78,14 @@ final class ExpiredKeyRefresher {
                         await MainActor.run { self?.rowState[fp] = .failed(message) }
                     }
                 }
+                return true
+            }
+
+            for _ in 0 ..< maxConcurrent {
+                addNext()
+            }
+            for await _ in group {
+                addNext()
             }
         }
     }

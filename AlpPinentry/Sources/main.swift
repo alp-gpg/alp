@@ -110,9 +110,26 @@ struct PinentryState {
 private let stdoutHandle = FileHandle.standardOutput
 private let stdinHandle = FileHandle.standardInput
 
+/// Writes raw bytes to gpg-agent over stdout. Returns false when the pipe is
+/// gone — the agent closed the connection because the operation was cancelled,
+/// timed out, or already had what it needed. The deprecated `FileHandle.write(_:)`
+/// instead raises an ObjC `NSFileHandleOperationException` on EPIPE, which is
+/// uncatchable from Swift and aborts the whole process (the crash we saw mid-send).
+@discardableResult
+private func writeRaw(_ data: Data) -> Bool {
+    do {
+        try stdoutHandle.write(contentsOf: data)
+        return true
+    } catch {
+        return false
+    }
+}
+
 private func send(_ line: String) {
     let bytes = (line + "\n").data(using: .utf8) ?? Data()
-    stdoutHandle.write(bytes)
+    // Nothing left to talk to once the agent pipe is closed — exit cleanly
+    // rather than crash on the next write.
+    if !writeRaw(bytes) { exit(EXIT_FAILURE) }
 }
 
 private func sendOK(_ comment: String? = nil) {
@@ -302,8 +319,9 @@ private func runAssuanLoop() {
                 var bytes: [UInt8] = Array("D ".utf8)
                 bytes.append(contentsOf: Assuan.encodeToBytes(pin))
                 bytes.append(0x0A) // \n
-                stdoutHandle.write(Data(bytes))
+                let wrote = writeRaw(Data(bytes))
                 bytes.resetBytes(in: 0 ..< bytes.count)
+                guard wrote else { exit(EXIT_FAILURE) }
                 sendOK()
             } else {
                 sendErr(83_886_179, "Operation cancelled")
@@ -404,6 +422,9 @@ private func installEditMenu() {
     NSApp.mainMenu = mainMenu
 }
 
+// A broken pipe to gpg-agent must surface as a recoverable write error, never
+// a SIGPIPE that kills us mid-prompt.
+signal(SIGPIPE, SIG_IGN)
 NSApplication.shared.setActivationPolicy(.accessory)
 installEditMenu()
 DispatchQueue.global(qos: .userInitiated).async {

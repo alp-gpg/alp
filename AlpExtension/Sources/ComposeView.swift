@@ -7,42 +7,31 @@ struct ComposeView: View {
     @State private var showingPrivacyTips = false
 
     var body: some View {
+        // Sign/encrypt live in Mail's native compose UI (the lock + signed
+        // badge), which is the single source of truth. This popover only offers
+        // the extras Mail has no UI for: the signing-key picker, inline-PGP, and
+        // missing-recipient-key warnings.
+        // ponytail: signer picker + Inline are shown whenever keys exist rather
+        // than gated on the live sign/encrypt state — gating would mean reading
+        // composeContext into the view for marginal tidiness.
         HStack(spacing: 8) {
-            Toggle(isOn: $vm.shouldSign) {
-                Label("Sign", systemImage: "signature")
-                    .symbolEffect(.bounce, value: vm.shouldSign)
-            }
-            .toggleStyle(.button)
-            .tint(.blue)
-            .disabled(!vm.canSign)
-            .keyboardShortcut("s", modifiers: [.shift, .command])
-            .help(vm.canSign ? "Sign message (⇧⌘S)" : "No signing key. Add a secret key in Alp → General.")
-            .accessibilityLabel("Sign message")
-            .accessibilityValue(vm.shouldSign ? "On" : "Off")
-
-            if vm.shouldSign, vm.availableSecretKeys.count > 1 {
+            if vm.availableSecretKeys.count > 1 {
                 keyPickerMenu
+                Divider().frame(height: 16).opacity(0.5)
             }
 
-            Divider().frame(height: 16).opacity(0.5)
-
-            Toggle(isOn: $vm.shouldEncrypt) {
-                Label("Encrypt", systemImage: "lock.fill")
-                    .symbolEffect(.variableColor, value: vm.shouldEncrypt)
+            Toggle(isOn: $vm.useInlinePGP) {
+                Text("Inline")
+                    .font(.caption)
             }
             .toggleStyle(.button)
-            .tint(.green)
-            .disabled(!vm.canEncrypt)
-            .keyboardShortcut("e", modifiers: [.shift, .command])
-            .help(vm.canEncrypt ? "Encrypt message (⇧⌘E)" : encryptTooltip)
-            .accessibilityLabel("Encrypt message")
-            .accessibilityValue(vm.shouldEncrypt ? "On" : "Off")
-
-            if !vm.shouldSign, !vm.shouldEncrypt, vm.missingKeyEmails.isEmpty {
-                Text("Plaintext")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            .controlSize(.mini)
+            .keyboardShortcut("i", modifiers: [.shift, .command])
+            .help(
+                "Send as inline ASCII-armor (RFC 4880) for legacy recipients. Falls back to PGP/MIME for messages with attachments. ⇧⌘I",
+            )
+            .accessibilityLabel("Inline PGP")
+            .accessibilityValue(vm.useInlinePGP ? "On" : "Off")
 
             if !vm.missingKeyEmails.isEmpty {
                 Button {
@@ -62,52 +51,25 @@ struct ComposeView: View {
                 }
             }
 
-            if vm.shouldEncrypt || vm.shouldSign {
-                Toggle(isOn: $vm.useInlinePGP) {
-                    Text("Inline")
-                        .font(.caption)
-                }
-                .toggleStyle(.button)
-                .controlSize(.mini)
-                .keyboardShortcut("i", modifiers: [.shift, .command])
-                .help(
-                    "Send as inline ASCII-armor (RFC 4880) for legacy recipients. Falls back to PGP/MIME for messages with attachments. ⇧⌘I",
-                )
-                .accessibilityLabel("Inline PGP")
-                .accessibilityValue(vm.useInlinePGP ? "On" : "Off")
+            Button {
+                showingPrivacyTips.toggle()
+            } label: {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
             }
-
-            if vm.shouldEncrypt {
-                Button {
-                    showingPrivacyTips.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Privacy limits of PGP encryption — click for details")
-                .accessibilityLabel("Encryption privacy notes")
-                .popover(isPresented: $showingPrivacyTips, arrowEdge: .bottom) {
-                    PrivacyTipsView()
-                }
+            .buttonStyle(.plain)
+            .help("Privacy limits of PGP encryption — click for details")
+            .accessibilityLabel("Encryption privacy notes")
+            .popover(isPresented: $showingPrivacyTips, arrowEdge: .bottom) {
+                PrivacyTipsView()
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .glassEffect(.regular, in: .capsule)
         .task { await vm.refresh() }
-        .onChange(of: vm.shouldSign) { _, _ in vm.syncStateToStore() }
-        .onChange(of: vm.shouldEncrypt) { _, _ in vm.syncStateToStore() }
         .onChange(of: vm.selectedSignerFingerprint) { _, _ in vm.syncStateToStore() }
         .onChange(of: vm.useInlinePGP) { _, _ in vm.syncStateToStore() }
-    }
-
-    private var encryptTooltip: String {
-        if vm.canEncrypt { return "" }
-        if !vm.missingKeyEmails.isEmpty {
-            return "Missing public keys for \(vm.missingKeyEmails.count) recipient(s)"
-        }
-        return "Add recipients to enable encryption"
     }
 
     private var keyPickerMenu: some View {

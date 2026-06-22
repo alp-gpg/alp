@@ -68,7 +68,9 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         // Extract values synchronously on the calling thread, then do async work.
         let allAddresses = message.allRecipientAddresses
         let emails = allAddresses.map { $0.addressString ?? $0.rawString }
-        let contextID = composeContext.contextID
+        // Encrypt/sign intent comes from Mail's native security UI — the single
+        // source of truth — not from any Alp-side toggle.
+        let shouldEncrypt = composeContext.shouldEncrypt
         // MailKit's completion handlers aren't annotated @Sendable but are
         // designed to be invoked from arbitrary XPC callback queues. Use
         // nonisolated(unsafe) so the detached Task can capture the handler
@@ -76,11 +78,8 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         nonisolated(unsafe) let handler = completionHandler
 
         Task.detached {
-            // Consult the per-window state: a missing-key error is only
-            // meaningful when the user actually intends to encrypt (§5.3).
-            let (_, shouldEncrypt, _, _) = await MainActor.run {
-                ComposeSessionStore.shared.state(forContextID: contextID)
-            }
+            // A missing-key error is only meaningful when the user actually
+            // intends to encrypt (§5.3).
 
             var missingEmails: [String] = []
             var helperDown = false
@@ -132,11 +131,14 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         let rawData = message.rawData
         let recipientEmails = message.allRecipientAddresses.map { $0.addressString ?? $0.rawString }
         let contextID = composeContext.contextID
+        // Sign/encrypt decision = Mail's native security UI (source of truth).
+        // The popover only contributes the signer key + inline-PGP choice.
+        let shouldSign = composeContext.shouldSign
+        let shouldEncrypt = composeContext.shouldEncrypt
         nonisolated(unsafe) let handler = completionHandler
 
         Task.detached {
-            // Look up the correct session state by context ID.
-            let (shouldSign, shouldEncrypt, signerFP, useInlinePGP) = await MainActor.run {
+            let (signerFP, useInlinePGP) = await MainActor.run {
                 ComposeSessionStore.shared.state(forContextID: contextID)
             }
 

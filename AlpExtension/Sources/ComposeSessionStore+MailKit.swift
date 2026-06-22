@@ -7,16 +7,12 @@ import MailKit
 extension ComposeSessionStore {
     func register(
         session: MEComposeSession,
-        sign: Bool,
-        encrypt: Bool,
         signer: String?,
         useInlinePGP: Bool = false,
     ) {
         register(
             contextID: session.composeContext.contextID,
             sessionID: session.sessionID,
-            sign: sign,
-            encrypt: encrypt,
             signer: signer,
             useInlinePGP: useInlinePGP,
         )

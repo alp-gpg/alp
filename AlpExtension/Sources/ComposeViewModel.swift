@@ -3,19 +3,15 @@ import Observation
 
 @Observable @MainActor
 final class ComposeViewModel {
-    var shouldSign: Bool
-    var shouldEncrypt: Bool
-    var canEncrypt: Bool = false
+    // Sign/encrypt intent is owned by Mail's native security UI (read from
+    // MEComposeContext in SecurityHandler), not this popover. The popover only
+    // carries the extras Mail can't express: which key signs, and inline-PGP.
     var missingKeyEmails: [String] = []
     var availableSecretKeys: [GPGKeyInfo] = []
     var selectedSignerFingerprint: String?
     /// Per-message override: send as inline ASCII-armored PGP (RFC 4880)
     /// instead of PGP/MIME. Off by default; on for legacy recipients.
     var useInlinePGP: Bool = false
-
-    var canSign: Bool {
-        !availableSecretKeys.isEmpty
-    }
 
     var selectedKey: GPGKeyInfo? {
         availableSecretKeys.first { $0.fingerprint == selectedSignerFingerprint }
@@ -26,10 +22,6 @@ final class ComposeViewModel {
 
     init(session: MEComposeSession) {
         self.session = session
-        let defaults = Self.sharedDefaults
-        // Respect stored compose defaults; fall back to sign=false, encrypt=false.
-        shouldSign = defaults?.object(forKey: "signByDefault") as? Bool ?? false
-        shouldEncrypt = defaults?.bool(forKey: "encryptByDefault") ?? false
     }
 
     func refresh() async {
@@ -39,11 +31,6 @@ final class ComposeViewModel {
             if selectedSignerFingerprint == nil {
                 selectedSignerFingerprint = preferredSigner(for: senderEmail, available: keys)
             }
-        }
-
-        // Can't sign without a key — override the stored default.
-        if availableSecretKeys.isEmpty {
-            shouldSign = false
         }
 
         // Check recipient keys
@@ -58,7 +45,6 @@ final class ComposeViewModel {
             }
         }
         missingKeyEmails = missing
-        canEncrypt = missing.isEmpty && !allAddresses.isEmpty
 
         syncStateToStore()
     }
@@ -120,8 +106,6 @@ final class ComposeViewModel {
     func syncStateToStore() {
         ComposeSessionStore.shared.register(
             session: session,
-            sign: shouldSign,
-            encrypt: shouldEncrypt,
             signer: selectedSignerFingerprint,
             useInlinePGP: useInlinePGP,
         )

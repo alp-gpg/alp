@@ -35,3 +35,6 @@ secrets.xcconfig
 # Local editor/agent state
 .claude/
 .worktrees/
+
+# Private task list — tracked via GitHub issues once public
+TODO.md

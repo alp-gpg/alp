@@ -3,11 +3,20 @@
 # Usage: ./scripts/build-release.sh [version]
 #   version: e.g. "1.0.0" — defaults to git tag (v prefix stripped)
 #
+# Signing happens on THIS machine — no secrets in CI. Credentials come from
+# the local keychain, not env vars / GitHub secrets.
+#
 # Required environment:
 #   DEVELOPER_ID_APPLICATION  — signing identity, e.g. "Developer ID Application: Name (TEAMID)"
-#   APPLE_ID                  — Apple ID for notarization
-#   APPLE_ID_PASSWORD         — app-specific password
-#   APPLE_TEAM_ID             — Team ID for notarization
+#                               (the matching cert + key live in your login keychain)
+# Optional environment:
+#   NOTARY_PROFILE            — notarytool keychain profile (default "alp-notary").
+#                               Create once: xcrun notarytool store-credentials alp-notary \
+#                                 --apple-id you@example.com --team-id 3G6WR6H4M5
+#   APPLE_TEAM_ID             — Team ID for the archive (default 3G6WR6H4M5; not secret)
+#   ALP_UPDATE_PRIVATE_KEY    — base64 Ed25519 update key; falls back to keychain
+#                               item "alp-update" (security add-generic-password -s alp-update -w '<key>')
+#   GPG_SIGNING_KEY           — key id/fingerprint to detached-sign SHA256SUMS
 set -euo pipefail
 
 VERSION="${1:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}"
@@ -15,6 +24,13 @@ if [[ -z "$VERSION" ]]; then
     echo "Error: No version provided and no git tag found." >&2
     exit 1
 fi
+
+NOTARY_PROFILE="${NOTARY_PROFILE:-alp-notary}"
+APPLE_TEAM_ID="${APPLE_TEAM_ID:-3G6WR6H4M5}"
+# Pull the update key from the keychain unless already in env, then export so
+# the sign-release.swift child process inherits it.
+ALP_UPDATE_PRIVATE_KEY="${ALP_UPDATE_PRIVATE_KEY:-$(security find-generic-password -s alp-update -w 2>/dev/null || true)}"
+export ALP_UPDATE_PRIVATE_KEY
 
 echo "==> Building Alp $VERSION"
 
@@ -63,9 +79,7 @@ echo "==> Notarizing app..."
 APP_ZIP="build/Alp-app.zip"
 ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP"
 xcrun notarytool submit "$APP_ZIP" \
-    --apple-id "$APPLE_ID" \
-    --team-id "$APPLE_TEAM_ID" \
-    --password "$APPLE_ID_PASSWORD" \
+    --keychain-profile "$NOTARY_PROFILE" \
     --wait
 
 # Staple
@@ -92,9 +106,7 @@ codesign --force --sign "${DEVELOPER_ID_APPLICATION}" "$DMG_PATH"
 # common case: a user downloads the DMG directly rather than via Sparkle).
 echo "==> Notarizing DMG..."
 xcrun notarytool submit "$DMG_PATH" \
-    --apple-id "$APPLE_ID" \
-    --team-id "$APPLE_TEAM_ID" \
-    --password "$APPLE_ID_PASSWORD" \
+    --keychain-profile "$NOTARY_PROFILE" \
     --wait
 xcrun stapler staple "$DMG_PATH"
 
@@ -143,8 +155,9 @@ if [[ -n "${ALP_UPDATE_PRIVATE_KEY:-}" ]]; then
     echo "==> release.json.sig:"; cat "build/release.json.sig"
     echo "==> Commit build/release.json + build/release.json.sig to /docs and push (GitHub Pages serves the feed)."
 else
-    echo "Warning: ALP_UPDATE_PRIVATE_KEY not set — release.json.sig not produced." >&2
-    echo "         Generate a keypair (see BUILDING.md) and store the private key as a GitHub secret." >&2
+    echo "Warning: ALP_UPDATE_PRIVATE_KEY not set and keychain item 'alp-update' missing —" >&2
+    echo "         release.json.sig not produced. See BUILDING.md to generate + store the key." >&2
 fi
 
 echo "==> Done: $DMG_PATH"
+echo "==> Publish:  gh release create v${VERSION} \"$DMG_PATH\" \"$SHASUM_PATH\"*"

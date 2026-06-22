@@ -3,6 +3,15 @@
 Alp handles GPG key material and passphrases. We take security reports
 seriously and ask you to follow coordinated disclosure.
 
+## Supported Versions
+
+Alp is pre-1.0 (beta). Only the **latest released version** receives security
+fixes — there is no backporting to older builds. Always run the newest release
+(enable **General → Updates**, or `brew upgrade --cask alp`).
+
+Reports against the latest version are welcome — beta or not — and are covered
+by the safe harbor below.
+
 ## Reporting a Vulnerability
 
 **Do not open a public GitHub issue for security reports.**
@@ -62,7 +71,9 @@ We will not take legal action against researchers who:
 - Give us reasonable time to remediate before public disclosure
 - Do not demand payment in exchange for withholding disclosure
 
-## Disclosure
+## Rewards and Disclosure
 
-Once a fix is released, we publish a GitHub Security Advisory with
-credit to the reporter (unless they prefer to remain anonymous).
+Alp is an unfunded, volunteer-run open-source project — we cannot offer a paid
+bug bounty or monetary rewards. What we can offer is credit: once a fix is
+released, we publish a GitHub Security Advisory crediting the reporter (unless
+you prefer to remain anonymous).

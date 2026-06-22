@@ -20,6 +20,12 @@ it probably doesn't belong. When unsure, open an issue before writing code.
   in-house, not Sparkle). Reach for the standard library and platform APIs first.
 - **Don't weaken** code signing, entitlements, or the gpg invocation boundary to make
   something build or a test pass. Ask instead.
+- **Keyserver and WKD lookups are client-side, on purpose.** Alp fetches keys over
+  `URLSession` (`Shared/KeyserverSession.swift`, `Shared/WKDClient.swift`) and only feeds
+  the bytes to `gpg --import`. Do **not** switch to gpg's keyserver machinery
+  (`--keyserver`, `--locate-keys`, `--auto-key-locate`) — client-side lookups keep network
+  access auditable and insulate Alp from gpg keyserver-config changes (e.g. GnuPG 2.5
+  dropped the built-in default keyserver).
 
 ## Before you finish
 

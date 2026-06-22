@@ -12,8 +12,5 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<!-- No mach-lookup exceptions: the notification-only updater runs entirely
-	     in-process (URLSession + CryptoKit) and never launches a privileged
-	     installer, so Sparkle's InstallerLauncher/Downloader services are gone. -->
 </dict>
 </plist>

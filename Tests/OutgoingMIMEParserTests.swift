@@ -117,6 +117,59 @@ struct OutgoingMIMEParserEnvelopeTests {
     }
 }
 
+@Suite("OutgoingMIMEParser envelope merge (decode path)")
+struct OutgoingMIMEParserMergeTests {
+    /// The encrypted message as Mail hands it to decode — full envelope plus
+    /// the multipart/encrypted framing.
+    private let original = Data(
+        "To: c@d.co\r\nFrom: a@b.co\r\nSubject: hi\r\nMessage-ID: <1@local>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/encrypted; boundary=\"X\"; protocol=\"application/pgp-encrypted\"\r\n\r\n--X\r\n(parts)\r\n--X--\r\n"
+            .utf8,
+    )
+
+    private func text(_ data: Data) -> String {
+        String(data: data, encoding: .utf8) ?? ""
+    }
+
+    @Test
+    func `re-attaches envelope to a decrypted content entity`() {
+        let entity = Data("Content-Type: text/plain; charset=utf-8\r\n\r\nSecret body\r\n".utf8)
+        let out = text(OutgoingMIMEParser.mergingEnvelope(of: original, withEntity: entity))
+        // Envelope Mail's indexer needs — sender, recipient, subject, message-id.
+        #expect(out.contains("To: c@d.co"))
+        #expect(out.contains("From: a@b.co"))
+        #expect(out.contains("Subject: hi"))
+        #expect(out.contains("Message-ID: <1@local>"))
+        // Exactly one MIME-Version, the entity's content type, no encrypted framing.
+        #expect(out.components(separatedBy: "MIME-Version:").count == 2)
+        #expect(out.contains("Content-Type: text/plain; charset=utf-8"))
+        #expect(!out.contains("multipart/encrypted"))
+        // Header block ends before the body — the entity's own blank line.
+        #expect(out.contains("charset=utf-8\r\n\r\nSecret body"))
+    }
+
+    @Test
+    func `wraps bare inline plaintext as text-plain`() {
+        let out = text(OutgoingMIMEParser.mergingEnvelope(
+            of: original, withEntity: Data("Just the decrypted words.\r\n".utf8),
+        ))
+        #expect(out.contains("To: c@d.co"))
+        #expect(out.contains("Content-Type: text/plain; charset=utf-8\r\n\r\nJust the decrypted words."))
+    }
+
+    @Test
+    func `passes through an entity that is already a full message`() {
+        let full = Data("From: legacy@e.co\r\nTo: c@d.co\r\nSubject: old\r\n\r\nbody\r\n".utf8)
+        let out = OutgoingMIMEParser.mergingEnvelope(of: original, withEntity: full)
+        #expect(out == full)
+    }
+
+    @Test
+    func `returns entity unchanged when original has no header separator`() {
+        let entity = Data("Content-Type: text/plain\r\n\r\nx".utf8)
+        #expect(OutgoingMIMEParser.mergingEnvelope(of: Data("garbage".utf8), withEntity: entity) == entity)
+    }
+}
+
 @Suite("OutgoingMIMEParser Bcc stripping")
 struct OutgoingMIMEParserBccTests {
     private func text(_ data: Data) -> String {

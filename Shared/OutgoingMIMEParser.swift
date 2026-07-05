@@ -95,6 +95,35 @@ enum OutgoingMIMEParser {
         return Envelope(outerHeaders: Data(outer.joined(separator: "\r\n").utf8), contentEntity: entity)
     }
 
+    /// Rebuilds a full RFC 822 message from the envelope of `original` (the
+    /// encrypted message as received) and the decrypted MIME `entity` gpg
+    /// returned. Mail parses the bytes an extension hands back from decode as
+    /// *the* message — its indexer reads sender/recipients/subject out of them
+    /// right after send, and a bare entity (no To/From/Subject) makes it abort
+    /// on a nil set insert (`-[__NSSetM addObject:]`). So the original
+    /// envelope rides on top of the decrypted entity:
+    ///   * entity starts with `Content-*` headers → envelope + MIME-Version + entity
+    ///   * entity is itself a full message (starts with some other header,
+    ///     e.g. legacy encrypters that encrypt the whole message) → unchanged
+    ///   * bare text (inline PGP plaintext) → wrapped as text/plain
+    static func mergingEnvelope(of original: Data, withEntity entity: Data) -> Data {
+        guard let envelope = splitEnvelope(original) else { return entity }
+        let firstLine = String(data: entity.prefix(998), encoding: .utf8)?
+            .components(separatedBy: .newlines).first?.lowercased() ?? ""
+
+        var out = envelope.outerHeaders
+        out.append(Data("\r\nMIME-Version: 1.0\r\n".utf8))
+        if firstLine.hasPrefix("content-") {
+            out.append(entity)
+        } else if firstLine.firstMatch(of: #/^[!-9;-~]+:/#) != nil {
+            return entity // full message with its own envelope — use as-is
+        } else {
+            out.append(Data("Content-Type: text/plain; charset=utf-8\r\n\r\n".utf8))
+            out.append(entity)
+        }
+        return out
+    }
+
     /// True when the body's Content-Transfer-Encoding is one we can wrap inline
     /// without decoding (7bit/8bit/binary). Absent header defaults to 7bit.
     static func bodyIsRawText(headers: Data) -> Bool {

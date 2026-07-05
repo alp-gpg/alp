@@ -194,8 +194,13 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             case let .mime(cipher), let .inline(cipher):
                 let (plain, signer, signerName) = try await GPGXPCClient.shared.decrypt(cipher)
                 log.info("Decrypted successfully")
+                // gpg returns only the decrypted MIME entity (Content-* +
+                // body). Mail parses the bytes we return as the *complete*
+                // message — its post-send indexer reads sender/subject out of
+                // them and aborts on nil (-[__NSSetM addObject:]) if the
+                // envelope is missing. Re-attach the original envelope.
                 return MEDecodedMessage(
-                    data: plain,
+                    data: OutgoingMIMEParser.mergingEnvelope(of: data, withEntity: plain),
                     securityInformation: MEMessageSecurityInformation(
                         signers: makeSigner(signer, displayName: signerName), isEncrypted: true,
                         signingError: nil, encryptionError: nil,
@@ -229,8 +234,12 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             }
         } catch {
             log.error("Decrypt failed")
+            // Per MEDecodedMessage.h: when decryption fails rawData "should be
+            // left nil and an error message will be displayed to the user".
+            // Returning the original bytes instead makes Mail render raw
+            // armored ciphertext as the message body.
             return MEDecodedMessage(
-                data: data,
+                data: nil,
                 securityInformation: MEMessageSecurityInformation(
                     signers: [], isEncrypted: false,
                     signingError: nil,

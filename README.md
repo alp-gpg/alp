@@ -24,7 +24,7 @@ Sign, encrypt, decrypt, and verify mail in Apple Mail using your existing GnuPG 
 - **Mail just works.** Encrypted mail decrypts on read. Signed mail shows who signed it. Sign and encrypt with Mail's own compose controls; Alp's compose popover adds the signing-key picker, inline-PGP mode, and missing-key warnings with one-click import.
 - **One-click key lookup.** Type a recipient who's not in your keyring and Alp finds them on `keys.openpgp.org` or via Web Key Directory.
 - **Full key manager** in Settings → Keys. Generate, set expiry, change passphrase, back up, revoke, publish — without leaving the app.
-- **Right-click on files** in Finder: Decrypt File, Verify File, Sign File, Encrypt File. Same for selected text via the macOS Services menu.
+- **Right-click on files** in Finder: Decrypt File, Verify File, Sign File, Encrypt File. Selected text gets Decrypt and Verify via the macOS Services menu (signing and encrypting need a recipient/key choice, so they stay file-only).
 - **Encrypted backups.** "Back Up Key…" wraps your secret key, a fresh revocation cert, and ownertrust into one AES-256 file. "Restore Backup…" pulls it back on another Mac.
 
 ## Installation

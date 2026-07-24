@@ -42,7 +42,9 @@ codesign -dvv /Applications/Alp.app/Contents/MacOS/AlpHelper 2>&1 | grep TeamIde
 ```
 
 Alp itself enforces this at runtime: every XPC connection is gated by
-`setCodeSigningRequirement` (see `Shared/BuildConfig.swift`). A binary
+`setCodeSigningRequirement` (calls in `Shared/HelperConnection.swift`
+and `AlpHelper/Sources/main.swift`; the requirement strings live in
+`Shared/BuildConfig.swift`). A binary
 signed by a different team cannot impersonate the helper.
 
 ## 3. Confirm Alp does not phone home on first launch
@@ -66,10 +68,19 @@ sudo tcpdump -i any -nn 'tcp and not port 22'
 # Expected: zero outbound connections.
 ```
 
-Keyserver lookups (`keys.openpgp.org`, WKD, HKPS pool) are only made
-when you explicitly click _Find Key_ or refresh a key. Typing a
-recipient address triggers a **local** keyring lookup, not a network
-call.
+Keyserver lookups are only made on explicit user action — clicking
+_Find Key_, refreshing a key, publishing a key, or (opt-in, off by
+default) enabling the publish-status check in Settings → Keyserver
+Security. _Find Key_ tries these sources in order until one returns a
+key: `keys.openpgp.org`, the recipient domain's Web Key Directory,
+`api.protonmail.ch`, and `keyserver.ubuntu.com`. Typing a recipient
+address triggers a **local** keyring lookup, not a network call.
+
+SPKI certificate pinning applies to `keys.openpgp.org` traffic
+(`Shared/KeyserverSession.swift`). WKD, Proton, and Ubuntu-pool
+lookups and the opt-in update check use plain TLS — their hosts are
+either user-derived (WKD) or secondary sources that rotate
+certificates on their own schedule.
 
 ## 4. Audit the source code
 
@@ -84,10 +95,16 @@ Swift that map cleanly to the surface area documented in `README.md`.
 | `Alp/Sources/ServicesProvider.swift`                                            | The macOS Services menu entry points (`Decrypt with Alp`, `Decrypt File with Alp`, etc.).                                                      |
 | `AlpExtension/Sources/SecurityHandler.swift`                                    | MailKit's hook for incoming/outgoing messages.                                                                                                 |
 | `Alp/Sources/HelperXPCClient.swift` / `AlpExtension/Sources/GPGXPCClient.swift` | The two XPC clients (app + Mail extension) that talk to the helper.                                                                            |
-| `Alp/Sources/KeyserverSession.swift`                                            | The only outbound HTTPS code path. Uses SPKI pinning for `keys.openpgp.org`.                                                                   |
+| `Shared/KeyserverSession.swift`                                                 | Shared HTTPS session with SPKI pinning for `keys.openpgp.org`.                                                                                 |
+| `Shared/WKDClient.swift`                                                        | Web Key Directory lookups (HTTPS to the recipient's mail domain).                                                                              |
+| `Shared/KeyserverUploader.swift`                                                | Key publishing to `keys.openpgp.org` (VKS upload + verify request).                                                                            |
+| `Alp/Sources/KeyserverRefreshService.swift`                                     | Per-key refresh from `keys.openpgp.org`.                                                                                                       |
+| `Alp/Sources/UpdateChecker.swift`                                               | Opt-in update check against `alp-gpg.github.io` (Ed25519-verified).                                                                            |
+| `AlpExtension/Sources/ComposeView.swift`                                        | Compose-time _Find Key_ (keys.openpgp.org → WKD → Proton → Ubuntu pool).                                                                       |
 
-Read those files (a few thousand lines total) and you have read every
-moving part of Alp.
+Those are **all** of Alp's outbound network call sites. Read the files
+above (a few thousand lines total) and you have read every moving part
+of Alp.
 
 ## 5. Audit the gpg invocations
 

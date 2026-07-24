@@ -57,7 +57,7 @@ struct GeneralSettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Check keys.openpgp.org for each key")
                         Text(
-                            "Shows whether each key is published. Turning this off keeps your full contact-key list private — Alp won't query the keyserver on every load.",
+                            "Shows whether each key is published. Off by default: turning this on queries the keyserver for every key whenever the list loads, which discloses your contact-key list.",
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)

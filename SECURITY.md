@@ -41,8 +41,9 @@ gpg --keyserver hkps://keys.openpgp.org \
     --recv-keys 2BC83F55A4007468864C680E1B7CC8D4D4E914AA
 ```
 
-The same key signs every `SHA256SUMS.asc` on the GitHub release pages,
-so you can confirm the fingerprint against any published release.
+The same key signs the `Alp-<VERSION>.SHA256SUMS.asc` checksum
+signature on the GitHub release pages, so you can confirm the
+fingerprint against a published release.
 
 ## Response Timeline
 

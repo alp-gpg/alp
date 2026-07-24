@@ -33,6 +33,7 @@ Understanding the target boundaries helps when deciding where code belongs:
 | `Alp`          | Yes     | SwiftUI, ServiceManagement, XPC to helper          |
 | `AlpExtension` | Yes     | MailKit, SwiftUI, XPC to helper, HTTPS (keyserver) |
 | `AlpHelper`    | **No**  | Foundation, Process (gpg binary), filesystem       |
+| `AlpPinentry`  | **No**  | Cocoa (secure text field); runs under gpg-agent    |
 | `Shared/`      | —       | Compiled into all targets above                    |
 
 - Code that both the extension and helper need goes in `Shared/`.

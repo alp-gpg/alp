@@ -49,16 +49,22 @@ xcodebuild build \
     -scheme Alp \
     -configuration Release \
     -destination 'platform=macOS' \
-    CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO
+    CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 ```
 
-`CODE_SIGN_IDENTITY="-"` builds an ad-hoc–signed binary so the
-signature you get is independent of any Developer ID. You can then:
+`CODE_SIGNING_ALLOWED=NO` skips signing (and the provisioning-profile
+resolution that would otherwise fail without the maintainer's team
+account), so the build is independent of any Developer ID. You can
+then:
 
 1. Run the resulting `Alp.app` and confirm it behaves identically to
    the released DMG.
-2. Compare the Swift source files of the running app's `.dylib` against
-   the source you built — they should match line-for-line in symbols.
+2. Compare the app's bundle layout and binaries against the release:
+   `Contents/MacOS/Alp`, `Contents/MacOS/AlpHelper`,
+   `Contents/Helpers/AlpPinentry`,
+   `Contents/PlugIns/AlpExtension.appex`, and
+   `Contents/Library/LaunchAgents/app.alp.Alp.helper.plist` — same
+   structure, same architectures (`lipo -archs`), comparable sizes.
 3. Inspect the gpg invocations the helper makes (every one is
    constructed in `AlpHelper/Sources/GPGHelper.swift` and
    `AlpHelper/Sources/GPGHelper+FileOps.swift`).

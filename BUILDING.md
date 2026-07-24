@@ -77,6 +77,7 @@ Tests require `gpg` installed and at least one secret key in your keyring. They 
 Alp/                    Main app — settings UI + helper installer
 AlpExtension/           Mail extension — MailKit protocols, compose toolbar
 AlpHelper/              XPC helper agent — calls gpg binary (unsandboxed)
+AlpPinentry/            Bundled pinentry — Assuan passphrase prompt for gpg-agent
 Shared/                 Code shared across all targets
 Tests/                  Unit tests
 Project.swift           Tuist manifest (defines all targets and settings)

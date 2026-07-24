@@ -74,7 +74,7 @@ Next steps:
 
   2. Pick the "Alp" scheme and ⌘R to run.
 
-  3. ⌘U to run the test suite (191 tests; needs a secret key in your keyring).
+  3. ⌘U to run the test suite (needs gpg and a secret key in your keyring).
 
   4. Read CONTRIBUTING.md and docs/VERIFYING.md before opening a PR.
 

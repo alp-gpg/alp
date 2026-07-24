@@ -116,12 +116,12 @@ final class SettingsViewModel {
         }
     }
 
-    /// When ON (default), Alp HEAD-requests keys.openpgp.org for each key on
-    /// load to show publish status. That discloses the whole contact-key graph
-    /// to the keyserver, so offer an opt-out for a "no phone-home" posture
-    /// (§5.7).
+    /// When ON, Alp HEAD-requests keys.openpgp.org for each key on load to
+    /// show publish status. That discloses the whole contact-key graph to the
+    /// keyserver, so it is OPT-IN (default off) — the README promises
+    /// keyserver traffic only on explicit user action (§5.7).
     var keyserverPresenceChecks: Bool = UserDefaults.standard
-        .object(forKey: "keyserverPresenceChecks") as? Bool ?? true
+        .object(forKey: "keyserverPresenceChecks") as? Bool ?? false
     {
         didSet {
             UserDefaults.standard.set(keyserverPresenceChecks, forKey: "keyserverPresenceChecks")

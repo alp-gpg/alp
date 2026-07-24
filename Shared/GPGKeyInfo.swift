@@ -26,9 +26,15 @@ struct GPGSubkey: Codable, Identifiable, Hashable {
     var capabilityIcons: [String] {
         var icons: [String] = []
         let caps = capabilities.lowercased()
-        if caps.contains("s") { icons.append("signature") }
-        if caps.contains("e") { icons.append("lock") }
-        if caps.contains("a") { icons.append("person.badge.key") }
+        if caps.contains("s") {
+            icons.append("signature")
+        }
+        if caps.contains("e") {
+            icons.append("lock")
+        }
+        if caps.contains("a") {
+            icons.append("person.badge.key")
+        }
         return icons
     }
 }

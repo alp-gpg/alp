@@ -102,7 +102,9 @@ private final class PinningDelegate: NSObject, URLSessionDelegate, Sendable {
         }
 
         let shouldNotify = hasNotified.withLock { notified -> Bool in
-            if notified { return false }
+            if notified {
+                return false
+            }
             notified = true
             return true
         }

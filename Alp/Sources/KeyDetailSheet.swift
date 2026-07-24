@@ -139,7 +139,11 @@ struct KeyDetailSheet: View {
             "Revoke this UID?",
             isPresented: Binding(
                 get: { uidIndexPendingRevoke != nil },
-                set: { if !$0 { uidIndexPendingRevoke = nil } },
+                set: {
+                    if !$0 {
+                        uidIndexPendingRevoke = nil
+                    }
+                },
             ),
         ) {
             Button("Revoke", role: .destructive) {
@@ -220,7 +224,11 @@ struct KeyDetailSheet: View {
             "Revoke this subkey?",
             isPresented: Binding(
                 get: { subkeyPendingRevoke != nil },
-                set: { if !$0 { subkeyPendingRevoke = nil } },
+                set: {
+                    if !$0 {
+                        subkeyPendingRevoke = nil
+                    }
+                },
             ),
         ) {
             Button("Revoke", role: .destructive) {
@@ -238,7 +246,11 @@ struct KeyDetailSheet: View {
             "Delete this subkey?",
             isPresented: Binding(
                 get: { subkeyPendingDelete != nil },
-                set: { if !$0 { subkeyPendingDelete = nil } },
+                set: {
+                    if !$0 {
+                        subkeyPendingDelete = nil
+                    }
+                },
             ),
         ) {
             Button("Delete", role: .destructive) {
@@ -337,7 +349,9 @@ struct KeyDetailSheet: View {
         ]
         let lower = caps.lowercased()
         let names = order.compactMap { lower.contains($0.0) ? $0.1 : nil }
-        if names.isEmpty { return "—" }
+        if names.isEmpty {
+            return "—"
+        }
         return names.joined(separator: " · ")
     }
 }

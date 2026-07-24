@@ -72,8 +72,12 @@ struct ExpiredKeyRefresherTests {
         refresher.cancel()
         try? await Task.sleep(nanoseconds: 300_000_000)
         let completed = refresher.rowState.values.count(where: { state in
-            if case .idle = state { return false }
-            if case .fetching = state { return false }
+            if case .idle = state {
+                return false
+            }
+            if case .fetching = state {
+                return false
+            }
             return true
         })
         #expect(completed < 20, "Expected cancellation to prevent finishing all 20 keys")
@@ -99,7 +103,9 @@ actor AtomicCounter {
     private(set) var peakValue = 0
     func enter() {
         current += 1
-        if current > peakValue { peakValue = current }
+        if current > peakValue {
+            peakValue = current
+        }
     }
 
     func leave() {

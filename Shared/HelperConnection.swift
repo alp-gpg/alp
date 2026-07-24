@@ -101,7 +101,9 @@ private final class ResumeGuard: @unchecked Sendable {
     private var claimed = false
     func claim() -> Bool {
         lock.lock(); defer { lock.unlock() }
-        if claimed { return false }
+        if claimed {
+            return false
+        }
         claimed = true
         return true
     }

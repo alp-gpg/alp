@@ -76,7 +76,9 @@ enum OutgoingMIMEParser {
         for line in text.components(separatedBy: separator) {
             let folded = line.first == " " || line.first == "\t"
             if folded {
-                if droppingMIMEVersion { continue }
+                if droppingMIMEVersion {
+                    continue
+                }
             } else {
                 let lower = line.lowercased()
                 if lower.hasPrefix("mime-version:") {
@@ -86,7 +88,11 @@ enum OutgoingMIMEParser {
                 droppingMIMEVersion = false
                 routingToContent = lower.hasPrefix("content-")
             }
-            if routingToContent { content.append(line) } else { outer.append(line) }
+            if routingToContent {
+                content.append(line)
+            } else {
+                outer.append(line)
+            }
         }
 
         var entity = Data(content.joined(separator: "\r\n").utf8)
@@ -157,7 +163,9 @@ enum OutgoingMIMEParser {
         var droppedAny = false
         for line in text.components(separatedBy: separator) {
             if line.first == " " || line.first == "\t" {
-                if dropping { continue } // folded continuation of a dropped header
+                if dropping {
+                    continue
+                } // folded continuation of a dropped header
                 kept.append(line)
                 continue
             }
@@ -236,7 +244,9 @@ enum OutgoingMIMEParser {
             // RFC 5322 folded continuation lines start with whitespace; they
             // belong to the previous header. Drop them when we drop the header.
             if line.first == " " || line.first == "\t" {
-                if skippingFolded { continue }
+                if skippingFolded {
+                    continue
+                }
                 keptLines.append(line)
                 continue
             }

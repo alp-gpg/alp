@@ -23,7 +23,9 @@ struct AlpApp: App {
             ContentView()
                 .environment(updateChecker)
                 .task {
-                    if automaticUpdateChecks { updateChecker.startAutomaticChecks() }
+                    if automaticUpdateChecks {
+                        updateChecker.startAutomaticChecks()
+                    }
                 }
         }
         .windowResizability(.contentSize)

@@ -26,8 +26,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func listAllKeys() async throws -> [GPGKeyInfo] {
         try await call { proxy, resume in
             proxy.listAllKeys { dataList, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(Self.decodeKeys(dataList))) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(Self.decodeKeys(dataList)))
+                }
             }
         }
     }
@@ -43,8 +46,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func pinentryConfigStatus() async throws -> PinentryConfig {
         try await call { proxy, resume in
             proxy.pinentryConfigStatus { path, isAlp, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(PinentryConfig(configuredPath: path, isAlpPinentry: isAlp))) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(PinentryConfig(configuredPath: path, isAlpPinentry: isAlp)))
+                }
             }
         }
     }
@@ -52,8 +58,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func installAlpPinentry(bundlePath: String) async throws {
         let _: Bool = try await call { proxy, resume in
             proxy.installAlpPinentry(bundlePath: bundlePath) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -61,8 +70,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func uninstallAlpPinentry() async throws {
         let _: Bool = try await call { proxy, resume in
             proxy.uninstallAlpPinentry { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -75,9 +87,13 @@ final class HelperXPCClient: @unchecked Sendable {
     func backupKey(fingerprint: String) async throws -> Data {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.backupKey(fingerprint: fingerprint) { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data { resume(.success(data)) }
-                else { resume(.failure(GPGError.xpcUnavailable)) }
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }
@@ -88,8 +104,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func restoreBackup(bundlePath: String) async throws -> [String] {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.restoreBackup(bundlePath: bundlePath) { fps, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(fps ?? [])) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(fps ?? []))
+                }
             }
         }
     }
@@ -97,8 +116,9 @@ final class HelperXPCClient: @unchecked Sendable {
     func checkHealth() async throws -> GPGHealthStatus {
         try await call { proxy, resume in
             proxy.checkHealth { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data {
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
                     do {
                         let status = try JSONDecoder().decode(GPGHealthStatus.self, from: data)
                         resume(.success(status))
@@ -117,8 +137,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func previewKey(_ armoredKey: Data) async throws -> [GPGKeyInfo] {
         try await call { proxy, resume in
             proxy.previewKey(armoredKey: armoredKey) { dataList, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(Self.decodeKeys(dataList))) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(Self.decodeKeys(dataList)))
+                }
             }
         }
     }
@@ -128,8 +151,9 @@ final class HelperXPCClient: @unchecked Sendable {
     func importKey(_ armoredKey: Data) async throws -> GPGImportResult {
         try await call { proxy, resume in
             proxy.importKey(armoredKey: armoredKey) { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data {
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
                     do {
                         let result = try JSONDecoder().decode(GPGImportResult.self, from: data)
                         resume(.success(result))
@@ -146,9 +170,13 @@ final class HelperXPCClient: @unchecked Sendable {
     func exportPublicKey(fingerprint: String) async throws -> Data {
         try await call { proxy, resume in
             proxy.exportPublicKey(fingerprint: fingerprint) { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data { resume(.success(data)) }
-                else { resume(.failure(GPGError.xpcUnavailable)) }
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }
@@ -158,9 +186,13 @@ final class HelperXPCClient: @unchecked Sendable {
     func exportSecretKey(fingerprint: String) async throws -> Data {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.exportSecretKey(fingerprint: fingerprint) { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data { resume(.success(data)) }
-                else { resume(.failure(GPGError.xpcUnavailable)) }
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }
@@ -168,8 +200,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func deletePublicKey(fingerprint: String) async throws {
         let _: Bool = try await call { proxy, resume in
             proxy.deletePublicKey(fingerprint: fingerprint) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -177,8 +212,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func deleteSecretKey(fingerprint: String) async throws {
         let _: Bool = try await call { proxy, resume in
             proxy.deleteSecretKey(fingerprint: fingerprint) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -196,9 +234,13 @@ final class HelperXPCClient: @unchecked Sendable {
                 comment: comment,
                 expiryDays: expiryDays,
             ) { fp, error in
-                if let error { resume(.failure(error)) }
-                else if let fp { resume(.success(fp)) }
-                else { resume(.failure(GPGError.xpcUnavailable)) }
+                if let error {
+                    resume(.failure(error))
+                } else if let fp {
+                    resume(.success(fp))
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }
@@ -206,8 +248,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func changePassphrase(fingerprint: String) async throws {
         let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.changePassphrase(fingerprint: fingerprint) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -215,8 +260,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func setExpiry(fingerprint: String, expiryDays: Int) async throws {
         let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.setExpiry(fingerprint: fingerprint, expiryDays: expiryDays) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -232,8 +280,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 algoTag: algoTag,
                 expiryDays: expiryDays,
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -249,8 +300,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 subkeyIndex: subkeyIndex,
                 reasonCode: reasonCode,
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -264,8 +318,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 fingerprint: fingerprint,
                 subkeyIndex: subkeyIndex,
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -279,8 +336,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 fingerprint: fingerprint,
                 subkeyIndices: subkeyIndices.map { NSNumber(value: $0) },
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -298,8 +358,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 email: email,
                 comment: comment,
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -307,8 +370,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func revokeUserID(fingerprint: String, uidIndex: Int) async throws {
         let _: Bool = try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.revokeUserID(fingerprint: fingerprint, uidIndex: uidIndex) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -324,8 +390,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 signerFingerprint: signer,
                 exportable: exportable,
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -333,8 +402,11 @@ final class HelperXPCClient: @unchecked Sendable {
     func setOwnerTrust(fingerprint: String, level: Int) async throws {
         let _: Bool = try await call { proxy, resume in
             proxy.setOwnerTrust(fingerprint: fingerprint, level: level) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -350,9 +422,13 @@ final class HelperXPCClient: @unchecked Sendable {
                 reasonCode: reasonCode,
                 description: description,
             ) { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data { resume(.success(data)) }
-                else { resume(.failure(GPGError.xpcUnavailable)) }
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }
@@ -360,9 +436,13 @@ final class HelperXPCClient: @unchecked Sendable {
     func generateRevocationCertificate(fingerprint: String) async throws -> Data {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.generateRevocationCertificate(fingerprint: fingerprint) { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data { resume(.success(data)) }
-                else { resume(.failure(GPGError.xpcUnavailable)) }
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(GPGError.xpcUnavailable))
+                }
             }
         }
     }
@@ -370,9 +450,13 @@ final class HelperXPCClient: @unchecked Sendable {
     func decrypt(_ data: Data) async throws -> (plaintext: Data, signer: String?, signerName: String?) {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.decrypt(data: data) { plain, signer, signerName, error in
-                if let error { resume(.failure(error)) }
-                else if let plain { resume(.success((plain, signer, signerName))) }
-                else { resume(.failure(GPGError.decryptionFailed("nil plaintext"))) }
+                if let error {
+                    resume(.failure(error))
+                } else if let plain {
+                    resume(.success((plain, signer, signerName)))
+                } else {
+                    resume(.failure(GPGError.decryptionFailed("nil plaintext")))
+                }
             }
         }
     }
@@ -383,8 +467,11 @@ final class HelperXPCClient: @unchecked Sendable {
     ) async throws -> (valid: Bool, signer: String?, signerName: String?) {
         try await call { proxy, resume in
             proxy.verify(data: data, signatureData: signature) { valid, signer, signerName, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success((valid, signer, signerName))) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success((valid, signer, signerName)))
+                }
             }
         }
     }
@@ -399,8 +486,11 @@ final class HelperXPCClient: @unchecked Sendable {
     ) async throws -> (signer: String?, signerName: String?) {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.decryptFile(inputPath: inputPath, outputPath: outputPath) { signer, signerName, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success((signer, signerName))) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success((signer, signerName)))
+                }
             }
         }
     }
@@ -418,8 +508,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 .verifyFile(inputPath: inputPath,
                             signaturePath: signaturePath)
                 { valid, signer, signerName, trust, error in
-                    if let error { resume(.failure(error)) }
-                    else { resume(.success((valid, signer, signerName, trust))) }
+                    if let error {
+                        resume(.failure(error))
+                    } else {
+                        resume(.success((valid, signer, signerName, trust)))
+                    }
                 }
         }
     }
@@ -436,8 +529,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 outputPath: outputPath,
                 signingFingerprint: signer,
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }
@@ -456,8 +552,11 @@ final class HelperXPCClient: @unchecked Sendable {
                 recipientFingerprints: recipients,
                 signingFingerprint: signer,
             ) { error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success(true)) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success(true))
+                }
             }
         }
     }

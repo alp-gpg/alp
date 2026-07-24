@@ -44,7 +44,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         guard !value.isEmpty else { return false }
         guard value.hasPrefix("/") else { return false }
         for scalar in value.unicodeScalars {
-            if scalar.value < 0x20 || scalar.value == 0x7F { return false }
+            if scalar.value < 0x20 || scalar.value == 0x7F {
+                return false
+            }
         }
         return true
     }
@@ -84,7 +86,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
                        "DBUS_SESSION_BUS_ADDRESS", "SSH_AUTH_SOCK", "TERM"]
         var env: [String: String] = [:]
         for key in allowed {
-            if let val = inherited[key] { env[key] = val }
+            if let val = inherited[key] {
+                env[key] = val
+            }
         }
         env["HOME"] = env["HOME"] ?? NSHomeDirectory()
         env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/opt/local/bin:/nix/var/nix/profiles/default/bin:/usr/local/MacGPG2/bin:/usr/bin:/bin"
@@ -157,10 +161,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         let watchdogQueue = Self.watchdogQueue
         nonisolated(unsafe) var didTimeOut = false
         let terminateItem = DispatchWorkItem {
-            if process.isRunning { didTimeOut = true; process.terminate() }
+            if process.isRunning {
+                didTimeOut = true; process.terminate()
+            }
         }
         let killItem = DispatchWorkItem {
-            if process.isRunning { didTimeOut = true; kill(process.processIdentifier, SIGKILL) }
+            if process.isRunning {
+                didTimeOut = true; kill(process.processIdentifier, SIGKILL)
+            }
         }
         watchdogQueue.asyncAfter(deadline: .now() + timeout, execute: terminateItem)
         watchdogQueue.asyncAfter(deadline: .now() + timeout + 5, execute: killItem)
@@ -779,7 +787,9 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
 
     static func isValidUserIDComponent(_ value: String) -> Bool {
         for scalar in value.unicodeScalars {
-            if scalar.value < 0x20 || scalar.value == 0x7F { return false }
+            if scalar.value < 0x20 || scalar.value == 0x7F {
+                return false
+            }
             if scalar == "<" || scalar == ">" || scalar == "(" || scalar == ")" {
                 return false
             }
@@ -1075,8 +1085,12 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         for i in 0 ..< max(v.count, m.count) {
             let a = i < v.count ? v[i] : 0
             let b = i < m.count ? m[i] : 0
-            if a > b { return true }
-            if a < b { return false }
+            if a > b {
+                return true
+            }
+            if a < b {
+                return false
+            }
         }
         return true // equal
     }

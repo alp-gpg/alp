@@ -75,7 +75,9 @@ enum WKDClient {
         do {
             let (data, response) = try await session.data(from: url)
             if let http = response as? HTTPURLResponse {
-                if http.statusCode == 404 { throw Error.notFound }
+                if http.statusCode == 404 {
+                    throw Error.notFound
+                }
                 guard (200 ... 299).contains(http.statusCode) else {
                     throw Error.httpError(http.statusCode)
                 }

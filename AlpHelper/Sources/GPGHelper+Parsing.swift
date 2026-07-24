@@ -36,16 +36,26 @@ extension GPGHelper {
             // <KEYWORD> <long_keyid> <username...>
             for keyword in ["GOODSIG", "EXPSIG", "EXPKEYSIG", "REVKEYSIG", "BADSIG"] {
                 guard let idx = parts.firstIndex(of: keyword) else { continue }
-                if parts.count > idx + 1 { signerKeyID = parts[idx + 1] }
+                if parts.count > idx + 1 {
+                    signerKeyID = parts[idx + 1]
+                }
                 if parts.count > idx + 2 {
                     let name = parts[(idx + 2)...].joined(separator: " ")
                         .trimmingCharacters(in: .whitespaces)
-                    if !name.isEmpty { displayName = name }
+                    if !name.isEmpty {
+                        displayName = name
+                    }
                 }
-                if keyword == "GOODSIG" { sawGood = true } else { sawBadOrError = true }
+                if keyword == "GOODSIG" {
+                    sawGood = true
+                } else {
+                    sawBadOrError = true
+                }
             }
             // ERRSIG carries no username (key missing / unsupported algo).
-            if parts.contains("ERRSIG") { sawBadOrError = true }
+            if parts.contains("ERRSIG") {
+                sawBadOrError = true
+            }
         }
 
         let isValid = sawGood && !sawBadOrError
@@ -187,7 +197,9 @@ extension GPGHelper {
                 pendingSubkey = pending
             } else if recordType == "fpr" {
                 if pendingSubkey != nil {
-                    if fields.count > 9 { pendingSubkey?.fingerprint = fields[9] }
+                    if fields.count > 9 {
+                        pendingSubkey?.fingerprint = fields[9]
+                    }
                 } else if primaryFingerprint == nil, fields.count > 9 {
                     primaryFingerprint = fields[9]
                 }
@@ -223,7 +235,9 @@ extension GPGHelper {
         if [18, 19, 22].contains(algoId), !curve.isEmpty {
             return curve.capitalized
         }
-        if !bits.isEmpty { return "\(name) \(bits)" }
+        if !bits.isEmpty {
+            return "\(name) \(bits)"
+        }
         return name
     }
 }

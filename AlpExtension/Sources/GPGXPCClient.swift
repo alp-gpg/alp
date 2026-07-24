@@ -31,9 +31,13 @@ final class GPGXPCClient: @unchecked Sendable {
     ) async throws -> Data {
         try await call { proxy, resume in
             proxy.encrypt(data: data, recipientFingerprints: recipients, signingFingerprint: signer) { result, error in
-                if let error { resume(.failure(error)) }
-                else if let result { resume(.success(result)) }
-                else { resume(.failure(GPGError.encodingError("nil result"))) }
+                if let error {
+                    resume(.failure(error))
+                } else if let result {
+                    resume(.success(result))
+                } else {
+                    resume(.failure(GPGError.encodingError("nil result")))
+                }
             }
         }
     }
@@ -41,9 +45,13 @@ final class GPGXPCClient: @unchecked Sendable {
     func decrypt(_ data: Data) async throws -> (plaintext: Data, signer: String?, signerName: String?) {
         try await call(timeout: Self.interactiveCallTimeout) { proxy, resume in
             proxy.decrypt(data: data) { plain, signer, signerName, error in
-                if let error { resume(.failure(error)) }
-                else if let plain { resume(.success((plain, signer, signerName))) }
-                else { resume(.failure(GPGError.decryptionFailed("nil result"))) }
+                if let error {
+                    resume(.failure(error))
+                } else if let plain {
+                    resume(.success((plain, signer, signerName)))
+                } else {
+                    resume(.failure(GPGError.decryptionFailed("nil result")))
+                }
             }
         }
     }
@@ -51,9 +59,13 @@ final class GPGXPCClient: @unchecked Sendable {
     func sign(_ data: Data, signer: String) async throws -> (signature: Data, micalg: String) {
         try await call { proxy, resume in
             proxy.sign(data: data, signingFingerprint: signer) { result, micalg, error in
-                if let error { resume(.failure(error)) }
-                else if let result { resume(.success((result, micalg ?? "pgp-sha256"))) }
-                else { resume(.failure(GPGError.encodingError("nil signature"))) }
+                if let error {
+                    resume(.failure(error))
+                } else if let result {
+                    resume(.success((result, micalg ?? "pgp-sha256")))
+                } else {
+                    resume(.failure(GPGError.encodingError("nil signature")))
+                }
             }
         }
     }
@@ -63,8 +75,11 @@ final class GPGXPCClient: @unchecked Sendable {
     {
         try await call { proxy, resume in
             proxy.verify(data: data, signatureData: signature) { valid, signer, signerName, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success((valid, signer, signerName))) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success((valid, signer, signerName)))
+                }
             }
         }
     }
@@ -72,8 +87,9 @@ final class GPGXPCClient: @unchecked Sendable {
     func listSecretKeys() async throws -> [GPGKeyInfo] {
         try await call { proxy, resume in
             proxy.listSecretKeys { dataList, error in
-                if let error { resume(.failure(error)) }
-                else {
+                if let error {
+                    resume(.failure(error))
+                } else {
                     let keys = (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
                     resume(.success(keys))
                 }
@@ -84,8 +100,9 @@ final class GPGXPCClient: @unchecked Sendable {
     func previewKey(_ armoredKey: Data) async throws -> [GPGKeyInfo] {
         try await call { proxy, resume in
             proxy.previewKey(armoredKey: armoredKey) { dataList, error in
-                if let error { resume(.failure(error)) }
-                else {
+                if let error {
+                    resume(.failure(error))
+                } else {
                     let keys = (dataList ?? []).compactMap { try? JSONDecoder().decode(GPGKeyInfo.self, from: $0) }
                     resume(.success(keys))
                 }
@@ -98,8 +115,9 @@ final class GPGXPCClient: @unchecked Sendable {
     func importKey(_ armoredKey: Data) async throws -> GPGImportResult {
         try await call { proxy, resume in
             proxy.importKey(armoredKey: armoredKey) { data, error in
-                if let error { resume(.failure(error)) }
-                else if let data {
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
                     do {
                         let result = try JSONDecoder().decode(GPGImportResult.self, from: data)
                         resume(.success(result))
@@ -116,8 +134,11 @@ final class GPGXPCClient: @unchecked Sendable {
     func publicKeyExists(email: String) async throws -> (found: Bool, fingerprint: String?) {
         try await call { proxy, resume in
             proxy.publicKeyExists(email: email) { found, fp, error in
-                if let error { resume(.failure(error)) }
-                else { resume(.success((found, fp))) }
+                if let error {
+                    resume(.failure(error))
+                } else {
+                    resume(.success((found, fp)))
+                }
             }
         }
     }

@@ -129,7 +129,9 @@ private func send(_ line: String) {
     let bytes = (line + "\n").data(using: .utf8) ?? Data()
     // Nothing left to talk to once the agent pipe is closed — exit cleanly
     // rather than crash on the next write.
-    if !writeRaw(bytes) { exit(EXIT_FAILURE) }
+    if !writeRaw(bytes) {
+        exit(EXIT_FAILURE)
+    }
 }
 
 private func sendOK(_ comment: String? = nil) {
@@ -163,7 +165,9 @@ private func readAssuanLine() -> String? {
         let chunk = stdinHandle.availableData
         if chunk.isEmpty {
             // EOF. Surface any trailing line without a newline, then nil.
-            if stdinBuffer.isEmpty { return nil }
+            if stdinBuffer.isEmpty {
+                return nil
+            }
             let trailing = String(data: stdinBuffer, encoding: .utf8)
             stdinBuffer.removeAll()
             return trailing
@@ -272,7 +276,9 @@ private func runAssuanLoop() {
 
     while let raw = readAssuanLine() {
         let line = raw.trimmingCharacters(in: .whitespaces)
-        if line.isEmpty || line.hasPrefix("#") { continue }
+        if line.isEmpty || line.hasPrefix("#") {
+            continue
+        }
 
         let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
         let command = parts[0].uppercased()
@@ -337,7 +343,11 @@ private func runAssuanLoop() {
             let snapshot = state
             var ok = false
             DispatchQueue.main.sync { ok = Prompt.confirm(state: snapshot, oneButton: oneButton) }
-            if ok { sendOK() } else { sendErr(83_886_194, "Not confirmed") }
+            if ok {
+                sendOK()
+            } else {
+                sendErr(83_886_194, "Not confirmed")
+            }
             state.error = nil
 
         case "MESSAGE":

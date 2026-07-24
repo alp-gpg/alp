@@ -32,9 +32,13 @@ struct XPCRoundtripTests {
                 recipientFingerprints: [fp],
                 signingFingerprint: fp,
             ) { data, error in
-                if let error { cont.resume(throwing: error) }
-                else if let data { cont.resume(returning: data) }
-                else { cont.resume(throwing: GPGError.encodingError("nil")) }
+                if let error {
+                    cont.resume(throwing: error)
+                } else if let data {
+                    cont.resume(returning: data)
+                } else {
+                    cont.resume(throwing: GPGError.encodingError("nil"))
+                }
             }
         }
         #expect(!result.isEmpty)
@@ -44,8 +48,11 @@ struct XPCRoundtripTests {
     func `nonisolated listSecretKeys bridge returns JSON-encoded array`() async throws {
         let dataList: [Data] = try await withCheckedThrowingContinuation { cont in
             helper.listSecretKeys { dataList, error in
-                if let error { cont.resume(throwing: error) }
-                else { cont.resume(returning: dataList ?? []) }
+                if let error {
+                    cont.resume(throwing: error)
+                } else {
+                    cont.resume(returning: dataList ?? [])
+                }
             }
         }
         #expect(!dataList.isEmpty)
@@ -62,9 +69,13 @@ struct XPCRoundtripTests {
 
         let (signature, micalg): (Data, String?) = try await withCheckedThrowingContinuation { cont in
             helper.sign(data: body, signingFingerprint: fp) { data, micalg, error in
-                if let error { cont.resume(throwing: error) }
-                else if let data { cont.resume(returning: (data, micalg)) }
-                else { cont.resume(throwing: GPGError.encodingError("nil signature")) }
+                if let error {
+                    cont.resume(throwing: error)
+                } else if let data {
+                    cont.resume(returning: (data, micalg))
+                } else {
+                    cont.resume(throwing: GPGError.encodingError("nil signature"))
+                }
             }
         }
         #expect(!signature.isEmpty)
@@ -81,9 +92,13 @@ struct XPCRoundtripTests {
 
         let result: (Data, String?, String?) = try await withCheckedThrowingContinuation { cont in
             helper.decrypt(data: ciphertext) { plain, signer, signerName, error in
-                if let error { cont.resume(throwing: error) }
-                else if let plain { cont.resume(returning: (plain, signer, signerName)) }
-                else { cont.resume(throwing: GPGError.decryptionFailed("nil")) }
+                if let error {
+                    cont.resume(throwing: error)
+                } else if let plain {
+                    cont.resume(returning: (plain, signer, signerName))
+                } else {
+                    cont.resume(throwing: GPGError.decryptionFailed("nil"))
+                }
             }
         }
         #expect(result.0 == plaintext)
@@ -115,9 +130,13 @@ struct XPCRoundtripTests {
         let exported = try await helper._exportPublicKey(fp)
         let resultData: Data = try await withCheckedThrowingContinuation { cont in
             helper.importKey(armoredKey: exported) { data, error in
-                if let error { cont.resume(throwing: error) }
-                else if let data { cont.resume(returning: data) }
-                else { cont.resume(throwing: GPGError.encodingError("nil")) }
+                if let error {
+                    cont.resume(throwing: error)
+                } else if let data {
+                    cont.resume(returning: data)
+                } else {
+                    cont.resume(throwing: GPGError.encodingError("nil"))
+                }
             }
         }
         let result = try JSONDecoder().decode(GPGImportResult.self, from: resultData)

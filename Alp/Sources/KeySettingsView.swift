@@ -34,7 +34,9 @@ struct KeySettingsView: View {
         let filtered = vm.filteredKeys(showExpired: showExpired)
         let searched = Self.matching(query: searchQuery, in: filtered)
         let sorted = searched.sorted { lhs, rhs in
-            if lhs.hasSecretKey != rhs.hasSecretKey { return lhs.hasSecretKey }
+            if lhs.hasSecretKey != rhs.hasSecretKey {
+                return lhs.hasSecretKey
+            }
             return lhs.displayName.localizedCompare(rhs.displayName) == .orderedAscending
         }
         return sorted.map { .primary($0) }
@@ -44,7 +46,9 @@ struct KeySettingsView: View {
     /// primary rows and their children so subkey selections work too.
     private func row(for id: KeyRow.ID) -> KeyRow? {
         for row in primaryRows {
-            if row.id == id { return row }
+            if row.id == id {
+                return row
+            }
             if let children = row.children {
                 for child in children where child.id == id {
                     return child
@@ -63,9 +67,15 @@ struct KeySettingsView: View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmed.isEmpty else { return keys }
         return keys.filter { key in
-            if key.fingerprint.lowercased().contains(trimmed) { return true }
-            if key.displayName.lowercased().contains(trimmed) { return true }
-            if key.emails.contains(where: { $0.contains(trimmed) }) { return true }
+            if key.fingerprint.lowercased().contains(trimmed) {
+                return true
+            }
+            if key.displayName.lowercased().contains(trimmed) {
+                return true
+            }
+            if key.emails.contains(where: { $0.contains(trimmed) }) {
+                return true
+            }
             return key.subkeys.contains { $0.fingerprint.lowercased().contains(trimmed) }
         }
     }
@@ -356,11 +366,19 @@ struct KeySettingsView: View {
     }
 
     private var actionErrorBinding: Binding<Bool> {
-        Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
+        Binding(get: { actionError != nil }, set: {
+            if !$0 {
+                actionError = nil
+            }
+        })
     }
 
     private var deleteConfirmBinding: Binding<Bool> {
-        Binding(get: { keyToDelete != nil }, set: { if !$0 { keyToDelete = nil } })
+        Binding(get: { keyToDelete != nil }, set: {
+            if !$0 {
+                keyToDelete = nil
+            }
+        })
     }
 
     private func startBatchRefresh() {
@@ -968,7 +986,9 @@ private struct RevokeKeySheet: View {
             .fixedSize(horizontal: false, vertical: true)
 
             HStack {
-                if isWorking { ProgressView().controlSize(.small) }
+                if isWorking {
+                    ProgressView().controlSize(.small)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)

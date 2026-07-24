@@ -25,9 +25,15 @@ enum KeyRow: Identifiable, Hashable {
     private static func subkeyLabel(for sub: GPGSubkey) -> String {
         let caps = sub.capabilities.lowercased()
         var roles: [String] = []
-        if caps.contains("s") { roles.append("Signing") }
-        if caps.contains("e") { roles.append("Encryption") }
-        if caps.contains("a") { roles.append("Authentication") }
+        if caps.contains("s") {
+            roles.append("Signing")
+        }
+        if caps.contains("e") {
+            roles.append("Encryption")
+        }
+        if caps.contains("a") {
+            roles.append("Authentication")
+        }
         let role = roles.isEmpty ? "Subkey" : "\(roles.joined(separator: " + ")) subkey"
         return sub.isRevoked ? "\(role) (revoked)" : role
     }
@@ -79,10 +85,18 @@ enum KeyRow: Identifiable, Hashable {
     private static func primaryIcons(from capabilities: String) -> [String] {
         var icons: [String] = []
         let caps = capabilities.lowercased()
-        if caps.contains("s") { icons.append("signature") }
-        if caps.contains("e") { icons.append("lock") }
-        if caps.contains("a") { icons.append("person.badge.key") }
-        if caps.contains("c") { icons.append("checkmark.seal") }
+        if caps.contains("s") {
+            icons.append("signature")
+        }
+        if caps.contains("e") {
+            icons.append("lock")
+        }
+        if caps.contains("a") {
+            icons.append("person.badge.key")
+        }
+        if caps.contains("c") {
+            icons.append("checkmark.seal")
+        }
         return icons
     }
 

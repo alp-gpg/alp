@@ -52,7 +52,9 @@ final class ComposeHandler: NSObject, MEComposeSessionHandler {
     }
 
     func viewController(for session: MEComposeSession) -> MEExtensionViewController {
-        if let existing = controller(forSessionID: session.sessionID) { return existing }
+        if let existing = controller(forSessionID: session.sessionID) {
+            return existing
+        }
         let vc = ComposeViewController()
         vc.configure(session: session)
         lock.withLock { controllers[session.sessionID] = vc }

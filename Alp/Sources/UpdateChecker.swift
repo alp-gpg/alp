@@ -99,7 +99,9 @@ final class UpdateChecker {
         for i in 0 ..< max(a.count, b.count) {
             let l = i < a.count ? a[i] : 0
             let r = i < b.count ? b[i] : 0
-            if l != r { return l > r }
+            if l != r {
+                return l > r
+            }
         }
         return false
     }
@@ -110,8 +112,12 @@ final class UpdateChecker {
         let minor = parts.count > 1 ? parts[1] : 0
         let patch = parts.count > 2 ? parts[2] : 0
         let target = OperatingSystemVersion(majorVersion: major, minorVersion: minor, patchVersion: patch)
-        if current.majorVersion != target.majorVersion { return current.majorVersion > target.majorVersion }
-        if current.minorVersion != target.minorVersion { return current.minorVersion > target.minorVersion }
+        if current.majorVersion != target.majorVersion {
+            return current.majorVersion > target.majorVersion
+        }
+        if current.minorVersion != target.minorVersion {
+            return current.minorVersion > target.minorVersion
+        }
         return current.patchVersion >= target.patchVersion
     }
 

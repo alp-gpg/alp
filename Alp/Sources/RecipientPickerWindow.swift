@@ -113,8 +113,11 @@ private struct RecipientPickerView: View {
                     Toggle(isOn: Binding(
                         get: { viewModel.selectedRecipients.contains(key.fingerprint) },
                         set: { isOn in
-                            if isOn { viewModel.selectedRecipients.insert(key.fingerprint) }
-                            else { viewModel.selectedRecipients.remove(key.fingerprint) }
+                            if isOn {
+                                viewModel.selectedRecipients.insert(key.fingerprint)
+                            } else {
+                                viewModel.selectedRecipients.remove(key.fingerprint)
+                            }
                         },
                     )) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -180,7 +183,9 @@ private final class ResumeOnce: @unchecked Sendable {
     private var claimed = false
     func claim() -> Bool {
         lock.lock(); defer { lock.unlock() }
-        if claimed { return false }
+        if claimed {
+            return false
+        }
         claimed = true
         return true
     }

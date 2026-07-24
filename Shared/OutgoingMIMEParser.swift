@@ -95,9 +95,7 @@ enum OutgoingMIMEParser {
             }
         }
 
-        // Re-emit with the message's own separator: Mail's outgoing serializer
-        // requires the bytes returned from encode() to keep the compose
-        // message's EOLs, or it ships an empty/flattened body (macOS 26.5).
+        // Re-emit with the message's own separator — see detectEOL.
         var entity = Data(content.joined(separator: separator).utf8)
         entity.append(Data((separator + separator).utf8))
         entity.append(body)
@@ -105,29 +103,27 @@ enum OutgoingMIMEParser {
     }
 
     /// The line terminator of the message's first line — CRLF unless that line
-    /// ends with a bare LF. Header EOL wins for mixed-EOL bytes because Mail's
-    /// serializer parses the header block first. Messages without any newline
-    /// default to CRLF (RFC 5322 wire format).
-    static func detectEOL(in data: Data) -> Data {
-        guard let lf = data.firstIndex(of: 0x0A) else { return Data([0x0D, 0x0A]) }
-        let crlf = lf > data.startIndex && data[data.index(before: lf)] == 0x0D
-        return crlf ? Data([0x0D, 0x0A]) : Data([0x0A])
+    /// ends with a bare LF. Everything Alp returns from `encode()` is emitted
+    /// with this terminator: Mail's outgoing serializer mis-parses a message
+    /// whose EOLs differ from the compose bytes and ships it with an
+    /// empty/flattened body (macOS 26.5 — verified on the wire; ref
+    /// mahaupt/mailgpg, which hit the same and matches EOL). Header EOL wins
+    /// for mixed-EOL bytes because the serializer parses headers first.
+    /// Messages without any newline default to CRLF (RFC 5322 wire format).
+    static func detectEOL(in data: Data) -> String {
+        guard let lf = data.firstIndex(of: 0x0A) else { return "\r\n" }
+        return lf > data.startIndex && data[data.index(before: lf)] == 0x0D ? "\r\n" : "\n"
     }
 
     /// Rewrites every line terminator to `eol` and guarantees the result ends
     /// with one. Byte-level — never round-trips through String — so non-UTF-8
     /// bytes survive untouched; only a 0x0D immediately before a 0x0A is
     /// treated as part of a terminator, a lone CR stays in its line.
-    static func normalizingEOL(_ data: Data, to eol: Data) -> Data {
-        var out = Data(capacity: data.count + eol.count)
+    static func normalizingEOL(_ data: Data, to eol: String) -> Data {
+        let eol = Data(eol.utf8)
         let lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
-        for (i, line) in lines.enumerated() {
-            let followedByLF = i < lines.count - 1
-            out.append(contentsOf: followedByLF && line.last == 0x0D ? line.dropLast() : line)
-            if followedByLF {
-                out.append(eol)
-            }
-        }
+            .map { $0.last == 0x0D ? $0.dropLast() : $0 }
+        var out = Data(lines.joined(separator: eol))
         if data.last != 0x0A {
             out.append(eol)
         }
@@ -255,7 +251,7 @@ enum OutgoingMIMEParser {
     /// headers from the header block and appends the inline-PGP defaults
     /// (`text/plain; charset=utf-8`, `7bit`). The caller is responsible for
     /// adding the trailing CRLFCRLF separator before the new body.
-    static func rewriteContentTypeHeaders(in headers: Data) -> Data {
+    static func rewriteContentTypeHeaders(in headers: Data, eol: String) -> Data {
         let rawText: String
         if let utf8 = String(data: headers, encoding: .utf8) {
             rawText = utf8
@@ -265,10 +261,8 @@ enum OutgoingMIMEParser {
             return headers
         }
 
-        // Split on CRLF if present, otherwise on LF; we don't care about
-        // round-tripping the exact line terminator because we re-emit CRLF.
-        let separator = rawText.contains("\r\n") ? "\r\n" : "\n"
-        let lines = rawText.components(separatedBy: separator)
+        // Split on whatever the input uses; re-emit with the message's `eol`.
+        let lines = rawText.components(separatedBy: rawText.contains("\r\n") ? "\r\n" : "\n")
 
         var keptLines: [String] = []
         keptLines.reserveCapacity(lines.count)
@@ -297,6 +291,6 @@ enum OutgoingMIMEParser {
 
         keptLines.append("Content-Type: text/plain; charset=utf-8")
         keptLines.append("Content-Transfer-Encoding: 7bit")
-        return Data(keptLines.joined(separator: "\r\n").utf8)
+        return Data(keptLines.joined(separator: eol).utf8)
     }
 }

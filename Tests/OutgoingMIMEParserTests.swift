@@ -229,7 +229,7 @@ struct OutgoingMIMEParserRewriteTests {
             "Subject: Hi\r\nFrom: a@b.co\r\nContent-Type: text/html; charset=us-ascii\r\nContent-Transfer-Encoding: quoted-printable"
                 .utf8,
         )
-        let out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers)
+        let out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers, eol: "\r\n")
         let text = String(data: out, encoding: .utf8) ?? ""
         #expect(text.contains("Subject: Hi"))
         #expect(text.contains("From: a@b.co"))
@@ -244,7 +244,7 @@ struct OutgoingMIMEParserRewriteTests {
         let headers = Data(
             "Subject: Hi\r\nContent-Type: text/html;\r\n charset=us-ascii;\r\n format=flowed\r\nFrom: a@b.co".utf8,
         )
-        let out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers)
+        let out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers, eol: "\r\n")
         let text = String(data: out, encoding: .utf8) ?? ""
         #expect(!text.contains("text/html"))
         #expect(!text.contains("format=flowed"))
@@ -257,7 +257,7 @@ struct OutgoingMIMEParserRewriteTests {
         let headers = Data(
             "Subject: Hi\r\nMessage-ID: <1234@local>\r\nDate: now\r\n".utf8,
         )
-        let out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers)
+        let out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers, eol: "\r\n")
         let text = String(data: out, encoding: .utf8) ?? ""
         #expect(text.contains("Message-ID: <1234@local>"))
         #expect(text.contains("Date: now"))
@@ -267,8 +267,8 @@ struct OutgoingMIMEParserRewriteTests {
 
 @Suite("OutgoingMIMEParser EOL handling (encode path)")
 struct OutgoingMIMEParserEOLTests {
-    private let crlf = Data([0x0D, 0x0A])
-    private let lf = Data([0x0A])
+    private let crlf = "\r\n"
+    private let lf = "\n"
 
     @Test
     func `detects CRLF, LF, and defaults to CRLF without newlines`() {
@@ -301,7 +301,7 @@ struct OutgoingMIMEParserEOLTests {
         // 0xFF makes the data invalid UTF-8; a String round-trip would drop or
         // mangle it. A lone CR not followed by LF belongs to its line.
         let data = Data([0x61, 0xFF, 0x0D, 0x62, 0x0A, 0x63]) // "a<FF><CR>b\nc"
-        let normalized = OutgoingMIMEParser.normalizingEOL(data, to: Data([0x0D, 0x0A]))
+        let normalized = OutgoingMIMEParser.normalizingEOL(data, to: "\r\n")
         #expect(normalized == Data([0x61, 0xFF, 0x0D, 0x62, 0x0D, 0x0A, 0x63, 0x0D, 0x0A]))
     }
 

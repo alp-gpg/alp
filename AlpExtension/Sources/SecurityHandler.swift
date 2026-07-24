@@ -277,14 +277,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             ? OutgoingMIMEParser.removingHeader("Bcc", from: rawData)
             : rawData
 
-        // Everything below emits the compose message's own line endings: Mail's
-        // outgoing serializer mis-parses a returned message whose EOLs differ
-        // from the compose bytes and ships it with an empty/flattened body
-        // (macOS 26.5 — verified on the wire; ref mahaupt/mailgpg, which hit
-        // the same and matches EOL). splitEnvelope preserves the original EOL;
-        // the builders join synthesized headers with `eol` and rewrite gpg's
-        // bare-LF armor to it. The detached signature stays valid either way
-        // because the helper signs in canonical text mode (--textmode).
+        // Everything below emits the compose message's own line endings — see
+        // OutgoingMIMEParser.detectEOL for why Mail requires that. The detached
+        // signature stays valid either way because the helper signs in
+        // canonical text mode (--textmode).
         let eol = OutgoingMIMEParser.detectEOL(in: rawData)
 
         // Inline mode is only viable for single-part text bodies because
@@ -359,23 +355,11 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     /// Replaces the body of an outgoing RFC 822 message with `body`, rewriting
     /// the Content-Type and Content-Transfer-Encoding headers to text/plain.
     /// Original headers like Subject, From, To, Date, Message-ID survive.
-    private nonisolated static func inlinePGPMessage(headers: Data, body: Data, eol: Data) -> Data {
-        let rewritten = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers)
-        // rewriteContentTypeHeaders re-emits CRLF joins; bring the header block
-        // to the message EOL (it ends with one), then a blank line, then armor.
-        var out = OutgoingMIMEParser.normalizingEOL(rewritten, to: eol)
-        out.append(eol)
-        out.append(normalizedArmor(body, eol: eol))
+    private nonisolated static func inlinePGPMessage(headers: Data, body: Data, eol: String) -> Data {
+        var out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers, eol: eol)
+        out.append(Data((eol + eol).utf8))
+        out.append(OutgoingMIMEParser.normalizingEOL(body, to: eol))
         return out
-    }
-
-    /// gpg emits bare-LF ASCII armor; rewrite it to the message EOL. Binary
-    /// (non-armored) output passes through untouched — EOL rewriting would
-    /// corrupt it. The helper always passes --armor today; this guard keeps
-    /// that invariant local instead of trusting it at a distance.
-    private nonisolated static func normalizedArmor(_ data: Data, eol: Data) -> Data {
-        data.starts(with: Data("-----BEGIN PGP".utf8))
-            ? OutgoingMIMEParser.normalizingEOL(data, to: eol) : data
     }
 
     // MARK: – PGP/MIME builders
@@ -383,10 +367,9 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     /// Builds a multipart/encrypted RFC 3156 message with the routing envelope
     /// on the outer message (Mail reads the sender from it to pick an account).
     /// Every line terminator is `eol` — the compose message's own, which Mail's
-    /// serializer requires (see buildOutgoing).
-    private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data, envelopeHeaders: Data, eol: Data) -> Data {
-        let ciphertext = normalizedArmor(ciphertext, eol: eol)
-        let sep = eol == Data([0x0A]) ? "\n" : "\r\n"
+    /// serializer requires (see OutgoingMIMEParser.detectEOL).
+    private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data, envelopeHeaders: Data, eol: String) -> Data {
+        let ciphertext = OutgoingMIMEParser.normalizingEOL(ciphertext, to: eol)
         let boundary = "AlpBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
             "MIME-Version: 1.0",
@@ -404,13 +387,13 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             "Content-Disposition: inline; filename=\"encrypted.asc\"",
             "",
             "", // trailing empty = extra EOL before body
-        ].joined(separator: sep)
+        ].joined(separator: eol)
         var out = Data()
         out.append(envelopeHeaders)
-        out.append(eol)
+        out.append(Data(eol.utf8))
         out.append(Data(header.utf8))
         out.append(ciphertext)
-        out.append(Data("\(sep)--\(boundary)--\(sep)".utf8))
+        out.append(Data("\(eol)--\(boundary)--\(eol)".utf8))
         return out
     }
 
@@ -420,10 +403,9 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     /// - `micalg` must match the actual hash algorithm used by gpg; we pass it
     ///   through from the SIG_CREATED status line rather than hardcoding it.
     private nonisolated static func pgpMIMESigned(
-        _ body: Data, signature: Data, micalg: String, envelopeHeaders: Data, eol: Data,
+        _ body: Data, signature: Data, micalg: String, envelopeHeaders: Data, eol: String,
     ) -> Data {
-        let signature = normalizedArmor(signature, eol: eol)
-        let sep = eol == Data([0x0A]) ? "\n" : "\r\n"
+        let signature = OutgoingMIMEParser.normalizingEOL(signature, to: eol)
         let boundary = "AlpSigBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
             "MIME-Version: 1.0",
@@ -431,10 +413,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             "",
             "--\(boundary)",
             "",
-        ].joined(separator: sep)
+        ].joined(separator: eol)
         var out = Data()
         out.append(envelopeHeaders)
-        out.append(eol)
+        out.append(Data(eol.utf8))
         out.append(Data(header.utf8))
         out.append(body)
         let sigHeader = [
@@ -445,10 +427,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             "Content-Disposition: attachment; filename=\"signature.asc\"",
             "",
             "",
-        ].joined(separator: sep)
+        ].joined(separator: eol)
         out.append(Data(sigHeader.utf8))
         out.append(signature)
-        out.append(Data("\(sep)--\(boundary)--\(sep)".utf8))
+        out.append(Data("\(eol)--\(boundary)--\(eol)".utf8))
         return out
     }
 

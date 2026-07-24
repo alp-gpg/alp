@@ -164,8 +164,17 @@ struct KeySettingsView: View {
                         .width(100)
 
                         TableColumn("keys.openpgp.org") { row in
+                            // Presence checks are opt-in; without them a nil
+                            // status means "unchecked", not "in flight" — show
+                            // a dash, not an eternal spinner.
                             if case let .primary(key) = row {
-                                KeyserverStatusLabel(status: vm.keyserverStatus[key.fingerprint])
+                                if vm.keyserverPresenceChecks {
+                                    KeyserverStatusLabel(status: vm.keyserverStatus[key.fingerprint])
+                                } else {
+                                    Text("—")
+                                        .foregroundStyle(.tertiary)
+                                        .accessibilityLabel("Publish status not checked")
+                                }
                             }
                         }
                         .width(140)
@@ -411,7 +420,10 @@ struct KeySettingsView: View {
             Button("Refresh from keyserver") {
                 Task { await refreshSingle(fingerprint: key.fingerprint) }
             }
-            .disabled(vm.keyserverStatus[key.fingerprint] != .found)
+            // With presence checks off we don't know the publish status —
+            // allow the attempt (it's an explicit user action) instead of
+            // permanently disabling refresh.
+            .disabled(vm.keyserverPresenceChecks && vm.keyserverStatus[key.fingerprint] != .found)
             Button("Reveal on keys.openpgp.org…") { openKeyserverPage(for: key.fingerprint) }
 
             Divider()

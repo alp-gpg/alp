@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/alp-gpg/alp/actions/workflows/ci.yml"><img src="https://github.com/alp-gpg/alp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/alp-gpg/alp/releases"><img src="https://img.shields.io/github/v/release/alp-gpg/alp?include_prereleases&label=release" alt="Latest release" /></a>
   <a href="https://github.com/alp-gpg/alp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later" /></a>
 </p>
 
@@ -20,7 +21,7 @@ Sign, encrypt, decrypt, and verify mail in Apple Mail using your existing GnuPG 
 
 ## What you get
 
-- **Mail just works.** Encrypted mail decrypts on read. Signed mail shows who signed it. The compose window grows a Sign / Encrypt / Inline toggle.
+- **Mail just works.** Encrypted mail decrypts on read. Signed mail shows who signed it. Sign and encrypt with Mail's own compose controls; Alp's compose popover adds the signing-key picker, inline-PGP mode, and missing-key warnings with one-click import.
 - **One-click key lookup.** Type a recipient who's not in your keyring and Alp finds them on `keys.openpgp.org` or via Web Key Directory.
 - **Full key manager** in Settings → Keys. Generate, set expiry, change passphrase, back up, revoke, publish — without leaving the app.
 - **Right-click on files** in Finder: Decrypt File, Verify File, Sign File, Encrypt File. Same for selected text via the macOS Services menu.
@@ -28,7 +29,7 @@ Sign, encrypt, decrypt, and verify mail in Apple Mail using your existing GnuPG 
 
 ## Installation
 
-Pre-built binaries aren't published yet — see [BUILDING.md](BUILDING.md) to build from source.
+Download the signed, notarized DMG from the [releases page](https://github.com/alp-gpg/alp/releases), open it, and drag Alp to Applications. To verify the download first, check it against the release's `SHA256SUMS` (GPG-signed — see [docs/VERIFYING.md](docs/VERIFYING.md)). Or build from source: [BUILDING.md](BUILDING.md).
 
 On first launch, **General → Setup** walks you through four steps: install the background helper, check your GnuPG install, enable the Mail extension in System Settings, and pick a default signing key. Each step has a button.
 

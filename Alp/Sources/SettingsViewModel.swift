@@ -104,20 +104,6 @@ final class SettingsViewModel {
         }
     }
 
-    var signByDefault: Bool = UserDefaults.standard.object(forKey: "signByDefault") as? Bool ?? false {
-        didSet {
-            UserDefaults.standard.set(signByDefault, forKey: "signByDefault")
-            Self.groupDefaults?.set(signByDefault, forKey: "signByDefault")
-        }
-    }
-
-    var encryptByDefault: Bool = UserDefaults.standard.bool(forKey: "encryptByDefault") {
-        didSet {
-            UserDefaults.standard.set(encryptByDefault, forKey: "encryptByDefault")
-            Self.groupDefaults?.set(encryptByDefault, forKey: "encryptByDefault")
-        }
-    }
-
     /// When ON, the user's own key is added as a recipient on every encrypted
     /// message so their Sent items stay readable. Defaults ON — the common
     /// "I can't read my own sent encrypted mail" complaint for naive PGP setups.
@@ -196,7 +182,9 @@ final class SettingsViewModel {
             helperUnresponsive = false
         } catch {
             healthStatus = nil
-            if previouslyHealthy { helperUnresponsive = true }
+            if previouslyHealthy {
+                helperUnresponsive = true
+            }
         }
     }
 

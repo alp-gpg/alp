@@ -82,7 +82,11 @@ struct GeneralSettingsView: View {
                     }
                 }
                 .onChange(of: automaticUpdateChecks) { _, on in
-                    if on { updateChecker.startAutomaticChecks() } else { updateChecker.stopAutomaticChecks() }
+                    if on {
+                        updateChecker.startAutomaticChecks()
+                    } else {
+                        updateChecker.stopAutomaticChecks()
+                    }
                 }
 
                 updateStatusView
@@ -132,8 +136,6 @@ struct GeneralSettingsView: View {
             }
 
             Section("Compose Defaults") {
-                Toggle("Sign messages by default", isOn: $vm.signByDefault)
-                Toggle("Encrypt messages by default", isOn: $vm.encryptByDefault)
                 Toggle("Encrypt to my own key", isOn: $vm.encryptToSelf)
                     .help("Adds your own key as a recipient so you can read your sent encrypted mail.")
             }

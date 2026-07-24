@@ -82,12 +82,15 @@ final class SettingsViewModel {
         return allKeys.filter { !$0.isExpired }
     }
 
-    /// Count of expired primary keys that are published on keys.openpgp.org —
-    /// i.e. the ones Alp can plausibly refresh. Used to drive the banner in
-    /// KeySettingsView.
+    /// Count of expired primary keys Alp can plausibly refresh from
+    /// keys.openpgp.org — drives the banner in KeySettingsView. With presence
+    /// checks on, only keys confirmed published; with checks off (the default)
+    /// publish status is unknown, so count every expired key and let the
+    /// refresh attempts discover which are published.
     var expiredPublishedCount: Int {
         allKeys.count(where: { key in
-            key.isExpired && keyserverStatus[key.fingerprint] == .found
+            key.isExpired &&
+                (!keyserverPresenceChecks || keyserverStatus[key.fingerprint] == .found)
         })
     }
 

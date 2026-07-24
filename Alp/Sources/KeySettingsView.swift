@@ -391,8 +391,11 @@ struct KeySettingsView: View {
     }
 
     private func startBatchRefresh() {
+        // Mirror expiredPublishedCount: with presence checks off the publish
+        // status is unknown — attempt every expired key rather than none.
         let candidates = vm.allKeys.filter { key in
-            key.isExpired && vm.keyserverStatus[key.fingerprint] == .found
+            key.isExpired &&
+                (!vm.keyserverPresenceChecks || vm.keyserverStatus[key.fingerprint] == .found)
         }
         vm.expiredRefresher.start(keys: candidates)
     }

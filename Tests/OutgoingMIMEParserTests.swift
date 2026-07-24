@@ -119,6 +119,19 @@ struct OutgoingMIMEParserEnvelopeTests {
 
 @Suite("OutgoingMIMEParser envelope merge (decode path)")
 struct OutgoingMIMEParserMergeTests {
+    @Test
+    func `LF-only original merges with LF splices, not mixed EOL`() throws {
+        let lfOriginal = Data(
+            "To: c@d.co\nSubject: hi\nMIME-Version: 1.0\nContent-Type: multipart/encrypted; boundary=\"X\"\n\n--X\n(parts)\n--X--\n"
+                .utf8,
+        )
+        let entity = Data("Content-Type: text/plain\n\nhello\n".utf8)
+        let merged = OutgoingMIMEParser.mergingEnvelope(of: lfOriginal, withEntity: entity)
+        let text = try #require(String(bytes: merged, encoding: .utf8))
+        #expect(!text.contains("\r\n"), "no CRLF may leak into an LF message")
+        #expect(text.contains("\nMIME-Version: 1.0\n"))
+    }
+
     /// The encrypted message as Mail hands it to decode — full envelope plus
     /// the multipart/encrypted framing.
     private let original = Data(

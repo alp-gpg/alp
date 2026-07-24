@@ -1,7 +1,9 @@
 import Foundation
 import Testing
 
-@Suite("Keys view model filter")
+// .serialized: two tests below toggle the shared `keyserverPresenceChecks`
+// standard-defaults key that SettingsViewModel reads at init.
+@Suite("Keys view model filter", .serialized)
 @MainActor
 struct KeysViewModelFilterTests {
     private func makeKey(
@@ -44,7 +46,11 @@ struct KeysViewModelFilterTests {
     }
 
     @Test
-    func `expiredPublishedCount counts only published expired primaries`() {
+    func `expiredPublishedCount counts only published expired primaries when checks are on`() {
+        // Seed the standard-defaults key SettingsViewModel reads at init;
+        // setting the property post-init would didSet-write the real app group.
+        UserDefaults.standard.set(true, forKey: "keyserverPresenceChecks")
+        defer { UserDefaults.standard.removeObject(forKey: "keyserverPresenceChecks") }
         let vm = SettingsViewModel()
         vm.allKeys = [
             makeKey(fp: String(repeating: "A", count: 40), expired: true, published: true, store: vm),
@@ -52,5 +58,19 @@ struct KeysViewModelFilterTests {
             makeKey(fp: String(repeating: "C", count: 40), expired: false, published: true, store: vm),
         ]
         #expect(vm.expiredPublishedCount == 1)
+    }
+
+    @Test
+    func `expiredPublishedCount counts every expired primary when checks are off`() {
+        // Default (checks off): publish status is unknown, so all expired keys
+        // are refresh candidates — the banner/batch path must not go dead.
+        UserDefaults.standard.removeObject(forKey: "keyserverPresenceChecks")
+        let vm = SettingsViewModel()
+        vm.allKeys = [
+            makeKey(fp: String(repeating: "A", count: 40), expired: true, published: true, store: vm),
+            makeKey(fp: String(repeating: "B", count: 40), expired: true, published: false, store: vm),
+            makeKey(fp: String(repeating: "C", count: 40), expired: false, published: true, store: vm),
+        ]
+        #expect(vm.expiredPublishedCount == 2)
     }
 }

@@ -146,14 +146,18 @@ enum OutgoingMIMEParser {
         let firstLine = String(data: entity.prefix(998), encoding: .utf8)?
             .components(separatedBy: .newlines).first?.lowercased() ?? ""
 
+        // Splice with the original message's own EOL — splitEnvelope re-emits
+        // outerHeaders with it, so hardcoded CRLF here would produce a
+        // mixed-EOL header block for bare-LF messages (see detectEOL).
+        let eol = detectEOL(in: original)
         var out = envelope.outerHeaders
-        out.append(Data("\r\nMIME-Version: 1.0\r\n".utf8))
+        out.append(Data("\(eol)MIME-Version: 1.0\(eol)".utf8))
         if firstLine.hasPrefix("content-") {
             out.append(entity)
         } else if firstLine.firstMatch(of: #/^[!-9;-~]+:/#) != nil {
             return entity // full message with its own envelope — use as-is
         } else {
-            out.append(Data("Content-Type: text/plain; charset=utf-8\r\n\r\n".utf8))
+            out.append(Data("Content-Type: text/plain; charset=utf-8\(eol)\(eol)".utf8))
             out.append(entity)
         }
         return out

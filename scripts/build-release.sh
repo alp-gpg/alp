@@ -48,7 +48,7 @@ tuist generate --no-open
 #
 # Inject the real version into both CFBundleVersion (CURRENT_PROJECT_VERSION)
 # and CFBundleShortVersionString (MARKETING_VERSION). The committed defaults are
-# "1"/"1.0"; without this injection every release would ship build "1" and the
+# "1"/last-release; without this injection every release would ship build "1" and the
 # update checker would never see a newer build to offer.
 # Archive with AUTOMATIC signing: Xcode 16+ requires provisioning profiles
 # for macOS app groups, and -allowProvisioningUpdates lets Xcode register the

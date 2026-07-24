@@ -25,7 +25,7 @@ let baseSettings: SettingsDictionary = [
     // injection every build shipped CFBundleVersion "1", so Sparkle never saw
     // a newer build and no update could be offered.
     "CURRENT_PROJECT_VERSION": "1",
-    "MARKETING_VERSION": "0.9.0",
+    "MARKETING_VERSION": "0.9.1",
     "VERSIONING_SYSTEM": "apple-generic",
 ]
 

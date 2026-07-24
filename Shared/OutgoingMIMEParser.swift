@@ -95,10 +95,43 @@ enum OutgoingMIMEParser {
             }
         }
 
-        var entity = Data(content.joined(separator: "\r\n").utf8)
-        entity.append(Data("\r\n\r\n".utf8))
+        // Re-emit with the message's own separator: Mail's outgoing serializer
+        // requires the bytes returned from encode() to keep the compose
+        // message's EOLs, or it ships an empty/flattened body (macOS 26.5).
+        var entity = Data(content.joined(separator: separator).utf8)
+        entity.append(Data((separator + separator).utf8))
         entity.append(body)
-        return Envelope(outerHeaders: Data(outer.joined(separator: "\r\n").utf8), contentEntity: entity)
+        return Envelope(outerHeaders: Data(outer.joined(separator: separator).utf8), contentEntity: entity)
+    }
+
+    /// The line terminator of the message's first line — CRLF unless that line
+    /// ends with a bare LF. Header EOL wins for mixed-EOL bytes because Mail's
+    /// serializer parses the header block first. Messages without any newline
+    /// default to CRLF (RFC 5322 wire format).
+    static func detectEOL(in data: Data) -> Data {
+        guard let lf = data.firstIndex(of: 0x0A) else { return Data([0x0D, 0x0A]) }
+        let crlf = lf > data.startIndex && data[data.index(before: lf)] == 0x0D
+        return crlf ? Data([0x0D, 0x0A]) : Data([0x0A])
+    }
+
+    /// Rewrites every line terminator to `eol` and guarantees the result ends
+    /// with one. Byte-level — never round-trips through String — so non-UTF-8
+    /// bytes survive untouched; only a 0x0D immediately before a 0x0A is
+    /// treated as part of a terminator, a lone CR stays in its line.
+    static func normalizingEOL(_ data: Data, to eol: Data) -> Data {
+        var out = Data(capacity: data.count + eol.count)
+        let lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
+        for (i, line) in lines.enumerated() {
+            let followedByLF = i < lines.count - 1
+            out.append(contentsOf: followedByLF && line.last == 0x0D ? line.dropLast() : line)
+            if followedByLF {
+                out.append(eol)
+            }
+        }
+        if data.last != 0x0A {
+            out.append(eol)
+        }
+        return out
     }
 
     /// Rebuilds a full RFC 822 message from the envelope of `original` (the

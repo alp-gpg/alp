@@ -252,8 +252,15 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         guard Self.isValidFingerprint(signer) else {
             throw GPGError.encodingError("invalid signer fingerprint")
         }
+        // --textmode makes a canonical-text signature (RFC 4880 class 0x01):
+        // gpg hashes the input with line endings normalized to CRLF, and
+        // verifiers do the same. The signature therefore stays valid whether
+        // the multipart/signed body ships with LF (what Mail's serializer
+        // requires locally when the compose bytes are LF) or CRLF (what SMTP
+        // puts on the wire). A binary signature over LF bytes would fail for
+        // every recipient once transport normalizes to CRLF.
         let args = [
-            "--batch", "--yes", "--armor",
+            "--batch", "--yes", "--armor", "--textmode",
             "--status-fd", "2",
             "--detach-sign", "--local-user", signer,
             "--output", "-",

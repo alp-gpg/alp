@@ -264,3 +264,55 @@ struct OutgoingMIMEParserRewriteTests {
         #expect(text.contains("Content-Type: text/plain; charset=utf-8"))
     }
 }
+
+@Suite("OutgoingMIMEParser EOL handling (encode path)")
+struct OutgoingMIMEParserEOLTests {
+    private let crlf = Data([0x0D, 0x0A])
+    private let lf = Data([0x0A])
+
+    @Test
+    func `detects CRLF, LF, and defaults to CRLF without newlines`() {
+        #expect(OutgoingMIMEParser.detectEOL(in: Data("To: x\r\nSubject: y\r\n\r\nbody".utf8)) == crlf)
+        #expect(OutgoingMIMEParser.detectEOL(in: Data("To: x\nSubject: y\n\nbody".utf8)) == lf)
+        #expect(OutgoingMIMEParser.detectEOL(in: Data("no newline at all".utf8)) == crlf)
+        #expect(OutgoingMIMEParser.detectEOL(in: Data()) == crlf)
+    }
+
+    @Test
+    func `mixed EOLs follow the header terminator`() {
+        // CRLF headers over an LF body — the serializer parses headers first,
+        // so the header EOL decides.
+        #expect(OutgoingMIMEParser.detectEOL(in: Data("To: x\r\nSubject: y\r\n\r\nline\nline\n".utf8)) == crlf)
+        #expect(OutgoingMIMEParser.detectEOL(in: Data("To: x\nSubject: y\n\nline\r\n".utf8)) == lf)
+    }
+
+    @Test
+    func `normalizes CRLF to LF and LF to CRLF, ensuring a trailing terminator`() {
+        let mixed = Data("a\r\nb\nc".utf8)
+        #expect(OutgoingMIMEParser.normalizingEOL(mixed, to: lf) == Data("a\nb\nc\n".utf8))
+        #expect(OutgoingMIMEParser.normalizingEOL(mixed, to: crlf) == Data("a\r\nb\r\nc\r\n".utf8))
+        // Already-normalized input round-trips unchanged (idempotent).
+        let canonical = Data("a\r\nb\r\n".utf8)
+        #expect(OutgoingMIMEParser.normalizingEOL(canonical, to: crlf) == canonical)
+    }
+
+    @Test
+    func `preserves non-UTF8 bytes and lone carriage returns`() {
+        // 0xFF makes the data invalid UTF-8; a String round-trip would drop or
+        // mangle it. A lone CR not followed by LF belongs to its line.
+        let data = Data([0x61, 0xFF, 0x0D, 0x62, 0x0A, 0x63]) // "a<FF><CR>b\nc"
+        let normalized = OutgoingMIMEParser.normalizingEOL(data, to: Data([0x0D, 0x0A]))
+        #expect(normalized == Data([0x61, 0xFF, 0x0D, 0x62, 0x0D, 0x0A, 0x63, 0x0D, 0x0A]))
+    }
+
+    @Test
+    func `LF-only message keeps LF through splitEnvelope`() throws {
+        let raw = Data("To: c@d.co\nSubject: hi\nContent-Type: text/plain\n\nBody\n".utf8)
+        let env = try #require(OutgoingMIMEParser.splitEnvelope(raw))
+        let outer = try #require(String(bytes: env.outerHeaders, encoding: .utf8))
+        let entity = try #require(String(bytes: env.contentEntity, encoding: .utf8))
+        #expect(!outer.contains("\r\n"))
+        #expect(!entity.contains("\r\n"))
+        #expect(entity.hasPrefix("Content-Type: text/plain\n\n"))
+    }
+}

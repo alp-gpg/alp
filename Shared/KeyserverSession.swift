@@ -29,17 +29,27 @@ enum KeyserverSession {
     }
 
     /// SHA-256 hashes of public key data (SecKeyCopyExternalRepresentation) for
-    /// Let's Encrypt intermediates serving keys.openpgp.org.
-    /// Pinning intermediates (not the leaf) so 90-day LE renewals don't break.
+    /// the chain serving keys.openpgp.org. Pinning above the leaf so 90-day LE
+    /// renewals don't break; three levels deep so a rotation at any single
+    /// level still matches another pin.
     ///
-    /// When the KeyserverPinningTests canary fails, it prints the current chain
-    /// hashes — update the intermediate (index [1]) hash here.
+    /// When the KeyserverPinningTests canary fails
+    /// (`TEST_RUNNER_ALP_RUN_NETWORK_TESTS=1`), it prints the current chain
+    /// hashes. Before pinning a new value, verify the certificate against an
+    /// authoritative source (https://letsencrypt.org/certs/) — do NOT pin
+    /// whatever the network serves. The 2026-07 rotation revealed the previous
+    /// "ISRG Root X2" pin had been mis-computed and never matched the real X2
+    /// key, so the intended rotation resilience silently didn't exist.
     static let pinnedSPKIHashes: Set<Data> = {
         let base64Hashes = [
-            // Let's Encrypt E7 intermediate (current, 2026-04-02)
-            "rkie3IcdRKBv2qLlYHQEeMKcAIAQdrQNm5/0EJq3AqE=",
-            // ISRG Root X2 (LE ECDSA root — stable, long-lived)
-            "9Fk6HgfMnM7/vtnBHcUhg1b3gU2bIpSd50XmKZkMbGA=",
+            // Let's Encrypt YE2 intermediate (current, verified 2026-07-24)
+            "uVnyjs8i8IbTN0j/dhQYuoLYVYfhIa0bczhBt2SP4GQ=",
+            // ISRG Root YE (new ISRG root, cross-signed by X2; survives
+            // intermediate rotation within the YE hierarchy)
+            "o8gmWo6hTNA1Y/ybI8g6rlbzT1YElMY4ivrLbjg5fyE=",
+            // ISRG Root X2 — verified against letsencrypt.org/certs/isrg-root-x2.pem
+            // (SHA-256 cert fingerprint 69:72:9B:8E:…:CB:14:70)
+            "+QHt0j1IgBr88CsiSG197KRsbAlprQDohcvoe1Za45Y=",
         ]
         return Set(base64Hashes.compactMap { Data(base64Encoded: $0) })
     }()

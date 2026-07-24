@@ -1,0 +1,1 @@
+{"version": "0.9.0", "minOS": "26.0", "url": "https://github.com/alp-gpg/alp/releases/download/v0.9.0/Alp-0.9.0.dmg", "sha256": "ef0333ce6a0feb025192b1e992740563f09352c93e1d7baab7d032d4632d468a", "notes": "First public release: PGP/MIME encrypt, sign, decrypt and verify in Apple Mail; keyserver + WKD key discovery; bundled pinentry."}

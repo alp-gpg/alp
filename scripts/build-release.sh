@@ -50,22 +50,26 @@ tuist generate --no-open
 # and CFBundleShortVersionString (MARKETING_VERSION). The committed defaults are
 # "1"/"1.0"; without this injection every release would ship build "1" and the
 # update checker would never see a newer build to offer.
+# Archive with AUTOMATIC signing: Xcode 16+ requires provisioning profiles
+# for macOS app groups, and -allowProvisioningUpdates lets Xcode register the
+# app IDs and mint the profiles itself (uses the account signed into Xcode).
+# The export step below re-signs everything with the Developer ID identity.
 xcodebuild archive \
     -workspace Alp.xcworkspace \
     -scheme Alp \
     -configuration Release \
     -archivePath "$ARCHIVE_PATH" \
     -destination 'generic/platform=macOS' \
+    -allowProvisioningUpdates \
     CURRENT_PROJECT_VERSION="$VERSION" \
     MARKETING_VERSION="$VERSION" \
-    CODE_SIGN_IDENTITY="${DEVELOPER_ID_APPLICATION}" \
-    CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM="${APPLE_TEAM_ID}"
 
-# Export
+# Export — re-signs for Developer ID distribution per ExportOptions.plist.
 xcodebuild -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
     -exportPath "$EXPORT_PATH" \
+    -allowProvisioningUpdates \
     -exportOptionsPlist scripts/ExportOptions.plist
 
 APP_PATH="$EXPORT_PATH/Alp.app"

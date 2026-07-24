@@ -7,7 +7,12 @@ let baseSettings: SettingsDictionary = [
     "ALWAYS_SEARCH_USER_PATHS": "NO",
     "ENABLE_TESTABILITY": "YES",
     "ENABLE_HARDENED_RUNTIME": "YES",
-    "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
+    // Off: the three embed-script phases (LaunchAgent plist, AlpHelper,
+    // AlpPinentry) copy first-party build products into the app bundle, and
+    // during `xcodebuild archive` the sandbox's allow-list expands build
+    // variables differently from the scripts themselves (BUILT_PRODUCTS_DIR
+    // symlinks into InstallationBuildProductsLocation), denying the copies.
+    "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
     "SWIFT_EMIT_LOC_STRINGS": "YES",
     // Generate type-safe accessors for every entry in
     // Localizable.xcstrings so SwiftUI code can reference strings as
@@ -49,9 +54,15 @@ let project = Project(
             scripts: [
                 // SMAppService.agent(plistName:) requires the launchd plist at
                 // Contents/Library/LaunchAgents/ inside the app bundle.
+                // Destination + outputPaths use TARGET_BUILD_DIR, not
+                // BUILT_PRODUCTS_DIR: during `xcodebuild archive` the two
+                // diverge and the script sandbox derives its allow-list from
+                // TARGET_BUILD_DIR — BUILT_PRODUCTS_DIR paths get denied.
+                // Sources stay BUILT_PRODUCTS_DIR (dependency products land
+                // there in both build styles).
                 .post(
                     script: """
-                    DEST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchAgents"
+                    DEST="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchAgents"
                     mkdir -p "$DEST"
                     cp "${SRCROOT}/AlpHelper/SupportingFiles/app.alp.Alp.helper.plist" \
                        "$DEST/app.alp.Alp.helper.plist"
@@ -59,7 +70,7 @@ let project = Project(
                     name: "Copy LaunchAgent plist",
                     inputPaths: ["$(SRCROOT)/AlpHelper/SupportingFiles/app.alp.Alp.helper.plist"],
                     outputPaths: [
-                        "$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.alp.Alp.helper.plist",
+                        "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.alp.Alp.helper.plist",
                     ],
                     basedOnDependencyAnalysis: false,
                 ),
@@ -69,11 +80,11 @@ let project = Project(
                 .post(
                     script: """
                     cp "${BUILT_PRODUCTS_DIR}/AlpHelper" \
-                       "${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/AlpHelper"
+                       "${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/MacOS/AlpHelper"
                     """,
                     name: "Embed AlpHelper",
                     inputPaths: ["$(BUILT_PRODUCTS_DIR)/AlpHelper"],
-                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AlpHelper"],
+                    outputPaths: ["$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/AlpHelper"],
                     basedOnDependencyAnalysis: false,
                 ),
                 // Embed the AlpPinentry command-line tool. gpg-agent will
@@ -83,13 +94,13 @@ let project = Project(
                 // inside the bundle.
                 .post(
                     script: """
-                    DEST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+                    DEST="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
                     mkdir -p "$DEST"
                     cp "${BUILT_PRODUCTS_DIR}/AlpPinentry" "$DEST/AlpPinentry"
                     """,
                     name: "Embed AlpPinentry",
                     inputPaths: ["$(BUILT_PRODUCTS_DIR)/AlpPinentry"],
-                    outputPaths: ["$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/AlpPinentry"],
+                    outputPaths: ["$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/AlpPinentry"],
                     basedOnDependencyAnalysis: false,
                 ),
             ],
@@ -170,6 +181,10 @@ let project = Project(
                 "ENABLE_HARDENED_RUNTIME": "YES",
                 "CREATE_INFOPLIST_SECTION_IN_BINARY": "YES",
                 "OTHER_CODE_SIGN_FLAGS": "--identifier app.alp.Alp.helper",
+                // Embedded in Alp.app by a script phase — must not install
+                // itself into the archive as a standalone product (that turns
+                // the archive multi-product and breaks -exportArchive).
+                "SKIP_INSTALL": "YES",
             ]),
         ),
 
@@ -194,6 +209,8 @@ let project = Project(
                 "ENABLE_HARDENED_RUNTIME": "YES",
                 "CREATE_INFOPLIST_SECTION_IN_BINARY": "YES",
                 "OTHER_CODE_SIGN_FLAGS": "--identifier app.alp.Alp.pinentry",
+                // Embedded in Alp.app by a script phase — see AlpHelper.
+                "SKIP_INSTALL": "YES",
             ]),
         ),
 

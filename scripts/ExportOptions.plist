@@ -7,6 +7,6 @@
 	<key>teamID</key>
 	<string>3G6WR6H4M5</string>
 	<key>signingStyle</key>
-	<string>manual</string>
+	<string>automatic</string>
 </dict>
 </plist>

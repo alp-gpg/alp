@@ -30,7 +30,7 @@ let baseSettings: SettingsDictionary = [
     // masquerade as a shipped version and the update checker never offers a
     // dev build its own release as an "update". Bump after each release.
     "CURRENT_PROJECT_VERSION": "1",
-    "MARKETING_VERSION": "0.9.2",
+    "MARKETING_VERSION": "0.9.3",
     "VERSIONING_SYSTEM": "apple-generic",
 ]
 

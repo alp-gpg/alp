@@ -5,7 +5,7 @@ import os.log
 
 private let log = Logger(subsystem: "app.alp.Alp", category: "UpdateChecker")
 
-/// Notification-only updater — the replacement for Sparkle.
+/// Notification-only updater.
 ///
 /// Fetches a signed `release.json` manifest, verifies an Ed25519 signature over
 /// the **raw JSON bytes** (never a re-serialized copy), and on a newer version

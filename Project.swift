@@ -22,10 +22,15 @@ let baseSettings: SettingsDictionary = [
     // Both version keys are placeholders for local/dev builds; the release
     // pipeline (scripts/build-release.sh) injects the real values from the git
     // tag via CURRENT_PROJECT_VERSION and MARKETING_VERSION. Without that
-    // injection every build shipped CFBundleVersion "1", so Sparkle never saw
+    // injection every build shipped CFBundleVersion "1", so the updater never saw
     // a newer build and no update could be offered.
+    //
+    // Convention: MARKETING_VERSION here is always one ahead of the last
+    // official release (the next release's number), so dev builds never
+    // masquerade as a shipped version and the update checker never offers a
+    // dev build its own release as an "update". Bump after each release.
     "CURRENT_PROJECT_VERSION": "1",
-    "MARKETING_VERSION": "0.9.1",
+    "MARKETING_VERSION": "0.9.2",
     "VERSIONING_SYSTEM": "apple-generic",
 ]
 
@@ -36,7 +41,7 @@ let project = Project(
         developmentRegion: "en",
     ),
     // No SPM dependencies: updates are handled by the in-house notification-only
-    // UpdateChecker (CryptoKit Ed25519 verification), not Sparkle. Keeping the
+    // UpdateChecker (in-house, CryptoKit Ed25519 verification). Keeping the
     // dependency count at zero is part of the "small enough to audit" pitch.
     settings: .settings(base: baseSettings),
     targets: [

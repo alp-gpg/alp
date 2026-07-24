@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Ed25519 signer for release.json — replaces Sparkle's sign_update.
+// Ed25519 signer for release.json.
 // No external dependencies beyond CryptoKit (shipped with macOS).
 //
 // Usage: sign-release.swift <manifest-path>

@@ -26,7 +26,7 @@
         <false/>
     </dict>
     <!--
-        Notification-only updater config (replaced Sparkle). AlpUpdateFeedURL
+        Notification-only updater config. AlpUpdateFeedURL
         serves a signed release.json; AlpUpdatePublicKey is the base64 Ed25519
         public key (32 raw bytes) used by UpdateChecker to verify the manifest
         signature with CryptoKit. Auto-checks are opt-in via Settings → Updates

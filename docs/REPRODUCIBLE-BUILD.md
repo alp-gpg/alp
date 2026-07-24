@@ -18,7 +18,7 @@ inputs match:
   the same `Project.swift`.
 - **Dependency versions.** None — Alp has **zero** third-party Swift
   package dependencies. Updates are handled by the in-house, notification-only
-  `UpdateChecker` (CryptoKit), not Sparkle.
+  `UpdateChecker` (CryptoKit) — an in-house, notification-only updater.
 - **Assets and Info.plist.** Captured by Tuist; no per-machine variance.
 
 ## What is not reproducible (and why)

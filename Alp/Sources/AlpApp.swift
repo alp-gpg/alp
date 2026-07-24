@@ -8,7 +8,7 @@ struct AlpApp: App {
     /// implicitly-unwrapped global is still nil that early in launch.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    /// Notification-only updater (replaced Sparkle). Shared so the General
+    /// Notification-only updater. Shared so the General
     /// settings pane can show the current update state and the menu can
     /// trigger a manual check.
     @State private var updateChecker = UpdateChecker()

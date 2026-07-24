@@ -107,7 +107,7 @@ create-dmg \
 codesign --force --sign "${DEVELOPER_ID_APPLICATION}" "$DMG_PATH"
 
 # Notarize and staple the DMG itself so Gatekeeper clears it offline (the
-# common case: a user downloads the DMG directly rather than via Sparkle).
+# common case: a user downloads the DMG directly from the release page).
 echo "==> Notarizing DMG..."
 xcrun notarytool submit "$DMG_PATH" \
     --keychain-profile "$NOTARY_PROFILE" \
@@ -149,7 +149,7 @@ PY
 echo "==> Wrote $RELEASE_JSON"
 cat "$RELEASE_JSON"; echo
 
-# Sign release.json with Ed25519 using CryptoKit (no Sparkle dependency).
+# Sign release.json with Ed25519 using CryptoKit (no dependencies).
 # The private key is a base64-encoded 32-byte raw Ed25519 seed, provided
 # via the ALP_UPDATE_PRIVATE_KEY env var. The matching public key is
 # embedded in the app as AlpUpdatePublicKey in Info.plist; UpdateChecker

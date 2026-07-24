@@ -17,7 +17,7 @@ it probably doesn't belong. When unsure, open an issue before writing code.
   filesystem — all gpg work goes through the XPC `AlpHelper`. See the target table in
   CONTRIBUTING.md.
 - **Don't add dependencies.** Alp is intentionally dependency-light (the updater is
-  in-house, not Sparkle). Reach for the standard library and platform APIs first.
+  in-house). Reach for the standard library and platform APIs first.
 - **Don't weaken** code signing, entitlements, or the gpg invocation boundary to make
   something build or a test pass. Ask instead.
 - **Keyserver and WKD lookups are client-side, on purpose.** Alp fetches keys over

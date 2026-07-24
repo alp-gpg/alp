@@ -32,7 +32,7 @@
     <key>AlpUpdateFeedURL</key>
     <string>https://alp-gpg.github.io/alp/release.json</string>
     <key>AlpUpdatePublicKey</key>
-    <string>x1JEeu9YAmQj4qXAdlxw0Y9KiizUVwJQzUcAVmajMuQ=</string>
+    <string>mGXrcpPIoABazDvO/3z4YA7G4SBclskQm6MOdKWvmwc=</string>
     <key>NSServices</key>
     <array>
         <dict>

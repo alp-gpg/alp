@@ -117,7 +117,7 @@ swift -e 'import CryptoKit; let k = Curve25519.Signing.PrivateKey(); print("Priv
 1. Store the **Private** value in the keychain — `build-release.sh` reads it
    from there (or from `$ALP_UPDATE_PRIVATE_KEY` if set):
    ```bash
-   security add-generic-password -s alp-update -w '<private-base64>'
+   security add-generic-password -a alp -s alp-update -w '<private-base64>'
    ```
 2. Copy the **Public** value into `Alp/SupportingFiles/Info.plist` as the
    `AlpUpdatePublicKey` value. Commit it.

@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# CI only reads the repo (checkout, build, test, lint) — pin the token to
+# read-only so a compromised action or script can't write to the repo.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

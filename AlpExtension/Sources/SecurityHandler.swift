@@ -86,7 +86,9 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             for email in emails {
                 do {
                     let (found, _) = try await GPGXPCClient.shared.publicKeyExists(email: email)
-                    if !found { missingEmails.append(email) }
+                    if !found {
+                        missingEmails.append(email)
+                    }
                 } catch GPGError.xpcUnavailable {
                     helperDown = true
                     break
@@ -301,7 +303,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                     signer: shouldSign ? signerFingerprint : nil,
                 )
                 return MEEncodedOutgoingMessage(
-                    rawData: inlinePGPMessage(headers: parsed.headers, body: ciphertext),
+                    rawData: matchingEOL(
+                        inlinePGPMessage(headers: parsed.headers, body: ciphertext),
+                        original: rawData,
+                    ),
                     isSigned: shouldSign, isEncrypted: true,
                 )
             }
@@ -316,7 +321,10 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
                 signer: shouldSign ? signerFingerprint : nil,
             )
             return MEEncodedOutgoingMessage(
-                rawData: pgpMIMEEncrypted(ciphertext, envelopeHeaders: envelope.outerHeaders),
+                rawData: matchingEOL(
+                    pgpMIMEEncrypted(ciphertext, envelopeHeaders: envelope.outerHeaders),
+                    original: rawData,
+                ),
                 isSigned: shouldSign, isEncrypted: true,
             )
         }
@@ -326,12 +334,18 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
             guard let envelope = OutgoingMIMEParser.splitEnvelope(payload) else {
                 throw GPGError.encodingError("could not split outgoing message headers")
             }
-            let canonicalBody = canonicalizeForSigning(envelope.contentEntity)
+            // Canonicalize to the compose message's EOL and sign THOSE bytes, so
+            // the detached signature still covers the exact bytes that ship after
+            // matchingEOL normalizes the whole message.
+            let canonicalBody = matchingEOL(canonicalizeCRLF(envelope.contentEntity), original: rawData)
             let (signature, micalg) = try await GPGXPCClient.shared.sign(canonicalBody, signer: fp)
             return MEEncodedOutgoingMessage(
-                rawData: pgpMIMESigned(
-                    canonicalBody, signature: signature, micalg: micalg,
-                    envelopeHeaders: envelope.outerHeaders,
+                rawData: matchingEOL(
+                    pgpMIMESigned(
+                        canonicalBody, signature: signature, micalg: micalg,
+                        envelopeHeaders: envelope.outerHeaders,
+                    ),
+                    original: rawData,
                 ),
                 isSigned: true, isEncrypted: false,
             )
@@ -348,17 +362,36 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
         var out = Data()
         out.append(rewritten)
         out.appendUTF8("\r\n\r\n")
-        out.append(body)
+        // CRLF-normalize gpg's LF-terminated armor — see pgpMIMEEncrypted.
+        out.append(canonicalizeCRLF(body))
         return out
+    }
+
+    /// Match `built`'s line endings to the compose message's. Mail.app's
+    /// outgoing MIME serializer mis-parses a message whose EOLs differ from the
+    /// compose bytes and ships it with an empty/flattened body on transmit
+    /// (macOS 26.5 — verified on the wire; ref mahaupt/mailgpg, which hit the
+    /// same and matches EOL). We build with CRLF for readability, then convert
+    /// the whole message to whatever the original used.
+    private nonisolated static func matchingEOL(_ built: Data, original: Data?) -> Data {
+        let wantCRLF = original.map { $0.range(of: Data([0x0D, 0x0A])) != nil } ?? true
+        guard let text = String(data: built, encoding: .utf8) else { return built }
+        var normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        if wantCRLF {
+            normalized = normalized.replacingOccurrences(of: "\n", with: "\r\n")
+        }
+        return Data(normalized.utf8)
     }
 
     // MARK: – PGP/MIME builders
 
-    /// Builds a multipart/encrypted RFC 3156 message.
-    /// Ciphertext is appended as bytes — never round-tripped through String —
-    /// so ASCII-armored output is preserved exactly and binary ciphertext is
-    /// never silently replaced with an empty string.
+    /// Builds a multipart/encrypted RFC 3156 message with the routing envelope
+    /// on the outer message (Mail reads the sender from it to pick an account).
+    ///
+    /// The armored ciphertext is CRLF-normalized before embedding because MIME
+    /// requires CRLF line endings (RFC 3156 §5) and gpg emits bare-LF armor.
     private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data, envelopeHeaders: Data) -> Data {
+        let ciphertext = canonicalizeCRLF(ciphertext)
         let boundary = "AlpBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
             "MIME-Version: 1.0",
@@ -387,13 +420,17 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     }
 
     /// Builds a multipart/signed RFC 3156 message.
-    /// - `body` is expected to already be canonicalized (CRLF) because the same
-    ///   bytes are hashed by gpg for the signature.
+    /// - `body` is expected to already be canonicalized to the shipping EOL
+    ///   because the same bytes are hashed by gpg for the signature.
     /// - `micalg` must match the actual hash algorithm used by gpg; we pass it
     ///   through from the SIG_CREATED status line rather than hardcoding it.
     private nonisolated static func pgpMIMESigned(
         _ body: Data, signature: Data, micalg: String, envelopeHeaders: Data,
     ) -> Data {
+        // CRLF-normalize the LF-terminated armor gpg emits — MIME requires CRLF
+        // (RFC 3156 §5). The body is already canonical CRLF (it was hashed that
+        // way for the signature).
+        let signature = canonicalizeCRLF(signature)
         let boundary = "AlpSigBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
             "MIME-Version: 1.0",
@@ -426,17 +463,21 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     /// CRLF and ensure a trailing CRLF. The same byte sequence is then hashed
     /// for the signature and included in the multipart/signed body, so a
     /// receiving client sees identical bytes in both.
-    private nonisolated static func canonicalizeForSigning(_ data: Data) -> Data {
+    private nonisolated static func canonicalizeCRLF(_ data: Data) -> Data {
         guard let text = String(data: data, encoding: .utf8) else {
             // If the body isn't valid UTF-8 we cannot safely normalize line
             // endings — just guarantee a trailing CRLF and return the bytes.
             var out = data
-            if !out.hasSuffix([0x0D, 0x0A]) { out.append(contentsOf: [0x0D, 0x0A]) }
+            if !out.hasSuffix([0x0D, 0x0A]) {
+                out.append(contentsOf: [0x0D, 0x0A])
+            }
             return out
         }
         var normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
         normalized = normalized.replacingOccurrences(of: "\n", with: "\r\n")
-        if !normalized.hasSuffix("\r\n") { normalized += "\r\n" }
+        if !normalized.hasSuffix("\r\n") {
+            normalized += "\r\n"
+        }
         return Data(normalized.utf8)
     }
 

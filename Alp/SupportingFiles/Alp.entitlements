@@ -2,15 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Not sandboxed. Since macOS 14.2 a sandboxed app may only register an
+	     SMAppService agent/daemon whose target executable is *also* sandboxed
+	     ("deny(1) job-creation", surfaced as EPERM "Operation not permitted").
+	     AlpHelper must stay unsandboxed to exec gpg, so the app gives up its
+	     own sandbox instead. Alp is Developer ID / notarized, never App Store;
+	     the untrusted-input surface is AlpExtension, which stays sandboxed. -->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.app.alp.Alp</string>
 	</array>
-	<key>com.apple.security.files.user-selected.read-write</key>
-	<true/>
-	<key>com.apple.security.network.client</key>
-	<true/>
 </dict>
 </plist>

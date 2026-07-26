@@ -53,6 +53,9 @@ xcodebuild build \
 ## First Run
 
 1. In the running app, click **"Install Helper"** to register the background agent.
+   Debug builds use `SMAppService` exactly like release builds, so the helper shows
+   up in System Settings → General → Login Items. Each build location registers its
+   own record — click **"Uninstall Helper"** before moving or deleting a build.
 2. Open **Mail → Settings → Extensions** and enable **Alp**.
 3. Compose a new message — the Sign/Encrypt toolbar should appear.
 

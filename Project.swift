@@ -114,33 +114,19 @@ let project = Project(
                 .target(name: "AlpHelper"),
                 .target(name: "AlpPinentry"),
             ],
-            settings: .settings(
-                base: [
-                    "CODE_SIGN_IDENTITY": "Apple Development",
-                    "CODE_SIGN_STYLE": "Automatic",
-                    "DEVELOPMENT_TEAM": "3G6WR6H4M5",
-                    "ENABLE_HARDENED_RUNTIME": "YES",
-                    // Xcode 26 surfaces app-group membership in the
-                    // provisioning profile via this flag. Without it the
-                    // settings-side capabilities pane keeps nagging.
-                    "ENABLE_APP_GROUPS": "YES",
-                ],
-                configurations: [
-                    .debug(
-                        name: "Debug",
-                        settings: [
-                            // Disable sandbox so launchctl bootstrap works from DerivedData.
-                            "CODE_SIGN_ENTITLEMENTS": "Alp/SupportingFiles/AlpDebug.entitlements",
-                        ],
-                    ),
-                    .release(
-                        name: "Release",
-                        settings: [
-                            "CODE_SIGN_ENTITLEMENTS": "Alp/SupportingFiles/Alp.entitlements",
-                        ],
-                    ),
-                ],
-            ),
+            // Debug and Release share one (unsandboxed) entitlements file — the
+            // sandbox/no-sandbox split used to hide the fact that release builds
+            // could never register the helper.
+            settings: .settings(base: [
+                "CODE_SIGN_IDENTITY": "Apple Development",
+                "CODE_SIGN_STYLE": "Automatic",
+                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
+                "ENABLE_HARDENED_RUNTIME": "YES",
+                // Xcode 26 surfaces app-group membership in the
+                // provisioning profile via this flag. Without it the
+                // settings-side capabilities pane keeps nagging.
+                "ENABLE_APP_GROUPS": "YES",
+            ]),
         ),
 
         // ── Mail Extension ─────────────────────────────────────────────

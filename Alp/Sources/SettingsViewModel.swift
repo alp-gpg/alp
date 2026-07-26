@@ -213,13 +213,7 @@ final class SettingsViewModel {
     var helperError: String?
 
     func load() async {
-        #if DEBUG
-            // Don't assume helper is running — check if we can actually reach it.
-            // The user must click "Install Helper" to bootstrap via launchctl.
-            helperStatus = .notRegistered
-        #else
-            helperStatus = helperService.status
-        #endif
+        helperStatus = helperService.status
         if pinningObserver == nil {
             pinningObserver = NotificationCenter.default.addObserver(
                 forName: KeyserverSession.pinningDegradedNotification,
@@ -268,11 +262,7 @@ final class SettingsViewModel {
         helperError = nil
         do {
             try HelperInstaller.install()
-            #if DEBUG
-                helperStatus = .enabled
-            #else
-                helperStatus = helperService.status
-            #endif
+            helperStatus = helperService.status
             Task {
                 try? await Task.sleep(for: .milliseconds(500))
                 await refreshKeys()
@@ -291,11 +281,7 @@ final class SettingsViewModel {
         helperError = nil
         do {
             try HelperInstaller.uninstall()
-            #if DEBUG
-                helperStatus = .notRegistered
-            #else
-                helperStatus = helperService.status
-            #endif
+            helperStatus = helperService.status
             keyserverChecks.forEach { $0.cancel() }
             keyserverChecks = []
             allKeys = []

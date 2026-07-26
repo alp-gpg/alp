@@ -30,7 +30,7 @@ Understanding the target boundaries helps when deciding where code belongs:
 
 | Target         | Sandbox | Can access                                         |
 | -------------- | ------- | -------------------------------------------------- |
-| `Alp`          | Yes     | SwiftUI, ServiceManagement, XPC to helper          |
+| `Alp`          | **No**  | SwiftUI, ServiceManagement, XPC to helper          |
 | `AlpExtension` | Yes     | MailKit, SwiftUI, XPC to helper, HTTPS (keyserver) |
 | `AlpHelper`    | **No**  | Foundation, Process (gpg binary), filesystem       |
 | `AlpPinentry`  | **No**  | Cocoa (secure text field); runs under gpg-agent    |
@@ -38,6 +38,7 @@ Understanding the target boundaries helps when deciding where code belongs:
 
 - Code that both the extension and helper need goes in `Shared/`.
 - The extension **cannot** call `Process()` or access the filesystem — all gpg operations must go through the XPC helper.
+- `Alp` is deliberately **not** sandboxed: since macOS 14.2 a sandboxed app can only register an SMAppService agent whose target executable is also sandboxed, and `AlpHelper` must stay unsandboxed to exec gpg. Sandboxing the app again breaks helper installation with `deny(1) job-creation` / "Operation not permitted". Keep gpg work in the helper anyway — the app talking to gpg directly is still a bug.
 - MailKit protocol methods must be `nonisolated`. MailKit calls from its own XPC queue, not the main thread.
 
 ## Known Pitfalls

@@ -47,6 +47,30 @@ and `AlpHelper/Sources/main.swift`; the requirement strings live in
 `Shared/BuildConfig.swift`). A binary
 signed by a different team cannot impersonate the helper.
 
+### Which components are sandboxed
+
+Check for yourself:
+
+```bash
+codesign -d --entitlements - /Applications/Alp.app
+codesign -d --entitlements - /Applications/Alp.app/Contents/PlugIns/AlpExtension.appex
+```
+
+`AlpExtension` — the only component that ever sees untrusted input, i.e.
+mail from strangers — **is** sandboxed. The app and the helper are not.
+
+That is a deliberate trade, not an oversight. Since macOS 14.2 a sandboxed
+app may only register an `SMAppService` agent whose target executable is
+also sandboxed. `AlpHelper` has to exec `gpg`, so it cannot be sandboxed —
+and while the app was sandboxed, installing the helper failed for everyone
+with `deny(1) job-creation` ("Operation not permitted"). Alp is Developer ID
+signed and notarized, never App Store, so the app sandbox is optional; the
+part that matters — untrusted content stays confined — is unchanged.
+
+Hardened runtime stays on for every binary, and the XPC code-signing
+requirement above is what actually keeps other processes away from the
+helper.
+
 ## 3. Confirm Alp does not phone home on first launch
 
 Alp's update check is **opt-in**. A fresh install makes zero
@@ -91,7 +115,7 @@ Swift that map cleanly to the surface area documented in `README.md`.
 | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `AlpHelper/Sources/GPGHelper.swift`                                             | Drives the `gpg` binary via `Process`. All gpg invocations are constructed here — read this file to know exactly which gpg flags Alp can call. |
 | `AlpHelper/Sources/GPGHelper+FileOps.swift`                                     | File-level encrypt/decrypt/sign/verify. Streams gpg via `--output <path>`.                                                                     |
-| `Shared/GPGHelperProtocol.swift`                                                | The XPC API exposed to the sandboxed app and Mail extension. Nothing outside this protocol can be called over XPC.                             |
+| `Shared/GPGHelperProtocol.swift`                                                | The XPC API exposed to the app and the sandboxed Mail extension. Nothing outside this protocol can be called over XPC.                         |
 | `Alp/Sources/ServicesProvider.swift`                                            | The macOS Services menu entry points (`Decrypt with Alp`, `Decrypt File with Alp`, etc.).                                                      |
 | `AlpExtension/Sources/SecurityHandler.swift`                                    | MailKit's hook for incoming/outgoing messages.                                                                                                 |
 | `Alp/Sources/HelperXPCClient.swift` / `AlpExtension/Sources/GPGXPCClient.swift` | The two XPC clients (app + Mail extension) that talk to the helper.                                                                            |

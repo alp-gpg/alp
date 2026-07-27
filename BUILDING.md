@@ -56,6 +56,9 @@ xcodebuild build \
    Debug builds use `SMAppService` exactly like release builds, so the helper shows
    up in System Settings → General → Login Items. Each build location registers its
    own record — click **"Uninstall Helper"** before moving or deleting a build.
+   BTM pins the registration to the exact bundle, so after a rebuild the helper can
+   fail to spawn (`launchctl print gui/$UID/app.alp.Alp.helper` shows exit code 78
+   or "Invalid or missing Program") — uninstall and reinstall the helper to fix it.
 2. Open **Mail → Settings → Extensions** and enable **Alp**.
 3. Compose a new message — the Sign/Encrypt toolbar should appear.
 

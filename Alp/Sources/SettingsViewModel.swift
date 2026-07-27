@@ -264,13 +264,32 @@ final class SettingsViewModel {
             try HelperInstaller.install()
             helperStatus = helperService.status
             Task {
-                try? await Task.sleep(for: .milliseconds(500))
-                await refreshKeys()
-                await refreshHealth()
-                // Without this, the "Use Alp Pinentry" section never appears
-                // after a fresh install — pinentryConfig stays nil until the
-                // next app launch. Every other path to .enabled refreshes it.
-                await refreshPinentryConfig()
+                // launchd needs a moment to spawn the helper; a fixed delay
+                // loses that race and strands "Couldn't Load Keys" in the Keys
+                // tab. Poll health until the helper answers, then load.
+                for _ in 0 ..< 10 where healthStatus == nil {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    await refreshHealth()
+                }
+                if healthStatus != nil {
+                    await refreshKeys()
+                    // Without this, the "Use Alp Pinentry" section never appears
+                    // after a fresh install — pinentryConfig stays nil until the
+                    // next app launch. Every other path to .enabled refreshes it.
+                    await refreshPinentryConfig()
+                } else {
+                    // register() succeeding does not mean the helper runs:
+                    // launchd can be crash-looping it (stale BTM record) or the
+                    // user may have it switched off in Login Items. If it never
+                    // answered the health check, say so instead of a silent blank.
+                    helperStatus = helperService.status
+                    helperError = """
+                    Helper installed but not responding (status: \
+                    \(Self.describe(helperStatus))). Check that Alp is allowed \
+                    in System Settings → Login Items & Extensions, or uninstall \
+                    and reinstall the helper.
+                    """
+                }
             }
         } catch {
             helperError = error.localizedDescription
@@ -322,5 +341,15 @@ final class SettingsViewModel {
 
     private var helperService: SMAppService {
         SMAppService.agent(plistName: BuildConfig.helperPlistName)
+    }
+
+    private static func describe(_ status: SMAppService.Status) -> String {
+        switch status {
+        case .enabled: "enabled"
+        case .requiresApproval: "requires approval"
+        case .notRegistered: "not registered"
+        case .notFound: "not found"
+        @unknown default: "unknown"
+        }
     }
 }

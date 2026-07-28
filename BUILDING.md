@@ -139,7 +139,7 @@ updates — keep an offline backup (not in the repo).
 ```bash
 export DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (3G6WR6H4M5)"
 ./scripts/build-release.sh 1.2.0        # archives, signs, notarizes, staples, DMGs
-gh release create v1.2.0 build/Alp-1.2.0.dmg build/Alp-1.2.0.SHA256SUMS*
+gh release create v1.2.0 --prerelease build/Alp-1.2.0.dmg build/Alp-1.2.0.SHA256SUMS*
 ```
 
 `build-release.sh` also writes `build/release.json` (version / minOS / download
@@ -148,3 +148,6 @@ both to `/docs` and push to `main` so GitHub Pages serves the feed at
 <https://alp-gpg.github.io/alp/release.json>. Set `GPG_SIGNING_KEY` to also emit
 a detached GPG signature on `SHA256SUMS`. Finally bump `version` + `sha256` in
 the tap's `Casks/alp.rb`.
+
+Every 0.x release is a **pre-release** (`--prerelease`) — drop the flag only
+when 1.0 ships.

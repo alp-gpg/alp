@@ -59,6 +59,8 @@ xcodebuild build \
    BTM pins the registration to the exact bundle, so after a rebuild the helper can
    fail to spawn (`launchctl print gui/$UID/app.alp.Alp.helper` shows exit code 78
    or "Invalid or missing Program") — uninstall and reinstall the helper to fix it.
+   If reinstalling does not help, a reboot clears the stale record (confirmed on a
+   0.9.3 install where nothing else brought the helper up).
 2. Open **Mail → Settings → Extensions** and enable **Alp**.
 3. Compose a new message — the Sign/Encrypt toolbar should appear.
 

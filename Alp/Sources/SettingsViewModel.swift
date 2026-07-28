@@ -286,8 +286,10 @@ final class SettingsViewModel {
                     helperError = """
                     Helper installed but not responding (status: \
                     \(Self.describe(helperStatus))). Check that Alp is allowed \
-                    in System Settings → Login Items & Extensions, or uninstall \
-                    and reinstall the helper.
+                    in System Settings → Login Items & Extensions, then \
+                    uninstall and reinstall the helper. If it still does not \
+                    respond, restart your Mac — that clears a stale launchd \
+                    registration.
                     """
                 }
             }

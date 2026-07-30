@@ -16,14 +16,16 @@ import Foundation
 ///   ...
 ///   -----BEGIN PGP PRIVATE KEY BLOCK-----  (secret)
 ///   ...
-///   -----BEGIN PGP PUBLIC KEY BLOCK-----   (revocation cert, not imported)
+///   :-----BEGIN PGP PUBLIC KEY BLOCK-----  (revocation cert, colon-guarded)
 ///   ...
 ///   # ownertrust:
 ///   <fp>:<level>:
 ///
 /// gpg's `--import` reads multiple armored blocks from a single stream,
 /// so restore is `gpg --decrypt … | gpg --import` plus a separate
-/// `gpg --import-ownertrust` pass on the trailing trust line.
+/// `gpg --import-ownertrust` pass on the trailing trust line. The
+/// revocation cert's colon guard (gpg's own openpgp-revocs.d convention)
+/// keeps that import from revoking the key being restored.
 extension GPGHelper {
     func _backupKey(fingerprint: String) async throws -> Data {
         guard Self.isValidFingerprint(fingerprint) else {
@@ -61,7 +63,20 @@ extension GPGHelper {
             sections.append(secText)
         }
         if let revokeText = String(data: revoke, encoding: .utf8) {
-            sections.append(revokeText)
+            // Colon-guard the BEGIN line, exactly like gpg's own
+            // openpgp-revocs.d files: the armor scanner then never opens the
+            // block, so restoring this bundle cannot import the certificate
+            // and revoke the key it just resurrected. Removing the colon
+            // re-arms it.
+            sections.append("""
+            # Revocation certificate. Guarded against accidental import —
+            # to actually revoke this key, remove the leading ':' and run
+            # `gpg --import` on this block alone.
+            \(revokeText.replacingOccurrences(
+                of: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+                with: ":-----BEGIN PGP PUBLIC KEY BLOCK-----",
+            ))
+            """)
         }
         if !trust.isEmpty {
             sections.append("# ownertrust:\n\(trust)")
@@ -74,18 +89,21 @@ extension GPGHelper {
         //    but pinning it here keeps the bundle decryptable across
         //    gpg versions that change defaults.
         //
-        //    On gpg ≥ 2.3 we pass `--aead` so the outer layer uses AEAD
-        //    (OCB or EAX) instead of RFC 4880 CFB — giving tamper
-        //    detection at the cipher layer. gpg < 2.3 falls back to CFB
-        //    (still passphrase-protected; packet validation still catches
-        //    most tampering).
+        //    On gpg ≥ 2.3 we pass `--force-ocb` (alias `--force-aead`) so
+        //    the outer layer uses OCB AEAD instead of RFC 4880 CFB —
+        //    giving tamper detection at the cipher layer. A bare `--aead`
+        //    is NOT that option: gpg reads it as an abbreviation of
+        //    `--aead-algo`, which takes an argument, and exits 2 with
+        //    "missing argument" — failing every backup. gpg < 2.3 falls
+        //    back to CFB (still passphrase-protected; packet validation
+        //    still catches most tampering).
         var args = [
             "--yes", "--armor",
             "--symmetric", "--cipher-algo", "AES256",
             "--output", "-",
         ]
         if let version = try? await gpgVersion(), compareVersion(version, isAtLeast: "2.3") {
-            args.append("--aead")
+            args.append("--force-ocb")
         }
         return try await runGPG(args, input: Data(plaintext.utf8))
     }

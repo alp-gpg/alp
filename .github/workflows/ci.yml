@@ -43,32 +43,12 @@ jobs:
           brew install gnupg
           gpg --version | head -1
 
-      - name: Generate Xcode project
-        run: tuist generate --no-open
-
-      - name: Build
+      # Generates the project, builds, then runs the tests against a throwaway
+      # $HOME holding a freshly generated fixture key — same script contributors
+      # run locally, so a green CI and a green laptop mean the same thing.
+      - name: Build & Test
         run: |
-          xcodebuild build \
-            -workspace Alp.xcworkspace \
-            -scheme Alp \
-            -destination 'platform=macOS' \
-            -configuration Debug \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Generate CI GPG key
-        run: |
-          # Create a passphrase-less key in the default keyring for tests
-          gpg --batch --passphrase '' --quick-gen-key "CI Bot <ci@alp.test>" default default never
-          gpg --list-secret-keys --keyid-format long
-
-      - name: Test
-        run: |
-          xcodebuild test \
-            -workspace Alp.xcworkspace \
-            -scheme Alp \
-            -destination 'platform=macOS' \
+          bash scripts/test.sh \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \

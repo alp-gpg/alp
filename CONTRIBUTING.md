@@ -16,7 +16,37 @@ swiftlint               # lint
 swiftformat .           # format
 ```
 
-Run tests before submitting (`⌘U` in Xcode or `xcodebuild test`).
+### Tests
+
+```bash
+bash scripts/test.sh    # what CI runs
+```
+
+`scripts/test.sh` builds, then runs `AlpTests` against a throwaway `$HOME`
+holding a freshly generated fixture key, so the suite never touches — or
+depends on — your own keyring. `⌘U` and a bare `xcodebuild test` still work but
+run against your real keyring, so treat `scripts/test.sh` as the source of
+truth. (gpg derives its homedir from `$HOME`; `GPGHelper.sanitizedEnvironment()`
+strips `GNUPGHOME` on purpose, and that allowlist must not be relaxed for tests.)
+
+`AlpXPCTests` is separate and opt-in. It talks to the **installed** helper over
+a real `NSXPCConnection`, so it needs Alp.app installed with its helper
+registered, and it is hosted inside Alp.app because `AlpHelper` rejects any
+client that is not `app.alp.Alp`/`app.alp.Alp.extension`. Run it after a macOS
+upgrade — it is the fastest check that launchd registration, the code-signing
+requirement, and gpg detection all still work:
+
+```bash
+TEST_RUNNER_ALP_LIVE_XPC=1 xcodebuild test \
+    -workspace Alp.xcworkspace -scheme AlpXPCTests -destination 'platform=macOS'
+```
+
+The `TEST_RUNNER_` prefix is required — `xcodebuild` strips it and forwards the
+rest to the test process; without it the variable never reaches the suite and
+every test skips. Without the variable set the suite skips entirely; with it,
+an unreachable helper is a failure rather than a skip. One test briefly adds a
+throwaway passphrase-less key to your real keyring (to exercise decrypt without
+a pinentry prompt) and deletes it again afterwards.
 
 ## Code Style
 

@@ -215,12 +215,45 @@ let project = Project(
             bundleId: "app.alp.Alp.tests",
             deploymentTargets: .macOS("26.0"),
             sources: [
-                .glob("Tests/**"),
+                .glob("Tests/**", excluding: ["Tests/LiveXPC/**"]),
                 .glob("AlpHelper/Sources/**", excluding: ["AlpHelper/Sources/main.swift"]),
                 .glob("Alp/Sources/**", excluding: ["Alp/Sources/AlpApp.swift"]),
+                // The extension has no @main — its principal class is named in
+                // Info.plist — so the whole directory compiles into the test
+                // target as-is. Without this the RFC 3156 assembly in
+                // SecurityHandler was never even built by the test bundle.
+                .glob("AlpExtension/Sources/**"),
+                // Assuan.swift only — main.swift is top-level code and cannot
+                // be compiled into another target.
+                .glob("AlpPinentry/Sources/**", excluding: ["AlpPinentry/Sources/main.swift"]),
                 .glob("Shared/**"),
             ],
             dependencies: [],
+        ),
+
+        // ── Live XPC smoke tests ───────────────────────────────────────
+        // Hosted in Alp.app on purpose: AlpHelper only accepts connections
+        // from `app.alp.Alp` or `app.alp.Alp.extension` (BuildConfig
+        // .clientRequirement). A standalone test bundle is `app.alp.Alp.tests`
+        // and the system kills its connection before any reply, so these
+        // tests can only reach a real installed helper from inside the app's
+        // own code-signing identity. Skips itself when no helper is running.
+        .target(
+            name: "AlpXPCTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "app.alp.Alp.xpctests",
+            deploymentTargets: .macOS("26.0"),
+            sources: [
+                .glob("Tests/LiveXPC/**"),
+                .glob("Shared/**"),
+            ],
+            dependencies: [.target(name: "Alp")],
+            settings: .settings(base: [
+                "CODE_SIGN_IDENTITY": "Apple Development",
+                "CODE_SIGN_STYLE": "Automatic",
+                "DEVELOPMENT_TEAM": "3G6WR6H4M5",
+            ]),
         ),
     ],
 )

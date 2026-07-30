@@ -355,7 +355,9 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     /// Replaces the body of an outgoing RFC 822 message with `body`, rewriting
     /// the Content-Type and Content-Transfer-Encoding headers to text/plain.
     /// Original headers like Subject, From, To, Date, Message-ID survive.
-    private nonisolated static func inlinePGPMessage(headers: Data, body: Data, eol: String) -> Data {
+    /// Internal, not private: the test target compiles these sources directly,
+    /// and `private` is file-scoped so the byte-level assertions couldn't see it.
+    nonisolated static func inlinePGPMessage(headers: Data, body: Data, eol: String) -> Data {
         var out = OutgoingMIMEParser.rewriteContentTypeHeaders(in: headers, eol: eol)
         out.append(Data((eol + eol).utf8))
         out.append(OutgoingMIMEParser.normalizingEOL(body, to: eol))
@@ -368,7 +370,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     /// on the outer message (Mail reads the sender from it to pick an account).
     /// Every line terminator is `eol` — the compose message's own, which Mail's
     /// serializer requires (see OutgoingMIMEParser.detectEOL).
-    private nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data, envelopeHeaders: Data, eol: String) -> Data {
+    nonisolated static func pgpMIMEEncrypted(_ ciphertext: Data, envelopeHeaders: Data, eol: String) -> Data {
         let ciphertext = OutgoingMIMEParser.normalizingEOL(ciphertext, to: eol)
         let boundary = "AlpBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         let header = [
@@ -402,7 +404,7 @@ final class SecurityHandler: NSObject, MEMessageSecurityHandler {
     ///   hashed by gpg (in canonical text mode) for the signature.
     /// - `micalg` must match the actual hash algorithm used by gpg; we pass it
     ///   through from the SIG_CREATED status line rather than hardcoding it.
-    private nonisolated static func pgpMIMESigned(
+    nonisolated static func pgpMIMESigned(
         _ body: Data, signature: Data, micalg: String, envelopeHeaders: Data, eol: String,
     ) -> Data {
         let signature = OutgoingMIMEParser.normalizingEOL(signature, to: eol)

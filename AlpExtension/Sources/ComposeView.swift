@@ -11,9 +11,9 @@ struct ComposeView: View {
         // badge), which is the single source of truth. This popover only offers
         // the extras Mail has no UI for: the signing-key picker, inline-PGP, and
         // missing-recipient-key warnings.
-        // ponytail: signer picker + Inline are shown whenever keys exist rather
-        // than gated on the live sign/encrypt state — gating would mean reading
-        // composeContext into the view for marginal tidiness.
+        // Deliberately simple: signer picker + Inline are shown whenever keys
+        // exist rather than gated on the live sign/encrypt state — gating would
+        // mean reading composeContext into the view for marginal tidiness.
         HStack(spacing: 8) {
             if vm.availableSecretKeys.count > 1 {
                 keyPickerMenu

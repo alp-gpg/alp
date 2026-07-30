@@ -771,8 +771,14 @@ actor GPGHelper: NSObject, GPGHelperProtocol {
         //   <desc>      → description (optional single line)
         //   <empty>     → terminate description
         //   y           → confirm "Is this okay?"
-        let descLine = trimmedDescription ?? ""
-        let commands = "y\n\(reasonCode)\n\(descLine)\n\ny\n"
+        //
+        // The description line is emitted only when there is one. An empty
+        // description is already terminated by the blank line below, so
+        // unconditionally writing `descLine` sent *two* blanks: gpg consumed
+        // the second as the answer to "Is this okay?", then re-asked for the
+        // reason code and died on EOF, leaving the key unrevoked.
+        let descriptionLine = trimmedDescription.map { $0.isEmpty ? "" : "\($0)\n" } ?? ""
+        let commands = "y\n\(reasonCode)\n\(descriptionLine)\ny\n"
         // `--no-tty` is load-bearing inside the helper: see the
         // matching comment in GPGHelper+Backup.swift. Without it gpg
         // tries to write its menu prompts to /dev/tty even when fed

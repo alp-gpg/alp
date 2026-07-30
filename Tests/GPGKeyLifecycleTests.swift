@@ -198,6 +198,37 @@ struct GPGKeyLifecycleTests {
     }
 
     @Test
+    func `changes the passphrase and actually protects the key`() async throws {
+        let fingerprint = try await mintDisposableKey(email: "passwd-lifecycle@alp.invalid")
+
+        // The keygrip file under private-keys-v1.d is the ground truth:
+        // gpg-agent stores an unprotected key as "(11:private-key" and a
+        // protected one as "(21:protected-private-key". gpg exits 0 whether
+        // or not the passwd transcript drifted, so only the file can prove
+        // the change saved. The stub pinentry supplies the new passphrase.
+        let grip = try #require(
+            gpgCLI(["--list-secret-keys", "--with-colons", "--with-keygrip", fingerprint])
+                .split(separator: "\n").first { $0.hasPrefix("grp:") }?
+                .split(separator: ":").last.map(String.init),
+            "no keygrip in listing",
+        )
+        // Env HOME, not NSHomeDirectory(): the latter comes from getpwuid and
+        // ignores the scratch $HOME override that gpg derives its homedir from.
+        let home = try #require(ProcessInfo.processInfo.environment["HOME"])
+        let gripFile = URL(fileURLWithPath: home)
+            .appendingPathComponent(".gnupg/private-keys-v1.d/\(grip).key")
+        func keyIsProtected() throws -> Bool {
+            try Data(contentsOf: gripFile)
+                .range(of: Data("protected-private-key".utf8)) != nil
+        }
+        #expect(try !keyIsProtected())
+
+        try await GPGHelper()._changePassphrase(fingerprint)
+
+        #expect(try keyIsProtected())
+    }
+
+    @Test
     func `backs up a key and restores it after deletion`() async throws {
         let fingerprint = try await mintDisposableKey(email: "backup-lifecycle@alp.invalid")
         let helper = GPGHelper()

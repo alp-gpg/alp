@@ -11,10 +11,10 @@ struct GPGHelperBackupTests {
         -----END PGP PUBLIC KEY BLOCK-----
 
         # ownertrust:
-        2BC83F55A4007468864C680E1B7CC8D4D4E914AA:6:
+        AA00BB11CC22DD33EE44FF5500AA11BB22CC33DD:6:
         """
         let trust = GPGHelper.extractOwnertrustSection(from: bundle)
-        #expect(trust == "2BC83F55A4007468864C680E1B7CC8D4D4E914AA:6:")
+        #expect(trust == "AA00BB11CC22DD33EE44FF5500AA11BB22CC33DD:6:")
     }
 
     @Test
@@ -32,13 +32,13 @@ struct GPGHelperBackupTests {
         let status = """
         [GNUPG:] KEY_CONSIDERED ABCDEF0123456789ABCDEF0123456789ABCDEF01 0
         [GNUPG:] IMPORT_OK 1 ABCDEF0123456789ABCDEF0123456789ABCDEF01
-        [GNUPG:] IMPORT_OK 16 2BC83F55A4007468864C680E1B7CC8D4D4E914AA
+        [GNUPG:] IMPORT_OK 16 AA00BB11CC22DD33EE44FF5500AA11BB22CC33DD
         [GNUPG:] IMPORT_RES 2 0 1 0 1 0 0 0 0 0 0 0 0 0 0
         """
         let fps = GPGHelper.parseImportedFingerprints(from: status)
         #expect(fps == [
             "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
-            "2BC83F55A4007468864C680E1B7CC8D4D4E914AA",
+            "AA00BB11CC22DD33EE44FF5500AA11BB22CC33DD",
         ])
     }
 

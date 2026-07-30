@@ -139,6 +139,7 @@ fi
 # is well-formed and stable; do NOT reformat it after signing.
 RELEASE_JSON="build/release.json"
 DOWNLOAD_URL="${RELEASE_DOWNLOAD_URL:-https://github.com/alp-gpg/alp/releases/download/v${VERSION}/Alp-${VERSION}.dmg}"
+# Condense CHANGELOG.md's Unreleased section into this before releasing.
 RELEASE_NOTES="${RELEASE_NOTES:-Bug fixes and improvements.}"
 MIN_OS="${MIN_OS:-26.0}"
 python3 - "$VERSION" "$MIN_OS" "$DOWNLOAD_URL" "$DMG_SHA" "$RELEASE_NOTES" > "$RELEASE_JSON" <<'PY'

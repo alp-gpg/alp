@@ -48,4 +48,4 @@
 --enable wrapArguments
 --enable wrapAttributes
 
---exclude Derived,.build,Alp.xcworkspace,Alp.xcodeproj
+--exclude Derived,.build,build,Alp.xcworkspace,Alp.xcodeproj

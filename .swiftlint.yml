@@ -1,6 +1,7 @@
 excluded:
   - Derived
   - .build
+  - build
   - Alp.xcworkspace
   - Alp.xcodeproj
 

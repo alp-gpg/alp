@@ -31,20 +31,9 @@ Sign, encrypt, decrypt, and verify mail in Apple Mail using your existing GnuPG 
 
 Download the signed, notarized DMG from the [releases page](https://github.com/alp-gpg/alp/releases), open it, and drag Alp to Applications. To verify the download first, check it against the release's `SHA256SUMS` (GPG-signed — see [docs/VERIFYING.md](docs/VERIFYING.md)). Or build from source: [BUILDING.md](BUILDING.md).
 
-On first launch, **General → Setup** walks you through four steps: install the background helper, check your GnuPG install, enable the Mail extension in System Settings, and pick a default signing key. Each step has a button.
+You need macOS 26 (Tahoe) or later and GnuPG — the Setup checklist offers a one-click Homebrew install, or grab it from <https://gnupg.org/download/>. On first launch, **General → Setup** walks you through installing the background helper, checking GnuPG, enabling the Mail extension, and picking a default signing key.
 
-You need macOS 26 (Tahoe) or later and GnuPG. The Setup checklist offers a one-click Homebrew install; if you'd rather, grab GnuPG from <https://gnupg.org/download/>.
-
-Alp ships its own passphrase prompt — no `pinentry-mac` install required. Tap **General → Pinentry → "Use Alp Pinentry"** once and it's wired up.
-
-Prompted for your passphrase too often? That's gpg-agent's cache, not Alp — the default expires it after 10 idle minutes. Alp never stores your passphrase; to keep it cached longer, put these in `~/.gnupg/gpg-agent.conf` and run `gpgconf --reload gpg-agent`:
-
-```
-default-cache-ttl 28800   # idle timeout, seconds (8 h)
-max-cache-ttl     86400   # hard cap, seconds (24 h)
-```
-
-The cache lives only in gpg-agent's memory and is cleared on logout, reboot, or `gpgconf --kill gpg-agent`.
+Alp ships its own passphrase prompt — no `pinentry-mac` needed. Tap **General → Pinentry → "Use Alp Pinentry"** once and it's wired up. Prompted too often? That's gpg-agent's 10-minute idle cache, not Alp — Alp never stores your passphrase. Raise `default-cache-ttl 28800` / `max-cache-ttl 86400` (seconds) in `~/.gnupg/gpg-agent.conf`, then `gpgconf --reload gpg-agent`. The cache is memory-only; logout or reboot clears it.
 
 ## Privacy
 
@@ -54,14 +43,12 @@ The cache lives only in gpg-agent's memory and is cleared on logout, reboot, or 
 
 ## What encryption _doesn't_ protect
 
-Two limits worth knowing about PGP-on-Mail. Alp also warns you about these inside the app:
+Alp warns you about both of these in-app too:
 
 - **Drafts aren't encrypted.** Mail saves drafts to your IMAP/iCloud server while you type. For PGP accounts, turn off "Store drafts on server" in Mail → Settings → Accounts → Mailbox Behaviors.
 - **Subject lines aren't encrypted.** Keep sensitive content in the body.
 
 ## Trust but verify
-
-We try to be transparent. If you want to confirm Alp does what it says:
 
 - [docs/VERIFYING.md](docs/VERIFYING.md) — signature checks, source-audit map, network proof, gpg-invocation reference.
 - [docs/REPRODUCIBLE-BUILD.md](docs/REPRODUCIBLE-BUILD.md) — build from source, compare against the release.

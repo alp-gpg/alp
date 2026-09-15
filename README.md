@@ -37,6 +37,15 @@ You need macOS 26 (Tahoe) or later and GnuPG. The Setup checklist offers a one-c
 
 Alp ships its own passphrase prompt — no `pinentry-mac` install required. Tap **General → Pinentry → "Use Alp Pinentry"** once and it's wired up.
 
+Prompted for your passphrase too often? That's gpg-agent's cache, not Alp — the default expires it after 10 idle minutes. Alp never stores your passphrase; to keep it cached longer, put these in `~/.gnupg/gpg-agent.conf` and run `gpgconf --reload gpg-agent`:
+
+```
+default-cache-ttl 28800   # idle timeout, seconds (8 h)
+max-cache-ttl     86400   # hard cap, seconds (24 h)
+```
+
+The cache lives only in gpg-agent's memory and is cleared on logout, reboot, or `gpgconf --kill gpg-agent`.
+
 ## Privacy
 
 - **No phone-home.** Zero analytics, zero crash reporting. A fresh install makes no network calls.

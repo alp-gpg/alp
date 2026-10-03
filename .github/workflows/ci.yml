@@ -60,11 +60,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Both from brew, not the runner image: its preinstalled SwiftFormat lags
-      # the brew release contributors run, and rule changes between them fail lint.
+      # Current brew releases, matching what contributors run: the runner image
+      # preinstalls an older SwiftFormat and ships a stale formula index (auto-update
+      # is off), so `brew install` alone keeps it — and rule changes fail lint.
       - name: Install SwiftLint & SwiftFormat
         run: |
+          brew update --quiet
           brew install swiftlint swiftformat
+          brew upgrade swiftlint swiftformat
           swiftlint version
           swiftformat --version
 

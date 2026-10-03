@@ -58,7 +58,7 @@ struct GPGHelperFileRoundTripTests {
     let scratch: URL
 
     init() async throws {
-        helper = await GPGHelper()
+        helper = GPGHelper()
         scratch = FileManager.default.temporaryDirectory
             .appendingPathComponent("alp-fileops-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
@@ -214,7 +214,7 @@ struct GPGHelperLargeFileTests {
     let scratch: URL
 
     init() async throws {
-        helper = await GPGHelper()
+        helper = GPGHelper()
         scratch = FileManager.default.temporaryDirectory
             .appendingPathComponent("alp-large-fileops-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)

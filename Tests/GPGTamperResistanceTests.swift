@@ -8,7 +8,7 @@ struct GPGTamperResistanceTests {
     let helper: GPGHelper
 
     init() async {
-        helper = await GPGHelper()
+        helper = GPGHelper()
     }
 
     /// Returns the fingerprint of the first secret key, or skips the test.

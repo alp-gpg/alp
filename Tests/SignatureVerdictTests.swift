@@ -14,7 +14,7 @@ struct SignatureVerdictTests {
 
     @Test
     func `GOODSIG with VALIDSIG is valid and returns the 40-hex fingerprint`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let status = """
         [GNUPG:] GOODSIG \(Self.keyid) Alice <alice@example.com>
         [GNUPG:] VALIDSIG \(Self.fpr) 2024-01-01 1700000000 0 4 0 22 8 01 \(Self.fpr)
@@ -31,7 +31,7 @@ struct SignatureVerdictTests {
         // The headline regression: a cryptographically-good signature made by a
         // REVOKED key. gpg emits both REVKEYSIG and VALIDSIG; we must NOT treat
         // it as valid.
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let status = """
         [GNUPG:] REVKEYSIG \(Self.keyid) Mallory <mallory@example.com>
         [GNUPG:] VALIDSIG \(Self.fpr) 2024-01-01 1700000000 0 4 0 22 8 01 \(Self.fpr)
@@ -44,7 +44,7 @@ struct SignatureVerdictTests {
 
     @Test
     func `EXPKEYSIG (expired key) is invalid despite VALIDSIG`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let status = """
         [GNUPG:] EXPKEYSIG \(Self.keyid) Bob <bob@example.com>
         [GNUPG:] VALIDSIG \(Self.fpr) 2024-01-01 1700000000 0 4 0 22 8 01 \(Self.fpr)
@@ -55,7 +55,7 @@ struct SignatureVerdictTests {
 
     @Test
     func `EXPSIG (expired signature) is invalid despite VALIDSIG`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let status = """
         [GNUPG:] EXPSIG \(Self.keyid) Carol <carol@example.com>
         [GNUPG:] VALIDSIG \(Self.fpr) 2024-01-01 1700000000 0 4 0 22 8 01 \(Self.fpr)
@@ -66,7 +66,7 @@ struct SignatureVerdictTests {
 
     @Test
     func `BADSIG is invalid`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let status = "[GNUPG:] BADSIG \(Self.keyid) Dave <dave@example.com>"
         let v = await helper.testSignatureVerdict(status)
         #expect(!v.isValid)
@@ -74,7 +74,7 @@ struct SignatureVerdictTests {
 
     @Test
     func `ERRSIG (unverifiable / missing key) is invalid with no signer`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let status = "[GNUPG:] ERRSIG \(Self.keyid) 22 8 00 1700000000 9 \(Self.fpr)"
         let v = await helper.testSignatureVerdict(status)
         #expect(!v.isValid)
@@ -83,7 +83,7 @@ struct SignatureVerdictTests {
 
     @Test
     func `unsigned input yields invalid and nil fingerprint`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let v = await helper.testSignatureVerdict("[GNUPG:] DECRYPTION_OKAY\n[GNUPG:] GOODMDC")
         #expect(!v.isValid)
         #expect(v.fingerprint == nil)
@@ -92,7 +92,7 @@ struct SignatureVerdictTests {
 
     @Test
     func `a non-40-hex VALIDSIG token is not accepted as a fingerprint`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         // VALIDSIG must be a real 40-hex value; a short/garbage token falls back
         // to the GOODSIG key-id rather than being shown as a fingerprint.
         let status = """
@@ -112,9 +112,9 @@ struct SignatureVerdictTests {
     }
 
     @Test
-    func `decodeColonField decodes escaped colon and angle brackets`() async {
+    func `decodeColonField decodes escaped colon and angle brackets`() {
         // \x3a = ':', \x3c = '<', \x3e = '>'
-        let decoded = await GPGHelper.testDecodeColonField(#"Group\x3a Team \x3cteam@example.com\x3e"#)
+        let decoded = GPGHelper.testDecodeColonField(#"Group\x3a Team \x3cteam@example.com\x3e"#)
         #expect(decoded == "Group: Team <team@example.com>")
     }
 

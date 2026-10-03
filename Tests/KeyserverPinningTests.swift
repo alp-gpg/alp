@@ -83,7 +83,7 @@ private final class CertificateCollector: NSObject, URLSessionDelegate, @uncheck
 
     private func sha256(_ data: Data) -> Data {
         var digest = [UInt8](repeating: 0, count: 32)
-        data.withUnsafeBytes { ptr in
+        _ = data.withUnsafeBytes { ptr in
             CC_SHA256(ptr.baseAddress, CC_LONG(data.count), &digest)
         }
         return Data(digest)

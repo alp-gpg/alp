@@ -17,7 +17,7 @@ struct GPGErrorTests {
         ]
         for error in cases {
             #expect(error.errorDescription != nil)
-            #expect(try !#require(error.errorDescription?.isEmpty))
+            #expect(try !#require(error.errorDescription).isEmpty)
         }
     }
 
@@ -30,19 +30,19 @@ struct GPGErrorTests {
 
     @Test
     func `gpgNotFound mentions brew install`() throws {
-        #expect(try #require(GPGError.gpgNotFound.errorDescription?.contains("brew install")))
+        #expect(try #require(GPGError.gpgNotFound.errorDescription).contains("brew install"))
     }
 
     @Test
     func `missingKeys lists emails`() throws {
         let error = GPGError.missingKeys(["alice@test.com", "bob@test.com"])
-        #expect(try #require(error.errorDescription?.contains("alice@test.com")))
-        #expect(try #require(error.errorDescription?.contains("bob@test.com")))
+        #expect(try #require(error.errorDescription).contains("alice@test.com"))
+        #expect(try #require(error.errorDescription).contains("bob@test.com"))
     }
 
     @Test
     func `xpcUnavailable mentions helper`() throws {
-        #expect(try #require(GPGError.xpcUnavailable.errorDescription?.contains("helper")))
+        #expect(try #require(GPGError.xpcUnavailable.errorDescription).contains("helper"))
     }
 
     @Test

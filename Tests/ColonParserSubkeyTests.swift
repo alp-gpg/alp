@@ -5,7 +5,7 @@ import Testing
 struct ColonParserSubkeyTests {
     @Test
     func `Owner trust code is read from field 9 of the pub record`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         // Trailing trust char varies per fixture: `u` ultimate, `f` full,
         // `m` marginal, `n` never, `-` unknown.
         let cases: [(String, String?)] = [
@@ -39,7 +39,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Primary with no subkeys has empty subkeys array`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let text = """
         pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
         fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
@@ -52,7 +52,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Primary with one encrypt subkey captures fingerprint, caps, expiry, algo`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let text = """
         pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
         fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
@@ -73,7 +73,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Revoked subkey is marked isRevoked`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let text = """
         pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
         fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
@@ -86,7 +86,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Expired subkey under valid primary — primary stays valid`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let pastTs = String(Int(Date(timeIntervalSinceNow: -86400).timeIntervalSince1970))
         let text = """
         pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
@@ -101,7 +101,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Expired primary with a fresh subkey — both statuses preserved`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let pastTs = String(Int(Date(timeIntervalSinceNow: -86400).timeIntervalSince1970))
         let futureTs = String(Int(Date(timeIntervalSinceNow: 86400).timeIntervalSince1970))
         let text = """
@@ -118,7 +118,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Multiple subkeys captured in order`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let text = """
         pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
         fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
@@ -136,7 +136,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Ed25519 subkey uses curve name as algorithm`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let text = """
         pub:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
         fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:
@@ -150,7 +150,7 @@ struct ColonParserSubkeyTests {
 
     @Test
     func `Stub secret key (sec#) still produces a primary`() async {
-        let helper = await GPGHelper()
+        let helper = GPGHelper()
         let text = """
         sec:u:3072:1:AAAA1111BBBB2222:1700000000:0::u:::scESC::::::23::0:
         fpr:::::::::AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555:

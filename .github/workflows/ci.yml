@@ -60,8 +60,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install SwiftLint
-        run: brew install swiftlint
+      # Both from brew, not the runner image: its preinstalled SwiftFormat lags
+      # the brew release contributors run, and rule changes between them fail lint.
+      - name: Install SwiftLint & SwiftFormat
+        run: |
+          brew install swiftlint swiftformat
+          swiftlint version
+          swiftformat --version
 
       - name: SwiftLint
         run: swiftlint lint --strict --reporter github-actions-logging

@@ -37,11 +37,11 @@ enum RecipientPickerWindow {
             window.center()
 
             let resumed = ResumeOnce()
-            /// Single completion path. Tearing down contentViewController and the
-            /// associated observer here breaks the window → hosting controller →
-            /// hosted view → completion-closure → window retain cycle, so the
-            /// window (isReleasedWhenClosed = false) doesn't survive every
-            /// Encrypt-File service invocation (§3.6).
+            // Single completion path. Tearing down contentViewController and the
+            // associated observer here breaks the window → hosting controller →
+            // hosted view → completion-closure → window retain cycle, so the
+            // window (isReleasedWhenClosed = false) doesn't survive every
+            // Encrypt-File service invocation (§3.6).
             func finish(_ selection: RecipientPickerWindow.Selection?) {
                 guard resumed.claim() else { return }
                 // `finish` is always invoked on the main thread — from the

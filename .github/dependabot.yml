@@ -8,3 +8,8 @@ updates:
     labels:
       - dependencies
       - security
+    groups:
+      # init and analyze must move together; split PRs leave them mismatched.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"

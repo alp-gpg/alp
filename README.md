@@ -31,7 +31,7 @@ Sign, encrypt, decrypt, and verify mail in Apple Mail using your existing GnuPG 
 
 Download the signed, notarized DMG from the [releases page](https://github.com/alp-gpg/alp/releases), open it, and drag Alp to Applications. To verify the download first, check it against the release's `SHA256SUMS` (GPG-signed — see [docs/VERIFYING.md](docs/VERIFYING.md)). Or build from source: [BUILDING.md](BUILDING.md).
 
-You need macOS 26 (Tahoe) or later and GnuPG — the Setup checklist offers a one-click Homebrew install, or grab it from <https://gnupg.org/download/>. On first launch, **General → Setup** walks you through installing the background helper, checking GnuPG, enabling the Mail extension, and picking a default signing key.
+You need macOS 26 (Tahoe) or later (tested on macOS 27) and GnuPG — the Setup checklist offers a one-click Homebrew install, or grab it from <https://gnupg.org/download/>. On first launch, **General → Setup** walks you through installing the background helper, checking GnuPG, enabling the Mail extension, and picking a default signing key.
 
 Alp ships its own passphrase prompt — no `pinentry-mac` needed. Tap **General → Pinentry → "Use Alp Pinentry"** once and it's wired up. Prompted too often? That's gpg-agent's 10-minute idle cache, not Alp — Alp never stores your passphrase. Raise `default-cache-ttl 28800` / `max-cache-ttl 86400` (seconds) in `~/.gnupg/gpg-agent.conf`, then `gpgconf --reload gpg-agent`. The cache is memory-only; logout or reboot clears it.
 

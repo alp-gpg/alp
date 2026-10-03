@@ -1,27 +1,25 @@
 # Reproducible Builds
 
-Alp aims for builds that anyone with the same tag, Xcode version, and
-toolchain produces a binary that runs identically to the released DMG.
-Bit-for-bit reproducibility on Apple platforms is partially out of our
-hands (signed timestamps, provisioning profiles, build UUIDs change
-between machines), so this document is honest about what _is_ and what
-_is not_ reproducible.
+Goal: anyone building the same tag with the same Xcode version gets a
+binary that behaves identically to the released DMG. Bit-for-bit
+reproducibility is not achievable on Apple platforms (signatures,
+notarization tickets, and build UUIDs differ between machines); this
+document lists what matches and what does not.
 
-## What is reproducible
+## What should match
 
-These pieces of the build are byte-identical across machines when the
-inputs match:
+Given the same tag and Xcode version, these inputs are identical:
 
-- **Source compilation.** Swift 6.3 with `-strict-concurrency=complete`
-  and the project-pinned settings produces deterministic object code.
+- **Compiler settings.** Swift 6.3, `-strict-concurrency=complete`, and
+  every other build setting come from `Project.swift`.
 - **Tuist project generation.** `tuist generate` is deterministic given
   the same `Project.swift`.
-- **Dependency versions.** None — Alp has **zero** third-party Swift
-  package dependencies. Updates are handled by the in-house, notification-only
-  `UpdateChecker` (CryptoKit) — an in-house, notification-only updater.
-- **Assets and Info.plist.** Captured by Tuist; no per-machine variance.
+- **Dependencies.** None. Alp has no third-party Swift packages; the
+  updater (`UpdateChecker`, CryptoKit) is in-house.
+- **Assets and Info.plist.** Committed to the repo; Info.plist differs only
+  in the `DT_*` keys listed below.
 
-## What is not reproducible (and why)
+## What differs (and why)
 
 - **Code signature.** Each build is signed with the operator's
   Developer ID certificate. Two operators using different certs will
@@ -43,7 +41,6 @@ they are bookkeeping the OS uses.
 git fetch --tags
 git checkout v<VERSION>
 ./scripts/setup.sh
-tuist generate
 xcodebuild build \
     -workspace Alp.xcworkspace \
     -scheme Alp \
@@ -81,15 +78,10 @@ spctl --assess --type execute --verbose /Volumes/Alp/Alp.app
 # Expect: accepted, source=Notarized Developer ID
 
 # 3. Build from the matching git tag (see above) and run side by side.
-# Any behavioral divergence is a finding — please file an issue.
+# Any behavioral divergence is a finding; file an issue.
 ```
 
-## Future work
+## Not yet implemented
 
-We would like to publish a SLSA build provenance attestation for each
-release so a third party can verify, from a GitHub Actions log alone,
-that the published DMG came from a specific commit. That is on the
-roadmap but not yet implemented.
-
-Until then, the recipe above is the best we offer: build it yourself,
-or read the source and trust your own audit.
+SLSA build-provenance attestations. Releases are built and signed on a
+maintainer's Mac, not in CI (see [BUILDING.md → Releasing](../BUILDING.md#releasing)).

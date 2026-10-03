@@ -1,8 +1,7 @@
 # Changelog
 
-Feeds the `notes` field of the update manifest: at release time, condense the
-Unreleased section into `RELEASE_NOTES` for `scripts/build-release.sh`, then
-move the entries under the new version heading.
+Releases before 0.9.4: <https://github.com/alp-gpg/alp/releases>. Release
+process: [BUILDING.md → Each release](BUILDING.md#each-release).
 
 ## Unreleased
 

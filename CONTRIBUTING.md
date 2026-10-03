@@ -3,7 +3,7 @@
 ## Getting Started
 
 1. Fork the repository and clone your fork.
-2. Run `./scripts/setup.sh` — installs every Homebrew prerequisite and generates the Xcode project.
+2. Run `./scripts/setup.sh` — installs the Homebrew prerequisites and generates the Xcode project. Details: [BUILDING.md](BUILDING.md).
 3. Create a branch for your change.
 
 If you want to know exactly what Alp is doing before contributing, read [docs/VERIFYING.md](docs/VERIFYING.md). It maps each capability to the file that owns it.
@@ -11,9 +11,9 @@ If you want to know exactly what Alp is doing before contributing, read [docs/VE
 ## Development Workflow
 
 ```bash
-tuist generate          # regenerate Xcode project after Project.swift changes
-swiftlint               # lint
+tuist generate          # after editing Project.swift
 swiftformat .           # format
+swiftlint --strict      # lint; CI fails on any warning
 ```
 
 ### Tests
@@ -56,15 +56,13 @@ a pinentry prompt) and deletes it again afterwards.
 
 ## Architecture Notes
 
-Understanding the target boundaries helps when deciding where code belongs:
-
 | Target         | Sandbox | Can access                                         |
 | -------------- | ------- | -------------------------------------------------- |
 | `Alp`          | **No**  | SwiftUI, ServiceManagement, XPC to helper          |
 | `AlpExtension` | Yes     | MailKit, SwiftUI, XPC to helper, HTTPS (keyserver) |
 | `AlpHelper`    | **No**  | Foundation, Process (gpg binary), filesystem       |
 | `AlpPinentry`  | **No**  | Cocoa (secure text field); runs under gpg-agent    |
-| `Shared/`      | —       | Compiled into all targets above                    |
+| `Shared/`      | —       | Compiled into `Alp`, `AlpExtension`, `AlpHelper`   |
 
 - Code that both the extension and helper need goes in `Shared/`.
 - The extension **cannot** call `Process()` or access the filesystem — all gpg operations must go through the XPC helper.
@@ -72,8 +70,6 @@ Understanding the target boundaries helps when deciding where code belongs:
 - MailKit protocol methods must be `nonisolated`. MailKit calls from its own XPC queue, not the main thread.
 
 ## Known Pitfalls
-
-These are hard-won lessons. Please don't regress them:
 
 - **`SMAppService.agent` not `.daemon`**: Daemons run as root and can't access `~/.gnupg`. The helper must be an agent.
 - **AlpHelper code signing**: Requires `CREATE_INFOPLIST_SECTION_IN_BINARY`, `OTHER_CODE_SIGN_FLAGS --identifier`, hardened runtime, and Team ID. Without the embedded Info.plist, SMAppService rejects registration.
@@ -85,5 +81,5 @@ These are hard-won lessons. Please don't regress them:
 
 1. Keep PRs focused — one logical change per PR.
 2. Include a clear description of what changed and why.
-3. Ensure CI passes (build, test, lint).
-4. If you're adding a new GPG operation, add corresponding tests.
+3. Ensure CI passes (build & test, lint, CodeQL).
+4. If you're adding a new gpg operation, add corresponding tests.

@@ -21,25 +21,25 @@ Sign, encrypt, decrypt, and verify mail in Apple Mail using your existing GnuPG 
 
 ## What you get
 
-- **Mail just works.** Encrypted mail decrypts on read. Signed mail shows who signed it. Sign and encrypt with Mail's own compose controls; Alp's compose popover adds the signing-key picker, inline-PGP mode, and missing-key warnings with one-click import.
-- **One-click key lookup.** Type a recipient who's not in your keyring and Alp finds them on `keys.openpgp.org` or via Web Key Directory.
+- **Mail integration.** Encrypted mail decrypts on read. Signed mail shows who signed it. Sign and encrypt with Mail's own compose controls; Alp's compose popover adds the signing-key picker, inline-PGP mode, and missing-key warnings with one-click import.
+- **Key lookup.** For a recipient missing from your keyring, _Find Key_ searches `keys.openpgp.org`, the recipient's Web Key Directory, `api.protonmail.ch`, and `keyserver.ubuntu.com`.
 - **Full key manager** in Settings → Keys. Generate, set expiry, change passphrase, back up, revoke, publish — without leaving the app.
-- **Right-click on files** in Finder: Decrypt File, Verify File, Sign File, Encrypt File. Selected text gets Decrypt and Verify via the macOS Services menu (signing and encrypting need a recipient/key choice, so they stay file-only).
-- **Encrypted backups.** "Back Up Key…" wraps your secret key, a fresh revocation cert, and ownertrust into one AES-256 file. "Restore Backup…" pulls it back on another Mac.
+- **Finder and Services menu.** Files: Decrypt / Verify / Sign / Encrypt File with Alp. Selected text: Decrypt with Alp, Verify with Alp (signing and encrypting need a key choice, so they are file-only).
+- **Encrypted backups.** "Back Up Key…" writes your secret key, a fresh revocation certificate, and ownertrust into one passphrase-encrypted file (AES-256, OCB AEAD on gpg ≥ 2.3). "Restore Backup" imports it on another Mac.
 
 ## Installation
 
 Download the signed, notarized DMG from the [releases page](https://github.com/alp-gpg/alp/releases), open it, and drag Alp to Applications. To verify the download first, check it against the release's `SHA256SUMS` (GPG-signed — see [docs/VERIFYING.md](docs/VERIFYING.md)). Or build from source: [BUILDING.md](BUILDING.md).
 
-You need macOS 26 (Tahoe) or later (tested on macOS 27) and GnuPG — the Setup checklist offers a one-click Homebrew install, or grab it from <https://gnupg.org/download/>. On first launch, **General → Setup** walks you through installing the background helper, checking GnuPG, enabling the Mail extension, and picking a default signing key.
+You need macOS 26 (Tahoe) or later (tested on macOS 27) and GnuPG (`brew install gnupg`, or the installer from <https://gnupg.org/download/>). On first launch, **General → Setup** walks you through installing the helper (`AlpHelper`, a launch agent registered via SMAppService), checking GnuPG, enabling the Mail extension, and picking a default signing key.
 
-Alp ships its own passphrase prompt — no `pinentry-mac` needed. Tap **General → Pinentry → "Use Alp Pinentry"** once and it's wired up. Prompted too often? That's gpg-agent's 10-minute idle cache, not Alp — Alp never stores your passphrase. Raise `default-cache-ttl 28800` / `max-cache-ttl 86400` (seconds) in `~/.gnupg/gpg-agent.conf`, then `gpgconf --reload gpg-agent`. The cache is memory-only; logout or reboot clears it.
+Alp includes its own pinentry, so `pinentry-mac` is not needed. Enable it in **General → Pinentry → "Use Alp Pinentry"**. Alp never stores passphrases; gpg-agent caches them in memory for 10 minutes by default. To lengthen that, set `default-cache-ttl` / `max-cache-ttl` (seconds) in `~/.gnupg/gpg-agent.conf` and run `gpgconf --reload gpg-agent`. Logout or reboot clears the cache.
 
 ## Privacy
 
-- **No phone-home.** Zero analytics, zero crash reporting. A fresh install makes no network calls.
-- **Updates are opt-in.** Flip the switch in General → Updates and Alp pulls security patches from `alp-gpg.github.io`. (Off by default; we still recommend turning it on so you don't miss fixes.)
-- **Keyserver lookups happen only when you ask** — clicking _Find Key_, refreshing a key. Just typing a recipient does a local keyring lookup; no traffic.
+- **No analytics or crash reporting.** A fresh install makes no network connections.
+- **Update checks are opt-in** (General → Updates, off by default). When enabled, Alp fetches a signed `release.json` from `alp-gpg.github.io/alp/` and tells you when a newer DMG exists. It never downloads or installs anything.
+- **Keyserver traffic only on explicit action:** _Find Key_, refreshing or publishing a key, or the opt-in publish-status check (General → Keyserver Security). Typing a recipient searches the local keyring only.
 
 ## What encryption _doesn't_ protect
 
@@ -52,11 +52,10 @@ Alp warns you about both of these in-app too:
 
 - [docs/VERIFYING.md](docs/VERIFYING.md) — signature checks, source-audit map, network proof, gpg-invocation reference.
 - [docs/REPRODUCIBLE-BUILD.md](docs/REPRODUCIBLE-BUILD.md) — build from source, compare against the release.
-- Every release ships SHA256SUMS for independent checksum verification.
 
 ## Contributing
 
-Run `./scripts/setup.sh` to bootstrap the dev environment, then read [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

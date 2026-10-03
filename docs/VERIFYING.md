@@ -1,9 +1,7 @@
 # Verifying Alp
 
-This document explains how to convince yourself that the Alp binary on
-your Mac is doing what its source code says it does — no analytics, no
-phone-home, no keylogging, no key exfiltration. Everything here is
-something you can run from your own terminal in a few minutes.
+How to check that the installed Alp matches its source and makes no
+unexpected network connections. Every check runs from Terminal.
 
 If any check below fails, **do not run the binary**. Open an issue at
 <https://github.com/alp-gpg/alp/issues>.
@@ -17,7 +15,7 @@ codesign -dvv /Applications/Alp.app 2>&1 | grep -E 'Authority|TeamIdentifier'
 
 Expected:
 
-```yaml
+```text
 Authority=Developer ID Application: Robert Haist (3G6WR6H4M5)
 Authority=Developer ID Certification Authority
 Authority=Apple Root CA
@@ -34,7 +32,7 @@ Expected: `accepted, source=Notarized Developer ID`.
 
 ## 2. Confirm the helper signature
 
-The XPC helper runs unsandboxed and is the only component that touches
+The helper (`AlpHelper`, a launch agent registered via SMAppService) runs unsandboxed and is the only component that touches
 your gpg binary. Its signature must match the same Team ID as the app.
 
 ```bash
@@ -77,12 +75,9 @@ Alp's update check is **opt-in**. A fresh install makes zero
 outbound network calls until you flip the switch under
 **General → Updates**. The updater is notification-only — it never
 installs anything; at most it tells you a newer notarized DMG exists
-and links the download page.
-
-The trade-off: leaving update checks off means you also miss Alp's own
-bug fixes and cert-pin rotations until you manually re-download from
-GitHub Releases or run `brew upgrade --cask alp`. We recommend enabling
-update checks or letting brew carry the load.
+and links the download page. With update checks off, you get fixes and
+certificate-pin rotations only by downloading new releases from GitHub
+Releases manually.
 
 Verify with Little Snitch, LuLu, or by tcpdump on an isolated machine:
 
@@ -94,7 +89,7 @@ sudo tcpdump -i any -nn 'tcp and not port 22'
 
 Keyserver lookups are only made on explicit user action — clicking
 _Find Key_, refreshing a key, publishing a key, or (opt-in, off by
-default) enabling the publish-status check in Settings → Keyserver
+default) enabling the publish-status check in General → Keyserver
 Security. _Find Key_ tries these sources in order until one returns a
 key: `keys.openpgp.org`, the recipient domain's Web Key Directory,
 `api.protonmail.ch`, and `keyserver.ubuntu.com`. Typing a recipient
@@ -108,8 +103,7 @@ certificates on their own schedule.
 
 ## 4. Audit the source code
 
-Alp is intentionally small. The whole codebase is ~10,000 lines of
-Swift that map cleanly to the surface area documented in `README.md`.
+Alp is about 11,000 lines of Swift (excluding tests).
 
 | Where to look                                                                   | What it does                                                                                                                                   |
 | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -123,12 +117,11 @@ Swift that map cleanly to the surface area documented in `README.md`.
 | `Shared/WKDClient.swift`                                                        | Web Key Directory lookups (HTTPS to the recipient's mail domain).                                                                              |
 | `Shared/KeyserverUploader.swift`                                                | Key publishing to `keys.openpgp.org` (VKS upload + verify request).                                                                            |
 | `Alp/Sources/KeyserverRefreshService.swift`                                     | Per-key refresh from `keys.openpgp.org`.                                                                                                       |
+| `Alp/Sources/SettingsViewModel.swift`                                           | Opt-in publish-status check (HEAD request to `keys.openpgp.org`).                                                                              |
 | `Alp/Sources/UpdateChecker.swift`                                               | Opt-in update check against `alp-gpg.github.io` (Ed25519-verified).                                                                            |
 | `AlpExtension/Sources/ComposeView.swift`                                        | Compose-time _Find Key_ (keys.openpgp.org → WKD → Proton → Ubuntu pool).                                                                       |
 
-Those are **all** of Alp's outbound network call sites. Read the files
-above (a few thousand lines total) and you have read every moving part
-of Alp.
+Those are **all** of Alp's outbound network call sites.
 
 ## 5. Audit the gpg invocations
 
@@ -183,21 +176,27 @@ Tuist manifest is the single source of truth for build settings; the
 git clone https://github.com/alp-gpg/alp
 cd alp
 ./scripts/setup.sh
-tuist generate
-xcodebuild test -workspace Alp.xcworkspace -scheme Alp -destination 'platform=macOS'
+bash scripts/test.sh
 ```
 
-If the resulting binary behaves the same as the released DMG, you have
-end-to-end proof that the released binary matches the source.
+Matching behavior is evidence, not proof; see
+[REPRODUCIBLE-BUILD.md](REPRODUCIBLE-BUILD.md) for what can be compared.
 
 ## 7. SHA256 checksums
 
-Every release ships a `SHA256SUMS` file alongside the DMG. Verify the
-download independently:
+Every release ships `Alp-<VERSION>.SHA256SUMS` and a detached GPG signature,
+`Alp-<VERSION>.SHA256SUMS.asc`, alongside the DMG. First check the signature
+with the maintainer's key, then the checksum:
 
 ```bash
+gpg --keyserver hkps://keys.openpgp.org \
+    --recv-keys 2BC83F55A4007468864C680E1B7CC8D4D4E914AA
+gpg --verify Alp-<VERSION>.SHA256SUMS.asc Alp-<VERSION>.SHA256SUMS
 shasum -a 256 -c Alp-<VERSION>.SHA256SUMS
 ```
+
+Expected from `gpg --verify`: `Good signature`, with primary key fingerprint
+`2BC8 3F55 A400 7468 864C  680E 1B7C C8D4 D4E9 14AA`.
 
 Expected: `Alp-<VERSION>.dmg: OK`. Any other output means the bytes
 on disk do not match what we released — stop and re-download from the
@@ -231,8 +230,9 @@ These are limits, not bugs. We surface them in the app too:
   PGP.
 - **Subject lines are not encrypted.** RFC 3156 leaves the
   `Subject:` header in the clear.
-- **Memo fields written via Services** end up on the pasteboard in
-  plaintext. Copy carefully.
+- **Decrypt with Alp (Services) returns plaintext.** The decrypted text
+  passes through the Services pasteboard and replaces the selection in the
+  source app, which may save or sync it unencrypted.
 
-If you can find a way around any of these — or a place where Alp does
-something the source doesn't explain — file an issue. We mean it.
+If you find a way around any of these, or a place where Alp does
+something the source doesn't explain, file an issue.

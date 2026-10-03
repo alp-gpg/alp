@@ -1,16 +1,13 @@
 # Security Policy
 
-Alp handles GPG key material and passphrases. We take security reports
-seriously and ask you to follow coordinated disclosure.
+Alp handles GPG key material and passphrases. Report vulnerabilities
+privately as described below.
 
 ## Supported Versions
 
 Alp is pre-1.0 (beta). Only the **latest released version** receives security
 fixes — there is no backporting to older builds. Always run the newest release
-(enable **General → Updates**, or `brew upgrade --cask alp`).
-
-Reports against the latest version are welcome — beta or not — and are covered
-by the safe harbor below.
+(enable **General → Updates**).
 
 ## Reporting a Vulnerability
 
@@ -41,9 +38,8 @@ gpg --keyserver hkps://keys.openpgp.org \
     --recv-keys 2BC83F55A4007468864C680E1B7CC8D4D4E914AA
 ```
 
-The same key signs the `Alp-<VERSION>.SHA256SUMS.asc` checksum
-signature on the GitHub release pages, so you can confirm the
-fingerprint against a published release.
+The same key signs each release's `Alp-<VERSION>.SHA256SUMS.asc`; see
+[docs/VERIFYING.md](docs/VERIFYING.md#7-sha256-checksums).
 
 ## Response Timeline
 
